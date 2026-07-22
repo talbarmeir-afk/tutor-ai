@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Show your work — math mistake finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #1b3327;
+    --bg-soft: #234333;
+    --chalk: #f2efe3;
+    --chalk-muted: #aebfae;
+    --chalk-yellow: #e8d879;
+    --chalk-green: #8fc28a;
+    --pen-red: #d6483f;
+    --paper: #f7f3ea;
+    --paper-line: #ddd3ae;
+    --ink: #2b2b28;
+    --ink-muted: #6b6a5f;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0;
+    background:
+      radial-gradient(circle at 15% 8%, rgba(255,255,255,0.035), transparent 45%),
+      radial-gradient(circle at 85% 92%, rgba(255,255,255,0.03), transparent 45%),
+      var(--bg);
+    color:var(--chalk);
+    font-family:'Inter', system-ui, sans-serif;
+    min-height:100vh;
+  }
+  .app{ max-width:640px; margin:0 auto; padding:56px 24px 96px; }
+  .eyebrow{
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--chalk-yellow); font-weight:600; margin:0 0 14px;
+  }
+  h1{
+    font-family:'Kalam', cursive; font-weight:700;
+    font-size:clamp(32px, 6vw, 44px); line-height:1.15; margin:0 0 16px;
+    text-shadow: 0 0 18px rgba(242,239,227,0.12);
+  }
+  .lede{ color:var(--chalk-muted); font-size:16px; line-height:1.6; max-width:52ch; margin:0 0 40px; }
+
+  .dropzone{
+    border:2px dashed rgba(242,239,227,0.32);
+    border-radius:14px;
+    background:rgba(255,255,255,0.03);
+    padding:36px 24px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone:hover, .dropzone.is-drag{
+    border-color: rgba(232,216,121,0.55);
+    background:rgba(255,255,255,0.05);
+  }
+  .dropzone:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:3px; }
+  .dropzone svg{ display:block; margin:0 auto 14px; }
+  .dropzone .primary{ font-size:15px; font-weight:500; margin:0 0 4px; }
+  .dropzone .secondary{ font-size:13px; color:var(--chalk-muted); margin:0; }
+  input[type=file]{ display:none; }
+
+  .preview-row{
+    display:flex; align-items:center; gap:14px;
+    padding:14px 16px; border-radius:12px;
+    background:rgba(255,255,255,0.04);
+    border:1px solid rgba(242,239,227,0.14);
+  }
+  .preview-row img{ width:52px; height:52px; object-fit:cover; border-radius:8px; }
+  .preview-row .info{ flex:1; min-width:0; }
+  .preview-row .name{ font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .preview-row .change{
+    background:none; border:none; color:var(--chalk-muted); font-size:13px;
+    text-decoration:underline; cursor:pointer; padding:0; font-family:inherit;
+  }
+  .preview-row .change:hover{ color:var(--chalk); }
+
+  .actions{ margin-top:20px; display:flex; justify-content:flex-end; }
+  button.primary-btn{
+    font-family:'Inter', sans-serif; font-weight:600; font-size:14.5px;
+    background:var(--chalk-yellow); color:#2b2612;
+    border:none; border-radius:9px; padding:12px 22px;
+    cursor:pointer; transition:transform .12s ease, box-shadow .12s ease;
+  }
+  button.primary-btn:hover:not(:disabled){ transform:translateY(-1px); box-shadow:0 6px 18px rgba(232,216,121,0.22); }
+  button.primary-btn:disabled{ opacity:.55; cursor:not-allowed; }
+  button.primary-btn:focus-visible{ outline:2px solid var(--chalk); outline-offset:2px; }
+
+  .status{
+    display:flex; align-items:center; gap:10px;
+    font-size:14px; color:var(--chalk-muted); margin-top:18px;
+  }
+  .status .scribble{ width:22px; height:14px; flex-shrink:0; }
+  @media (prefers-reduced-motion: no-preference){
+    .status .scribble path{ stroke-dasharray:60; animation:scribble 1.1s ease-in-out infinite; }
+  }
+  @keyframes scribble{
+    0%{ stroke-dashoffset:60; }
+    50%{ stroke-dashoffset:0; }
+    100%{ stroke-dashoffset:-60; }
+  }
+
+  .hidden{ display:none !important; }
+
+  .paper{
+    margin-top:36px;
+    background:
+      repeating-linear-gradient(var(--paper) 0 27px, var(--paper-line) 27px 28px),
+      var(--paper);
+    color:var(--ink);
+    border-radius:4px;
+    padding:22px 22px 26px;
+    transform:rotate(-0.6deg);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.35), 0 2px 0 rgba(0,0,0,0.06);
+  }
+  .image-wrap{ position:relative; border-radius:4px; overflow:hidden; background:#00000010; }
+  .image-wrap img{ display:block; width:100%; height:auto; }
+  .image-wrap svg.overlay{ position:absolute; inset:0; width:100%; height:100%; }
+  .ann-flag{
+    position:absolute; transform:translate(-50%, -50%);
+    font-family:'Kalam', cursive; font-weight:700; font-size:14px;
+    white-space:nowrap; pointer-events:none;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  }
+
+  .verdict{ margin-top:20px; }
+  .verdict h2{
+    font-family:'Kalam', cursive; font-size:22px; margin:0 0 10px;
+    color:var(--pen-red);
+  }
+  .verdict.is-ok h2{ color:#4d7a49; }
+  .quote{
+    font-size:14px; font-style:italic; color:var(--ink-muted);
+    border-left:3px solid var(--pen-red); padding-left:12px; margin:0 0 12px;
+  }
+  .verdict.is-ok .quote{ border-color:#4d7a49; }
+  .verdict p{ font-size:15px; line-height:1.6; margin:0 0 10px; }
+  .verdict .fix-label{ font-weight:600; }
+
+  .reset-row{ margin-top:22px; text-align:right; }
+  button.ghost-btn{
+    font-family:'Inter', sans-serif; font-weight:500; font-size:14px;
+    background:none; border:1px solid rgba(242,239,227,0.3); color:var(--chalk);
+    border-radius:9px; padding:10px 18px; cursor:pointer;
+  }
+  button.ghost-btn:hover{ border-color:var(--chalk); }
+
+  .qa-section{ margin-top:26px; padding-top:20px; border-top:1px dashed var(--paper-line); }
+  .qa-heading{ font-family:'Kalam', cursive; font-size:17px; margin:0 0 12px; color:var(--ink); font-weight:700; }
+  .qa-thread{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px; max-height:280px; overflow-y:auto; }
+  .qa-item .q{ font-size:14px; font-weight:600; color:var(--ink); margin:0 0 3px; }
+  .qa-item .a{ font-family:'Kalam', cursive; font-size:15.5px; color:var(--pen-red); margin:0; line-height:1.45; }
+  .qa-item .a.is-pending{ opacity:.55; font-family:'Inter', sans-serif; font-size:13px; color:var(--ink-muted); }
+  .qa-form{ display:flex; gap:8px; }
+  .qa-input{ flex:1; font-family:'Inter', sans-serif; font-size:14px; padding:10px 12px; border-radius:8px; border:1px solid var(--paper-line); background:#fff; color:var(--ink); }
+  .qa-input:focus-visible{ outline:2px solid var(--pen-red); outline-offset:1px; }
+  .qa-send{ font-family:'Inter', sans-serif; font-weight:600; font-size:13.5px; background:var(--ink); color:var(--paper); border:none; border-radius:8px; padding:0 18px; cursor:pointer; }
+  .qa-send:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .error-note{
+    margin-top:36px; padding:20px; border-radius:10px;
+    background:rgba(214,72,63,0.12); border:1px solid rgba(214,72,63,0.4);
+  }
+  .error-note h2{ font-family:'Kalam', cursive; font-size:19px; color:#e8968f; margin:0 0 8px; }
+  .error-note p{ font-size:14px; color:var(--chalk-muted); margin:0 0 14px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="app">
+  <p class="eyebrow">AI math check</p>
+  <h1>Show your work.</h1>
+  <p class="lede">Upload a photo of a problem you solved by hand. I'll read through your steps and mark exactly where it goes wrong — like a teacher circling it in red.</p>
+
+  <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--chalk-muted)">
+      <path d="M12 16V4M12 4l-4 4M12 4l4 4"/>
+      <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+    </svg>
+    <p class="primary">Click to upload, or drag a photo here</p>
+    <p class="secondary">JPG or PNG · one problem at a time</p>
+  </div>
+  <input type="file" id="fileInput" accept="image/*">
+
+  <div id="previewRow" class="preview-row hidden">
+    <img id="previewThumb" alt="">
+    <div class="info">
+      <div class="name" id="previewName"></div>
+    </div>
+    <button class="change" id="changeBtn" type="button">Change photo</button>
+  </div>
+
+  <div id="actionsRow" class="actions hidden">
+    <button class="primary-btn" id="checkBtn" type="button">Check my work</button>
+  </div>
+
+  <div id="statusRow" class="status hidden" role="status" aria-live="polite">
+    <svg class="scribble" viewBox="0 0 22 14" fill="none">
+      <path d="M1 7 C4 2, 7 12, 10 7 S16 2, 21 7" stroke="var(--chalk-yellow)" stroke-width="1.6" stroke-linecap="round"/>
+    </svg>
+    <span id="statusText">Reading your steps…</span>
+  </div>
+
+  <div id="resultPaper" class="paper hidden">
+    <div class="image-wrap">
+      <img id="resultImg" alt="Your uploaded math work">
+      <svg class="overlay" id="overlaySvg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <defs>
+          <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="3" markerHeight="3" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+            <path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </marker>
+        </defs>
+        <g id="annGroup"></g>
+      </svg>
+      <div class="ann-flag" id="annFlag"></div>
+    </div>
+    <div class="verdict" id="verdict">
+      <h2 id="verdictHeading"></h2>
+      <p class="quote" id="verdictQuote"></p>
+      <p id="verdictExplanation"></p>
+      <p id="verdictFix"></p>
+    </div>
+
+    <div class="qa-section hidden" id="qaSection">
+      <h3 class="qa-heading">Questions about this?</h3>
+      <div class="qa-thread" id="qaThread"></div>
+      <form class="qa-form" id="qaForm">
+        <input type="text" id="qaInput" class="qa-input" placeholder="Ask about this step…" autocomplete="off">
+        <button type="submit" class="qa-send" id="qaSend">Ask</button>
+      </form>
+    </div>
+
+    <div class="reset-row">
+      <button class="ghost-btn" id="resetBtn" type="button">Check another problem</button>
+    </div>
+  </div>
+
+  <div id="errorNote" class="error-note hidden">
+    <h2>Couldn't read that photo</h2>
+    <p id="errorText">Something went wrong. Try a clearer, well-lit photo, or check your connection.</p>
+    <button class="ghost-btn" id="retryBtn" type="button">Try again</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const dropzone = document.getElementById('dropzone');
+  const fileInput = document.getElementById('fileInput');
+  const previewRow = document.getElementById('previewRow');
+  const previewThumb = document.getElementById('previewThumb');
+  const previewName = document.getElementById('previewName');
+  const changeBtn = document.getElementById('changeBtn');
+  const actionsRow = document.getElementById('actionsRow');
+  const checkBtn = document.getElementById('checkBtn');
+  const statusRow = document.getElementById('statusRow');
+  const statusText = document.getElementById('statusText');
+  const resultPaper = document.getElementById('resultPaper');
+  const resultImg = document.getElementById('resultImg');
+  const overlaySvg = document.getElementById('overlaySvg');
+  const annGroup = document.getElementById('annGroup');
+  const annFlag = document.getElementById('annFlag');
+  const verdict = document.getElementById('verdict');
+  const verdictHeading = document.getElementById('verdictHeading');
+  const verdictQuote = document.getElementById('verdictQuote');
+  const verdictExplanation = document.getElementById('verdictExplanation');
+  const verdictFix = document.getElementById('verdictFix');
+  const resetBtn = document.getElementById('resetBtn');
+  const qaSection = document.getElementById('qaSection');
+  const qaThread = document.getElementById('qaThread');
+  const qaForm = document.getElementById('qaForm');
+  const qaInput = document.getElementById('qaInput');
+  const qaSend = document.getElementById('qaSend');
+  const errorNote = document.getElementById('errorNote');
+  const errorText = document.getElementById('errorText');
+  const retryBtn = document.getElementById('retryBtn');
+
+  let imageData = null; // { dataUrl, base64 }
+  let conversation = [];
+
+  // Kept in sync with the ANALYSIS_PROMPT in lib/anthropic.js — this copy is
+  // only used to reconstruct conversation history for follow-up questions,
+  // the actual analysis call is made server-side.
+  const ANALYSIS_PROMPT = `Look at this photo of handwritten math work. Read it from top to bottom as the student's solution to one problem, treating each distinct equation or step as one "line" (ignore blank space between them).
+
+Find the first line where the student makes a mathematical error (an incorrect step, wrong sign, dropped term, arithmetic slip, etc). If the whole solution is correct, note that instead.
+
+Respond with ONLY this JSON object, no markdown fences, no extra text:
+{"has_mistake": true or false, "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "total_lines": number of distinct written lines/steps in the photo, "mistake_line_number": 1-based position of the flagged line counting from the top (use the last line if has_mistake is false), "first_line_y": percent from the top edge of the photo to the vertical center of the FIRST written line, "last_line_y": percent from the top edge of the photo to the vertical center of the LAST written line, "x": percent from the left edge of the photo to roughly where the flagged line sits horizontally}
+
+Take care with first_line_y and last_line_y — every other line's position gets calculated from those two anchors, so estimate them precisely rather than the individual flagged line.`;
+
+  function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
+  function numOr(val, fallback){ const n = Number(val); return Number.isFinite(n) ? n : fallback; }
+
+  function computeLocation(parsed){
+    const total = Math.max(1, Math.round(numOr(parsed.total_lines, 1)));
+    const idx = clamp(Math.round(numOr(parsed.mistake_line_number, total)), 1, total);
+    const topY = clamp(numOr(parsed.first_line_y, 15), 4, 96);
+    const bottomY = clamp(numOr(parsed.last_line_y, 85), 4, 96);
+    const y = total > 1 ? topY + (bottomY - topY) * (idx - 1) / (total - 1) : bottomY;
+    const x = clamp(numOr(parsed.x, 50), 4, 96);
+    return { x, y: clamp(y, 4, 96) };
+  }
+
+  function resizeImage(file, maxDim){
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('read-failed'));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('decode-failed'));
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > maxDim || height > maxDim){
+            if (width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
+            else { width = Math.round(width * maxDim / height); height = maxDim; }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          resolve({ dataUrl, base64: dataUrl.split(',')[1] });
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleFile(file){
+    if (!file || !file.type.startsWith('image/')) return;
+    hideError();
+    hideResults();
+    try{
+      imageData = await resizeImage(file, 1200);
+      previewThumb.src = imageData.dataUrl;
+      previewName.textContent = file.name;
+      previewRow.classList.remove('hidden');
+      actionsRow.classList.remove('hidden');
+      dropzone.classList.add('hidden');
+    } catch(err){
+      showError("That photo didn't load. Try a different file.");
+    }
+  }
+
+  dropzone.addEventListener('click', () => fileInput.click());
+  dropzone.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); fileInput.click(); }
+  });
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('is-drag'); });
+  dropzone.addEventListener('dragleave', () => dropzone.classList.remove('is-drag'));
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault(); dropzone.classList.remove('is-drag');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+  changeBtn.addEventListener('click', () => {
+    fileInput.value = '';
+    previewRow.classList.add('hidden');
+    actionsRow.classList.add('hidden');
+    dropzone.classList.remove('hidden');
+    hideResults(); hideError();
+    imageData = null;
+    conversation = [];
+    qaThread.innerHTML = '';
+    qaSection.classList.add('hidden');
+  });
+
+  function hideResults(){ resultPaper.classList.add('hidden'); }
+  function hideError(){ errorNote.classList.add('hidden'); }
+  function showError(msg){
+    errorText.textContent = msg;
+    errorNote.classList.remove('hidden');
+  }
+
+  function buildOverlay(loc, isMistake){
+    const x = clamp(Number(loc.x) || 50, 4, 96);
+    const y = clamp(Number(loc.y) || 50, 4, 96);
+    const preferRight = x < 55;
+    const preferBelow = y < 30;
+    const lx = clamp(x + (preferRight ? 16 : -16), 8, 92);
+    const ly = clamp(y + (preferBelow ? 13 : -13), 8, 92);
+    const jitter = ((Math.round(x * 13) % 7) - 3);
+    const midX = (lx + x) / 2 + jitter;
+    const midY = (ly + y) / 2;
+    const color = isMistake ? 'var(--pen-red)' : 'var(--chalk-green)';
+
+    const mark = isMistake
+      ? `<ellipse cx="${x}" cy="${y}" rx="3.6" ry="2.6" fill="none" stroke="${color}" stroke-width="0.6" stroke-dasharray="2 1.6"/>`
+      : `<path d="M ${x-2.4} ${y} L ${x-0.6} ${y+1.9} L ${x+2.8} ${y-2.3}" fill="none" stroke="${color}" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+    annGroup.innerHTML = `
+      <path d="M ${lx} ${ly} Q ${midX} ${midY} ${x} ${y}" fill="none" stroke="${color}" stroke-width="0.6" stroke-linecap="round" marker-end="url(#arrow)"/>
+      ${mark}
+    `;
+    annFlag.textContent = isMistake ? 'the mistake' : 'looks right';
+    annFlag.style.left = lx + '%';
+    annFlag.style.top = ly + '%';
+    annFlag.style.color = isMistake ? 'var(--pen-red)' : 'var(--chalk-green)';
+  }
+
+  function renderResult(parsed){
+    resultImg.src = imageData.dataUrl;
+    resultImg.onload = () => buildOverlay(computeLocation(parsed), !!parsed.has_mistake);
+
+    verdict.classList.toggle('is-ok', !parsed.has_mistake);
+    verdictHeading.textContent = parsed.has_mistake ? "Here's where it breaks" : "Looks solid";
+    verdictQuote.textContent = parsed.line_quote ? `"${parsed.line_quote}"` : '';
+    verdictQuote.style.display = parsed.line_quote ? '' : 'none';
+    verdictExplanation.textContent = parsed.explanation || '';
+    if (parsed.has_mistake && parsed.fix){
+      verdictFix.innerHTML = `<span class="fix-label">Try this instead:</span> ${parsed.fix}`;
+      verdictFix.style.display = '';
+    } else {
+      verdictFix.style.display = 'none';
+    }
+    resultPaper.classList.remove('hidden');
+
+    conversation = [
+      { role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageData.base64 } },
+        { type: 'text', text: ANALYSIS_PROMPT }
+      ]},
+      { role: 'assistant', content: summarizeForConversation(parsed) }
+    ];
+    qaThread.innerHTML = '';
+    qaSection.classList.remove('hidden');
+  }
+
+  function summarizeForConversation(parsed){
+    if (parsed.has_mistake){
+      return `I found a mistake. The line "${parsed.line_quote || ''}" is incorrect: ${parsed.explanation || ''} The correct step is: ${parsed.fix || ''}`;
+    }
+    return `This solution looks correct. ${parsed.explanation || ''}`;
+  }
+
+  function parseModelJson(text){
+    let cleaned = text.trim().replace(/^```(json)?/i, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (typeof parsed.has_mistake !== 'boolean') throw new Error('bad-shape');
+    return parsed;
+  }
+
+  async function runCheck(){
+    if (!imageData) return;
+    hideError(); hideResults();
+    checkBtn.disabled = true;
+    statusRow.classList.remove('hidden');
+    statusText.textContent = 'Reading your steps…';
+
+    try{
+      const response = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: imageData.base64, mediaType: 'image/jpeg' })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      const parsed = parseModelJson(data.text);
+      renderResult(parsed);
+    } catch(err){
+      showError("Something went wrong reading that photo. Try a clearer, well-lit photo, or check your connection, then try again.");
+    } finally {
+      checkBtn.disabled = false;
+      statusRow.classList.add('hidden');
+    }
+  }
+
+  checkBtn.addEventListener('click', runCheck);
+  retryBtn.addEventListener('click', runCheck);
+  resetBtn.addEventListener('click', () => {
+    fileInput.value = '';
+    previewRow.classList.add('hidden');
+    actionsRow.classList.add('hidden');
+    dropzone.classList.remove('hidden');
+    hideResults(); hideError();
+    imageData = null;
+    conversation = [];
+    qaThread.innerHTML = '';
+    qaSection.classList.add('hidden');
+  });
+
+  function addQaPair(question){
+    const item = document.createElement('div');
+    item.className = 'qa-item';
+    const q = document.createElement('p');
+    q.className = 'q';
+    q.textContent = question;
+    const a = document.createElement('p');
+    a.className = 'a is-pending';
+    a.textContent = 'thinking…';
+    item.appendChild(q);
+    item.appendChild(a);
+    qaThread.appendChild(item);
+    qaThread.scrollTop = qaThread.scrollHeight;
+    return a;
+  }
+
+  qaForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const question = qaInput.value.trim();
+    if (!question || qaSend.disabled) return;
+    const answerEl = addQaPair(question);
+    conversation.push({ role: 'user', content: question });
+    qaInput.value = '';
+    qaSend.disabled = true;
+    qaInput.disabled = true;
+    try{
+      const response = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      const answer = data.answer || "I couldn't come up with an answer to that — try rephrasing?";
+      conversation.push({ role: 'assistant', content: answer });
+      answerEl.textContent = answer;
+      answerEl.classList.remove('is-pending');
+    } catch(err){
+      answerEl.textContent = "Sorry, that question didn't go through. Try asking again.";
+      answerEl.classList.remove('is-pending');
+      conversation.pop();
+    } finally {
+      qaSend.disabled = false;
+      qaInput.disabled = false;
+      qaInput.focus();
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "math-mistake-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Upload a photo of handwritten math work; AI finds the first mistake and marks it.",
+  "engines": {
+    "node": ">=18"
+  }
+}
