@@ -630,6 +630,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const MOTION_SMALL_W = 48, MOTION_SMALL_H = 36; // downsized frame used for cheap diffing
   const MOTION_PIXEL_DIFF_THRESHOLD = 20;         // per-pixel grayscale diff (0-255) counted as "changed"
   const MOTION_CHANGED_FRACTION_THRESHOLD = 0.02; // fraction of small-frame pixels that must change to count as motion
+  const SHOW_MOTION_DEBUG = true; // temporary: shows live motion % in the status line so thresholds can be tuned from real numbers instead of guessing
 
   let currentMode = 'upload';
   let cameraStream = null;
@@ -738,12 +739,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const gray = sampleMotion();
     if (!gray) return;
     const now = Date.now();
+    let motionFraction = 0;
     if (lastSmallFrame){
       let changed = 0;
       for (let i = 0; i < gray.length; i++){
         if (Math.abs(gray[i] - lastSmallFrame[i]) > MOTION_PIXEL_DIFF_THRESHOLD) changed++;
       }
-      if (changed / gray.length > MOTION_CHANGED_FRACTION_THRESHOLD){
+      motionFraction = changed / gray.length;
+      if (motionFraction > MOTION_CHANGED_FRACTION_THRESHOLD){
         writingActive = true;
         lastMotionAt = now;
       }
@@ -752,6 +755,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
     const stableLongEnough = writingActive && (now - lastMotionAt) > MOTION_STABLE_MS;
     const cooledDown = (now - lastCheckAt) > MIN_CHECK_INTERVAL_MS;
+
+    if (SHOW_MOTION_DEBUG){
+      const pct = (motionFraction * 100).toFixed(1);
+      setCameraStatus(`Watching… motion ${pct}%${writingActive ? ' — writing detected' : ''}`);
+    }
+
     if (stableLongEnough && cooledDown){
       writingActive = false;
       runWatchCheck();
