@@ -384,6 +384,7 @@ ${reviewed}
 ${pending}
 
 Now look at the current photo and report on the CURRENT state of the work:
+- For every new line since the last reviewed point, actually recompute the arithmetic yourself step by step rather than skimming and assuming it looks plausible — this is the most common way real mistakes get missed, especially on simple steps like isolating a variable (e.g. going from "2a = 6" to "a = 2" instead of "a = 3").
 - If there is a previously-flagged mistake and it is still present uncorrected, has_mistake should be true, mistake_resolved should be false, and the mistake fields should describe that same original mistake.
 - If a previously-flagged mistake has been corrected, set mistake_resolved to true. Then also check whether the work continues correctly after that fix, or whether a new mistake exists further down — if so has_mistake should be true describing that new mistake; otherwise has_mistake should be false.
 - If there was no pending mistake, check only the content written since the last reviewed line: if it's all correct so far, has_mistake should be false; if there's a mistake in it, has_mistake should be true.
