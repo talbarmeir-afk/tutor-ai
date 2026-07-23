@@ -93,6 +93,8 @@
   .dropzone .secondary{ font-size:13px; color:var(--chalk-muted); margin:0; }
   input[type=file]{ display:none; }
 
+  .camera-option-row{ margin-top:14px; text-align:center; }
+
   .preview-row{
     display:flex; align-items:center; gap:14px;
     padding:14px 16px; border-radius:12px;
@@ -226,6 +228,22 @@
     </div>
     <input type="file" id="fileInput" accept="image/*">
 
+    <div class="camera-option-row" id="cameraOptionRow">
+      <button class="ghost-btn" id="takePhotoBtn" type="button">Take a photo instead</button>
+    </div>
+
+    <div id="takePhotoSection" class="hidden">
+      <div class="camera-wrap" id="takePhotoWrap">
+        <video id="takePhotoVideo" autoplay playsinline muted></video>
+        <div class="camera-guide"></div>
+      </div>
+      <div class="actions">
+        <button class="ghost-btn" id="rotateTakePhotoBtn" type="button">Rotate 180°</button>
+        <button class="ghost-btn" id="cancelTakePhotoBtn" type="button">Cancel</button>
+        <button class="primary-btn" id="capturePhotoBtn" type="button">Capture</button>
+      </div>
+    </div>
+
     <div id="previewRow" class="preview-row hidden">
       <img id="previewThumb" alt="">
       <div class="info">
@@ -346,6 +364,13 @@
   const stopCameraBtn = document.getElementById('stopCameraBtn');
   const checkNowBtn = document.getElementById('checkNowBtn');
   const rotateCameraBtn = document.getElementById('rotateCameraBtn');
+  const cameraOptionRow = document.getElementById('cameraOptionRow');
+  const takePhotoBtn = document.getElementById('takePhotoBtn');
+  const takePhotoSection = document.getElementById('takePhotoSection');
+  const takePhotoVideo = document.getElementById('takePhotoVideo');
+  const rotateTakePhotoBtn = document.getElementById('rotateTakePhotoBtn');
+  const cancelTakePhotoBtn = document.getElementById('cancelTakePhotoBtn');
+  const capturePhotoBtn = document.getElementById('capturePhotoBtn');
   const watchResumeRow = document.getElementById('watchResumeRow');
   const continueBtn = document.getElementById('continueBtn');
   const newProblemBtn = document.getElementById('newProblemBtn');
@@ -444,6 +469,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       previewRow.classList.remove('hidden');
       actionsRow.classList.remove('hidden');
       dropzone.classList.add('hidden');
+      cameraOptionRow.classList.add('hidden');
     } catch(err){
       showError("That photo didn't load. Try a different file.");
     }
@@ -465,6 +491,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     previewRow.classList.add('hidden');
     actionsRow.classList.add('hidden');
     dropzone.classList.remove('hidden');
+    cameraOptionRow.classList.remove('hidden');
     hideResults(); hideError();
     imageData = null;
     conversation = [];
@@ -580,6 +607,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     previewRow.classList.add('hidden');
     actionsRow.classList.add('hidden');
     dropzone.classList.remove('hidden');
+    cameraOptionRow.classList.remove('hidden');
     hideResults(); hideError();
     imageData = null;
     conversation = [];
@@ -650,7 +678,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   let currentMode = 'upload';
   let cameraStream = null;
-  let cameraRotated = false; // persists across start/stop within the page session — set once per physical camera mount
+  let cameraRotated = false; // persists across start/stop within the page session — set once per physical camera mount; shared between watch mode and the take-a-photo flow
+  let takePhotoStream = null;
   let motionIntervalId = null;
   let motionCanvas = null, motionCtx = null;
   let lastSmallFrame = null;
@@ -682,6 +711,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     qaSection.classList.add('hidden');
     conversation = [];
     if (mode !== 'watch') stopCamera();
+    if (!takePhotoSection.classList.contains('hidden')) cancelTakePhoto();
   }
 
   modeToggle.addEventListener('click', (e) => {
@@ -737,6 +767,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   rotateCameraBtn.addEventListener('click', () => {
     cameraRotated = !cameraRotated;
     cameraVideo.classList.toggle('is-rotated', cameraRotated);
+    takePhotoVideo.classList.toggle('is-rotated', cameraRotated);
   });
 
   function ensureMotionCanvas(){
@@ -813,6 +844,60 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     return { dataUrl, base64: dataUrl.split(',')[1] };
   }
+
+  // ---- Take a photo (single-shot, feeds into the same upload-mode flow) ----
+  function stopTakePhotoStream(){
+    if (takePhotoStream){
+      takePhotoStream.getTracks().forEach((t) => t.stop());
+      takePhotoStream = null;
+    }
+    takePhotoVideo.srcObject = null;
+  }
+
+  function cancelTakePhoto(){
+    stopTakePhotoStream();
+    takePhotoSection.classList.add('hidden');
+    dropzone.classList.remove('hidden');
+    cameraOptionRow.classList.remove('hidden');
+  }
+
+  takePhotoBtn.addEventListener('click', async () => {
+    hideError(); hideResults();
+    try{
+      takePhotoStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1440 } }
+      });
+    } catch(err){
+      showError("Couldn't access your camera. Check permissions and try again, or upload a photo instead.");
+      return;
+    }
+    takePhotoVideo.srcObject = takePhotoStream;
+    takePhotoVideo.classList.toggle('is-rotated', cameraRotated);
+    dropzone.classList.add('hidden');
+    cameraOptionRow.classList.add('hidden');
+    takePhotoSection.classList.remove('hidden');
+  });
+
+  cancelTakePhotoBtn.addEventListener('click', cancelTakePhoto);
+
+  rotateTakePhotoBtn.addEventListener('click', () => {
+    cameraRotated = !cameraRotated;
+    takePhotoVideo.classList.toggle('is-rotated', cameraRotated);
+    cameraVideo.classList.toggle('is-rotated', cameraRotated);
+  });
+
+  capturePhotoBtn.addEventListener('click', () => {
+    const frame = captureFrameFromVideo(takePhotoVideo, 1600, cameraRotated);
+    stopTakePhotoStream();
+    takePhotoSection.classList.add('hidden');
+    hideError(); hideResults();
+    imageData = frame;
+    previewThumb.src = imageData.dataUrl;
+    previewName.textContent = 'Photo taken just now';
+    previewRow.classList.remove('hidden');
+    actionsRow.classList.remove('hidden');
+    cameraOptionRow.classList.add('hidden');
+  });
 
   async function runWatchCheck(){
     checkInFlight = true;
