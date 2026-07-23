@@ -178,6 +178,12 @@
   }
   button.ghost-btn:hover{ border-color:var(--chalk); }
 
+  /* Ghost buttons default to light-on-dark (for the app background), but
+     resetBtn/newProblemBtn also live inside the light paper panel — override
+     to dark-on-light there so they're not nearly invisible against it. */
+  .paper button.ghost-btn{ color:var(--ink); border-color:rgba(43,43,40,0.28); }
+  .paper button.ghost-btn:hover{ border-color:var(--ink); }
+
   .qa-section{ margin-top:26px; padding-top:20px; border-top:1px dashed var(--paper-line); }
   .qa-heading{ font-family:'Kalam', cursive; font-size:17px; margin:0 0 12px; color:var(--ink); font-weight:700; }
   .qa-thread{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px; max-height:280px; overflow-y:auto; }
