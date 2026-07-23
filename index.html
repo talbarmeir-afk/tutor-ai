@@ -44,6 +44,35 @@
   }
   .lede{ color:var(--chalk-muted); font-size:16px; line-height:1.6; max-width:52ch; margin:0 0 40px; }
 
+  .mode-toggle{ display:flex; gap:8px; margin:0 0 28px; }
+  .mode-btn{
+    font-family:'Inter', sans-serif; font-weight:600; font-size:13.5px;
+    background:rgba(255,255,255,0.04); color:var(--chalk-muted);
+    border:1px solid rgba(242,239,227,0.16); border-radius:9px;
+    padding:9px 16px; cursor:pointer;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .mode-btn:hover{ color:var(--chalk); }
+  .mode-btn.is-active{ background:var(--chalk-yellow); color:#2b2612; border-color:var(--chalk-yellow); }
+  .mode-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+
+  .camera-wrap{
+    position:relative; border-radius:14px; overflow:hidden;
+    background:#0e1c14; border:1px solid rgba(242,239,227,0.16);
+    aspect-ratio:4/3;
+  }
+  .camera-wrap video{ display:block; width:100%; height:100%; object-fit:cover; }
+  .camera-guide{
+    position:absolute; inset:10% 14%; border:2px dashed rgba(242,239,227,0.4);
+    border-radius:10px; pointer-events:none;
+  }
+  .camera-status{
+    position:absolute; left:12px; right:12px; bottom:12px;
+    font-size:13px; color:var(--chalk); background:rgba(20,36,27,0.72);
+    padding:8px 12px; border-radius:8px; text-align:center;
+  }
+  .camera-status.is-flash{ color:var(--chalk-yellow); }
+
   .dropzone{
     border:2px dashed rgba(242,239,227,0.32);
     border-radius:14px;
@@ -172,35 +201,54 @@
 <div class="app">
   <p class="eyebrow">AI math check</p>
   <h1>Show your work.</h1>
-  <p class="lede">Upload a photo of a problem you solved by hand. I'll read through your steps and mark exactly where it goes wrong — like a teacher circling it in red.</p>
+  <p class="lede">Upload a photo of a problem you solved by hand, or let your camera watch as you write. I'll read through your steps and mark exactly where it goes wrong — like a teacher circling it in red.</p>
 
-  <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
-    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--chalk-muted)">
-      <path d="M12 16V4M12 4l-4 4M12 4l4 4"/>
-      <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
-    </svg>
-    <p class="primary">Click to upload, or drag a photo here</p>
-    <p class="secondary">JPG or PNG · one problem at a time</p>
+  <div class="mode-toggle" id="modeToggle" role="tablist">
+    <button class="mode-btn is-active" type="button" data-mode="upload">Upload a photo</button>
+    <button class="mode-btn" type="button" data-mode="watch">Watch with camera</button>
   </div>
-  <input type="file" id="fileInput" accept="image/*">
 
-  <div id="previewRow" class="preview-row hidden">
-    <img id="previewThumb" alt="">
-    <div class="info">
-      <div class="name" id="previewName"></div>
+  <div id="uploadMode">
+    <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--chalk-muted)">
+        <path d="M12 16V4M12 4l-4 4M12 4l4 4"/>
+        <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
+      </svg>
+      <p class="primary">Click to upload, or drag a photo here</p>
+      <p class="secondary">JPG or PNG · one problem at a time</p>
     </div>
-    <button class="change" id="changeBtn" type="button">Change photo</button>
+    <input type="file" id="fileInput" accept="image/*">
+
+    <div id="previewRow" class="preview-row hidden">
+      <img id="previewThumb" alt="">
+      <div class="info">
+        <div class="name" id="previewName"></div>
+      </div>
+      <button class="change" id="changeBtn" type="button">Change photo</button>
+    </div>
+
+    <div id="actionsRow" class="actions hidden">
+      <button class="primary-btn" id="checkBtn" type="button">Check my work</button>
+    </div>
+
+    <div id="statusRow" class="status hidden" role="status" aria-live="polite">
+      <svg class="scribble" viewBox="0 0 22 14" fill="none">
+        <path d="M1 7 C4 2, 7 12, 10 7 S16 2, 21 7" stroke="var(--chalk-yellow)" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <span id="statusText">Reading your steps…</span>
+    </div>
   </div>
 
-  <div id="actionsRow" class="actions hidden">
-    <button class="primary-btn" id="checkBtn" type="button">Check my work</button>
-  </div>
-
-  <div id="statusRow" class="status hidden" role="status" aria-live="polite">
-    <svg class="scribble" viewBox="0 0 22 14" fill="none">
-      <path d="M1 7 C4 2, 7 12, 10 7 S16 2, 21 7" stroke="var(--chalk-yellow)" stroke-width="1.6" stroke-linecap="round"/>
-    </svg>
-    <span id="statusText">Reading your steps…</span>
+  <div id="watchMode" class="hidden">
+    <div class="camera-wrap" id="cameraWrap">
+      <video id="cameraVideo" autoplay playsinline muted></video>
+      <div class="camera-guide"></div>
+      <div class="camera-status" id="cameraStatus">Press start, then point your camera at your paper.</div>
+    </div>
+    <div class="actions">
+      <button class="ghost-btn hidden" id="stopCameraBtn" type="button">Stop watching</button>
+      <button class="primary-btn" id="startCameraBtn" type="button">Start watching</button>
+    </div>
   </div>
 
   <div id="resultPaper" class="paper hidden">
@@ -234,6 +282,7 @@
 
     <div class="reset-row">
       <button class="ghost-btn" id="resetBtn" type="button">Check another problem</button>
+      <button class="ghost-btn hidden" id="resumeBtn" type="button">Got it — keep writing</button>
     </div>
   </div>
 
@@ -275,6 +324,14 @@
   const errorNote = document.getElementById('errorNote');
   const errorText = document.getElementById('errorText');
   const retryBtn = document.getElementById('retryBtn');
+  const modeToggle = document.getElementById('modeToggle');
+  const uploadModeEl = document.getElementById('uploadMode');
+  const watchModeEl = document.getElementById('watchMode');
+  const cameraVideo = document.getElementById('cameraVideo');
+  const cameraStatus = document.getElementById('cameraStatus');
+  const startCameraBtn = document.getElementById('startCameraBtn');
+  const stopCameraBtn = document.getElementById('stopCameraBtn');
+  const resumeBtn = document.getElementById('resumeBtn');
 
   let imageData = null; // { dataUrl, base64 }
   let conversation = [];
@@ -290,6 +347,36 @@ Respond with ONLY this JSON object, no markdown fences, no extra text:
 {"has_mistake": true or false, "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
 
 For x and y: point at the exact wrong token itself (e.g. the specific incorrect number or sign), not the start of the line and not the line's overall center — if the error is a number partway through or at the end of the line, x/y should land on that number, not on the beginning of the equation. Look directly at that token's pixel position in the photo; do not estimate it from the line's position in a numbered sequence or assume lines are evenly spaced.`;
+
+  // Kept in sync with buildWatchPrompt in lib/anthropic.js. It's a pure
+  // function of priorState, so calling it with the exact priorState snapshot
+  // used for a given /api/watch request reconstructs the identical prompt
+  // text that was actually sent — needed for follow-up Q&A conversation history.
+  function buildWatchPrompt(priorState){
+    const reviewed = priorState && priorState.reviewedThrough
+      ? `You have already checked this student's work and confirmed everything up through and including this line was correct: "${priorState.reviewedThrough}". Do not re-flag anything at or before that point — only evaluate content written after it.`
+      : `This is the first check — nothing has been reviewed yet.`;
+
+    const pending = priorState && priorState.pendingMistake
+      ? `On your last check you flagged an unresolved mistake: the line was "${priorState.pendingMistake.line_quote}" — ${priorState.pendingMistake.explanation} Check first whether the student has since corrected this specific mistake.`
+      : `There is no previously-flagged mistake to check on.`;
+
+    return `You are watching a student's handwritten math work through a webcam, checking in periodically as they write one problem, top to bottom, treating each distinct equation or step as one "line".
+
+${reviewed}
+${pending}
+
+Now look at the current photo and report on the CURRENT state of the work:
+- If there is a previously-flagged mistake and it is still present uncorrected, has_mistake should be true, mistake_resolved should be false, and the mistake fields should describe that same original mistake.
+- If a previously-flagged mistake has been corrected, set mistake_resolved to true. Then also check whether the work continues correctly after that fix, or whether a new mistake exists further down — if so has_mistake should be true describing that new mistake; otherwise has_mistake should be false.
+- If there was no pending mistake, check only the content written since the last reviewed line: if it's all correct so far, has_mistake should be false; if there's a mistake in it, has_mistake should be true.
+- Either way, set reviewed_through to a short exact snippet of the last written line that is now confirmed fully correct (the line immediately before any currently-unresolved mistake, or the last written line if everything so far is correct).
+
+Respond with ONLY this JSON object, no markdown fences, no extra text:
+{"has_mistake": true or false, "mistake_resolved": true or false, "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
+
+For x and y (only when has_mistake is true): point at the exact wrong token itself — the specific incorrect number, sign, or term — not the start of the line.`;
+  }
 
   function clamp(n, min, max){ return Math.max(min, Math.min(max, n)); }
   function numOr(val, fallback){ const n = Number(val); return Number.isFinite(n) ? n : fallback; }
@@ -400,8 +487,9 @@ For x and y: point at the exact wrong token itself (e.g. the specific incorrect 
     annFlag.style.color = isMistake ? 'var(--pen-red)' : 'var(--chalk-green)';
   }
 
-  function renderResult(parsed){
-    resultImg.src = imageData.dataUrl;
+  function renderResult(parsed, frameOverride, promptTextOverride){
+    const frame = frameOverride || imageData;
+    resultImg.src = frame.dataUrl;
     resultImg.onload = () => buildOverlay(computeLocation(parsed), !!parsed.has_mistake);
 
     verdict.classList.toggle('is-ok', !parsed.has_mistake);
@@ -419,8 +507,8 @@ For x and y: point at the exact wrong token itself (e.g. the specific incorrect 
 
     conversation = [
       { role: 'user', content: [
-        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageData.base64 } },
-        { type: 'text', text: ANALYSIS_PROMPT }
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: frame.base64 } },
+        { type: 'text', text: promptTextOverride || ANALYSIS_PROMPT }
       ]},
       { role: 'assistant', content: summarizeForConversation(parsed) }
     ];
@@ -526,6 +614,216 @@ For x and y: point at the exact wrong token itself (e.g. the specific incorrect 
       qaSend.disabled = false;
       qaInput.disabled = false;
       qaInput.focus();
+    }
+  });
+
+  // ---- Watch mode (camera) ----
+  // Claude's vision API isn't a live video model — "continuous" here means
+  // auto-triggering a check when the camera sees writing pause, not literal
+  // frame-by-frame tracking. These constants are starting points; tune them
+  // if checks fire too eagerly or too late for your camera/lighting/desk setup.
+  const MOTION_SAMPLE_MS = 600;           // how often we sample the feed for motion
+  const MOTION_STABLE_MS = 1500;          // stillness required after writing before triggering a check
+  const MIN_CHECK_INTERVAL_MS = 4000;     // hard floor between checks, regardless of motion
+  const MOTION_SMALL_W = 48, MOTION_SMALL_H = 36; // downsized frame used for cheap diffing
+  const MOTION_PIXEL_DIFF_THRESHOLD = 20;         // per-pixel grayscale diff (0-255) counted as "changed"
+  const MOTION_CHANGED_FRACTION_THRESHOLD = 0.02; // fraction of small-frame pixels that must change to count as motion
+
+  let currentMode = 'upload';
+  let cameraStream = null;
+  let motionIntervalId = null;
+  let motionCanvas = null, motionCtx = null;
+  let lastSmallFrame = null;
+  let writingActive = false;
+  let lastMotionAt = 0;
+  let lastCheckAt = 0;
+  let checkInFlight = false;
+  let watchFrozen = false;
+  let watchState = { reviewedThrough: null, pendingMistake: null };
+
+  function setCameraStatus(text, flash){
+    cameraStatus.textContent = text;
+    cameraStatus.classList.toggle('is-flash', !!flash);
+  }
+
+  function setMode(mode){
+    currentMode = mode;
+    modeToggle.querySelectorAll('.mode-btn').forEach((b) => {
+      b.classList.toggle('is-active', b.dataset.mode === mode);
+    });
+    uploadModeEl.classList.toggle('hidden', mode !== 'upload');
+    watchModeEl.classList.toggle('hidden', mode !== 'watch');
+    hideResults(); hideError();
+    resetBtn.classList.remove('hidden');
+    resumeBtn.classList.add('hidden');
+    qaThread.innerHTML = '';
+    qaSection.classList.add('hidden');
+    conversation = [];
+    if (mode !== 'watch') stopCamera();
+  }
+
+  modeToggle.addEventListener('click', (e) => {
+    const btn = e.target.closest('.mode-btn');
+    if (!btn || btn.dataset.mode === currentMode) return;
+    setMode(btn.dataset.mode);
+  });
+
+  async function startCamera(){
+    try{
+      cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }
+      });
+    } catch(err){
+      setCameraStatus("Couldn't access your camera. Check permissions and try again.");
+      return;
+    }
+    cameraVideo.srcObject = cameraStream;
+    startCameraBtn.classList.add('hidden');
+    stopCameraBtn.classList.remove('hidden');
+    watchState = { reviewedThrough: null, pendingMistake: null };
+    lastSmallFrame = null;
+    writingActive = false;
+    lastCheckAt = 0;
+    setCameraStatus('Watching… write your next step.');
+    motionIntervalId = setInterval(tickMotion, MOTION_SAMPLE_MS);
+  }
+
+  function stopCamera(){
+    if (motionIntervalId){ clearInterval(motionIntervalId); motionIntervalId = null; }
+    if (cameraStream){
+      cameraStream.getTracks().forEach((t) => t.stop());
+      cameraStream = null;
+    }
+    cameraVideo.srcObject = null;
+    startCameraBtn.classList.remove('hidden');
+    stopCameraBtn.classList.add('hidden');
+    watchFrozen = false;
+    setCameraStatus('Press start, then point your camera at your paper.');
+  }
+
+  startCameraBtn.addEventListener('click', startCamera);
+  stopCameraBtn.addEventListener('click', stopCamera);
+
+  function ensureMotionCanvas(){
+    if (!motionCanvas){
+      motionCanvas = document.createElement('canvas');
+      motionCanvas.width = MOTION_SMALL_W;
+      motionCanvas.height = MOTION_SMALL_H;
+      motionCtx = motionCanvas.getContext('2d', { willReadFrequently: true });
+    }
+  }
+
+  function sampleMotion(){
+    if (!cameraVideo.videoWidth) return null;
+    ensureMotionCanvas();
+    motionCtx.drawImage(cameraVideo, 0, 0, MOTION_SMALL_W, MOTION_SMALL_H);
+    const frame = motionCtx.getImageData(0, 0, MOTION_SMALL_W, MOTION_SMALL_H).data;
+    const gray = new Uint8ClampedArray(MOTION_SMALL_W * MOTION_SMALL_H);
+    for (let i = 0, p = 0; i < frame.length; i += 4, p++){
+      gray[p] = (frame[i] * 0.299 + frame[i + 1] * 0.587 + frame[i + 2] * 0.114) | 0;
+    }
+    return gray;
+  }
+
+  function tickMotion(){
+    if (watchFrozen || checkInFlight) return;
+    const gray = sampleMotion();
+    if (!gray) return;
+    const now = Date.now();
+    if (lastSmallFrame){
+      let changed = 0;
+      for (let i = 0; i < gray.length; i++){
+        if (Math.abs(gray[i] - lastSmallFrame[i]) > MOTION_PIXEL_DIFF_THRESHOLD) changed++;
+      }
+      if (changed / gray.length > MOTION_CHANGED_FRACTION_THRESHOLD){
+        writingActive = true;
+        lastMotionAt = now;
+      }
+    }
+    lastSmallFrame = gray;
+
+    const stableLongEnough = writingActive && (now - lastMotionAt) > MOTION_STABLE_MS;
+    const cooledDown = (now - lastCheckAt) > MIN_CHECK_INTERVAL_MS;
+    if (stableLongEnough && cooledDown){
+      writingActive = false;
+      runWatchCheck();
+    }
+  }
+
+  function captureFrameFromVideo(video, maxDim){
+    let width = video.videoWidth, height = video.videoHeight;
+    if (width > maxDim || height > maxDim){
+      if (width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
+      else { width = Math.round(width * maxDim / height); height = maxDim; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    return { dataUrl, base64: dataUrl.split(',')[1] };
+  }
+
+  async function runWatchCheck(){
+    checkInFlight = true;
+    setCameraStatus('Checking…');
+    const frame = captureFrameFromVideo(cameraVideo, 1200);
+    // Snapshot priorState before mutating it — buildWatchPrompt(priorStateSnapshot)
+    // must reconstruct exactly what was sent for THIS request, for QA history.
+    const priorStateSnapshot = { reviewedThrough: watchState.reviewedThrough, pendingMistake: watchState.pendingMistake };
+
+    try{
+      const response = await fetch('/api/watch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: frame.base64, mediaType: 'image/jpeg', priorState: priorStateSnapshot })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      const parsed = parseModelJson(data.text);
+      lastCheckAt = Date.now();
+
+      if (parsed.has_mistake){
+        watchState = {
+          reviewedThrough: parsed.reviewed_through || priorStateSnapshot.reviewedThrough,
+          pendingMistake: { line_quote: parsed.line_quote || '', explanation: parsed.explanation || '', fix: parsed.fix || '' }
+        };
+        showWatchResult(parsed, frame, priorStateSnapshot);
+      } else {
+        watchState = { reviewedThrough: parsed.reviewed_through || priorStateSnapshot.reviewedThrough, pendingMistake: null };
+        setCameraStatus(parsed.mistake_resolved ? "Nice — that's fixed! Watching…" : 'Watching…', !!parsed.mistake_resolved);
+      }
+    } catch(err){
+      lastCheckAt = Date.now();
+      setCameraStatus("Couldn't check that step — still watching.");
+    } finally {
+      checkInFlight = false;
+    }
+  }
+
+  function showWatchResult(parsed, frame, priorStateSnapshot){
+    watchFrozen = true;
+    if (motionIntervalId){ clearInterval(motionIntervalId); motionIntervalId = null; }
+    watchModeEl.classList.add('hidden');
+    resetBtn.classList.add('hidden');
+    resumeBtn.classList.remove('hidden');
+    renderResult(parsed, frame, buildWatchPrompt(priorStateSnapshot));
+  }
+
+  resumeBtn.addEventListener('click', () => {
+    hideResults();
+    watchModeEl.classList.remove('hidden');
+    resumeBtn.classList.add('hidden');
+    resetBtn.classList.remove('hidden');
+    qaThread.innerHTML = '';
+    qaSection.classList.add('hidden');
+    conversation = [];
+    watchFrozen = false;
+    if (cameraStream){
+      setCameraStatus('Watching…');
+      lastSmallFrame = null;
+      writingActive = false;
+      lastMotionAt = Date.now();
+      motionIntervalId = setInterval(tickMotion, MOTION_SAMPLE_MS);
     }
   });
 })();
