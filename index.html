@@ -246,6 +246,7 @@
       <div class="camera-status" id="cameraStatus">Press start, then point your camera at your paper.</div>
     </div>
     <div class="actions">
+      <button class="ghost-btn hidden" id="checkNowBtn" type="button">Check now</button>
       <button class="ghost-btn hidden" id="stopCameraBtn" type="button">Stop watching</button>
       <button class="primary-btn" id="startCameraBtn" type="button">Start watching</button>
     </div>
@@ -331,6 +332,7 @@
   const cameraStatus = document.getElementById('cameraStatus');
   const startCameraBtn = document.getElementById('startCameraBtn');
   const stopCameraBtn = document.getElementById('stopCameraBtn');
+  const checkNowBtn = document.getElementById('checkNowBtn');
   const resumeBtn = document.getElementById('resumeBtn');
 
   let imageData = null; // { dataUrl, base64 }
@@ -680,6 +682,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     cameraVideo.srcObject = cameraStream;
     startCameraBtn.classList.add('hidden');
     stopCameraBtn.classList.remove('hidden');
+    checkNowBtn.classList.remove('hidden');
     watchState = { reviewedThrough: null, pendingMistake: null };
     lastSmallFrame = null;
     writingActive = false;
@@ -697,12 +700,17 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     cameraVideo.srcObject = null;
     startCameraBtn.classList.remove('hidden');
     stopCameraBtn.classList.add('hidden');
+    checkNowBtn.classList.add('hidden');
     watchFrozen = false;
     setCameraStatus('Press start, then point your camera at your paper.');
   }
 
   startCameraBtn.addEventListener('click', startCamera);
   stopCameraBtn.addEventListener('click', stopCamera);
+  checkNowBtn.addEventListener('click', () => {
+    if (checkInFlight || watchFrozen || !cameraStream) return;
+    runWatchCheck();
+  });
 
   function ensureMotionCanvas(){
     if (!motionCanvas){
