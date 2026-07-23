@@ -107,7 +107,7 @@
   }
   .preview-row .change:hover{ color:var(--chalk); }
 
-  .actions{ margin-top:20px; display:flex; justify-content:flex-end; }
+  .actions{ margin-top:20px; display:flex; justify-content:flex-end; gap:10px; }
   button.primary-btn{
     font-family:'Inter', sans-serif; font-weight:600; font-size:14.5px;
     background:var(--chalk-yellow); color:#2b2612;
@@ -273,7 +273,8 @@
     </div>
 
     <div class="actions hidden" id="watchResumeRow">
-      <button class="primary-btn" id="resumeBtn" type="button">Got it — keep writing</button>
+      <button class="ghost-btn" id="newProblemBtn" type="button">Start a new problem</button>
+      <button class="primary-btn" id="continueBtn" type="button">Continue this problem</button>
     </div>
 
     <div class="qa-section hidden" id="qaSection">
@@ -337,7 +338,8 @@
   const stopCameraBtn = document.getElementById('stopCameraBtn');
   const checkNowBtn = document.getElementById('checkNowBtn');
   const watchResumeRow = document.getElementById('watchResumeRow');
-  const resumeBtn = document.getElementById('resumeBtn');
+  const continueBtn = document.getElementById('continueBtn');
+  const newProblemBtn = document.getElementById('newProblemBtn');
 
   let imageData = null; // { dataUrl, base64 }
   let conversation = [];
@@ -836,7 +838,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     renderResult(parsed, frame, buildWatchPrompt(priorStateSnapshot));
   }
 
-  resumeBtn.addEventListener('click', () => {
+  // "Continue" keeps watchState as-is, so the next check still knows about
+  // this unresolved mistake and expects it fixed before moving on. "Start a
+  // new problem" resets watchState, so the next check judges only what's
+  // newly written from scratch — otherwise the model (correctly, per its
+  // instructions) keeps re-flagging the old unresolved mistake even after
+  // the student has moved on to a different problem entirely.
+  function resumeWatching(resetState){
     hideResults();
     watchModeEl.classList.remove('hidden');
     watchResumeRow.classList.add('hidden');
@@ -845,14 +853,20 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     qaSection.classList.add('hidden');
     conversation = [];
     watchFrozen = false;
+    if (resetState){
+      watchState = { reviewedThrough: null, pendingMistake: null };
+    }
     if (cameraStream){
-      setCameraStatus('Watching…');
+      setCameraStatus(resetState ? 'Watching for a new problem…' : 'Watching…');
       lastSmallFrame = null;
       writingActive = false;
       lastMotionAt = Date.now();
       motionIntervalId = setInterval(tickMotion, MOTION_SAMPLE_MS);
     }
-  });
+  }
+
+  continueBtn.addEventListener('click', () => resumeWatching(false));
+  newProblemBtn.addEventListener('click', () => resumeWatching(true));
 })();
 </script>
 </body>
