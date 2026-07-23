@@ -414,7 +414,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
           resolve({ dataUrl, base64: dataUrl.split(',')[1] });
         };
         img.src = e.target.result;
@@ -428,7 +428,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     hideError();
     hideResults();
     try{
-      imageData = await resizeImage(file, 1200);
+      imageData = await resizeImage(file, 1600);
       previewThumb.src = imageData.dataUrl;
       previewName.textContent = file.name;
       previewRow.classList.remove('hidden');
@@ -682,7 +682,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   async function startCamera(){
     try{
       cameraStream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 960 } }
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1440 } }
       });
     } catch(err){
       setCameraStatus("Couldn't access your camera. Check permissions and try again.");
@@ -784,14 +784,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const canvas = document.createElement('canvas');
     canvas.width = width; canvas.height = height;
     canvas.getContext('2d').drawImage(video, 0, 0, width, height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     return { dataUrl, base64: dataUrl.split(',')[1] };
   }
 
   async function runWatchCheck(){
     checkInFlight = true;
     setCameraStatus('Checking…');
-    const frame = captureFrameFromVideo(cameraVideo, 1200);
+    const frame = captureFrameFromVideo(cameraVideo, 1600);
     // Snapshot priorState before mutating it — buildWatchPrompt(priorStateSnapshot)
     // must reconstruct exactly what was sent for THIS request, for QA history.
     const priorStateSnapshot = { reviewedThrough: watchState.reviewedThrough, pendingMistake: watchState.pendingMistake };
