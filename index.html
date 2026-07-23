@@ -62,6 +62,7 @@
     aspect-ratio:4/3;
   }
   .camera-wrap video{ display:block; width:100%; height:100%; object-fit:cover; }
+  .camera-wrap video.is-rotated{ transform:rotate(180deg); }
   .camera-guide{
     position:absolute; inset:10% 14%; border:2px dashed rgba(242,239,227,0.4);
     border-radius:10px; pointer-events:none;
@@ -246,6 +247,7 @@
       <div class="camera-status" id="cameraStatus">Press start, then point your camera at your paper.</div>
     </div>
     <div class="actions">
+      <button class="ghost-btn hidden" id="rotateCameraBtn" type="button">Rotate 180°</button>
       <button class="ghost-btn hidden" id="checkNowBtn" type="button">Check now</button>
       <button class="ghost-btn hidden" id="stopCameraBtn" type="button">Stop watching</button>
       <button class="primary-btn" id="startCameraBtn" type="button">Start watching</button>
@@ -337,6 +339,7 @@
   const startCameraBtn = document.getElementById('startCameraBtn');
   const stopCameraBtn = document.getElementById('stopCameraBtn');
   const checkNowBtn = document.getElementById('checkNowBtn');
+  const rotateCameraBtn = document.getElementById('rotateCameraBtn');
   const watchResumeRow = document.getElementById('watchResumeRow');
   const continueBtn = document.getElementById('continueBtn');
   const newProblemBtn = document.getElementById('newProblemBtn');
@@ -640,6 +643,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   let currentMode = 'upload';
   let cameraStream = null;
+  let cameraRotated = false; // persists across start/stop within the page session — set once per physical camera mount
   let motionIntervalId = null;
   let motionCanvas = null, motionCtx = null;
   let lastSmallFrame = null;
@@ -689,9 +693,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       return;
     }
     cameraVideo.srcObject = cameraStream;
+    cameraVideo.classList.toggle('is-rotated', cameraRotated);
     startCameraBtn.classList.add('hidden');
     stopCameraBtn.classList.remove('hidden');
     checkNowBtn.classList.remove('hidden');
+    rotateCameraBtn.classList.remove('hidden');
     watchState = { reviewedThrough: null, pendingMistake: null };
     lastSmallFrame = null;
     writingActive = false;
@@ -710,6 +716,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     startCameraBtn.classList.remove('hidden');
     stopCameraBtn.classList.add('hidden');
     checkNowBtn.classList.add('hidden');
+    rotateCameraBtn.classList.add('hidden');
     watchFrozen = false;
     setCameraStatus('Press start, then point your camera at your paper.');
   }
@@ -719,6 +726,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   checkNowBtn.addEventListener('click', () => {
     if (checkInFlight || watchFrozen || !cameraStream) return;
     runWatchCheck();
+  });
+  rotateCameraBtn.addEventListener('click', () => {
+    cameraRotated = !cameraRotated;
+    cameraVideo.classList.toggle('is-rotated', cameraRotated);
   });
 
   function ensureMotionCanvas(){
@@ -775,7 +786,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
   }
 
-  function captureFrameFromVideo(video, maxDim){
+  function captureFrameFromVideo(video, maxDim, rotated){
     let width = video.videoWidth, height = video.videoHeight;
     if (width > maxDim || height > maxDim){
       if (width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
@@ -783,7 +794,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     const canvas = document.createElement('canvas');
     canvas.width = width; canvas.height = height;
-    canvas.getContext('2d').drawImage(video, 0, 0, width, height);
+    const ctx = canvas.getContext('2d');
+    if (rotated){
+      // Rotate the canvas itself so the captured frame matches the rotated
+      // preview — otherwise the toggle would fix what the user sees without
+      // fixing what actually gets sent to the model.
+      ctx.translate(width, height);
+      ctx.rotate(Math.PI);
+    }
+    ctx.drawImage(video, 0, 0, width, height);
     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
     return { dataUrl, base64: dataUrl.split(',')[1] };
   }
@@ -791,7 +810,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   async function runWatchCheck(){
     checkInFlight = true;
     setCameraStatus('Checking…');
-    const frame = captureFrameFromVideo(cameraVideo, 1600);
+    const frame = captureFrameFromVideo(cameraVideo, 1600, cameraRotated);
     // Snapshot priorState before mutating it — buildWatchPrompt(priorStateSnapshot)
     // must reconstruct exactly what was sent for THIS request, for QA history.
     const priorStateSnapshot = { reviewedThrough: watchState.reviewedThrough, pendingMistake: watchState.pendingMistake };
