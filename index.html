@@ -385,6 +385,8 @@
 
 Find the first line where the student makes a mathematical error (an incorrect step, wrong sign, dropped term, arithmetic slip, etc), and identify the specific wrong token within that line — the particular number, sign, or term that is actually incorrect (not just the line as a whole). If the whole solution is correct, note that instead (point at the last written line).
 
+If a line has been crossed out, struck through, or otherwise marked as deleted/wrong by the student themselves, treat it as retracted — do not flag it as the mistake. Evaluate whatever they wrote as the replacement (on the same line or the next one) as the actual current step instead.
+
 Respond with ONLY this JSON object, no markdown fences, no extra text:
 {"has_mistake": true or false, "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
 
@@ -410,7 +412,8 @@ ${pending}
 
 Now look at the current photo and report on the CURRENT state of the work:
 - For every new line since the last reviewed point, actually recompute the arithmetic yourself step by step rather than skimming and assuming it looks plausible — this is the most common way real mistakes get missed, especially on simple steps like isolating a variable (e.g. going from "2a = 6" to "a = 2" instead of "a = 3").
-- If there is a previously-flagged mistake and it is still present uncorrected, has_mistake should be true, mistake_resolved should be false, and the mistake fields should describe that same original mistake.
+- If any line — including a previously-flagged mistake line — has been crossed out, struck through, or otherwise marked as deleted/wrong by the student themselves, treat it as retracted, not as an active mistake. If that retracted line was the previously-flagged mistake, set mistake_resolved to true and evaluate their replacement (on the same line or the next one) instead of the crossed-out original.
+- If there is a previously-flagged mistake and it is still present uncorrected (not crossed out), has_mistake should be true, mistake_resolved should be false, and the mistake fields should describe that same original mistake.
 - If a previously-flagged mistake has been corrected, set mistake_resolved to true. Then also check whether the work continues correctly after that fix, or whether a new mistake exists further down — if so has_mistake should be true describing that new mistake; otherwise has_mistake should be false.
 - If there was no pending mistake, check only the content written since the last reviewed line: if it's all correct so far, has_mistake should be false; if there's a mistake in it, has_mistake should be true.
 - Either way, set reviewed_through to a short exact snippet of the last written line that is now confirmed fully correct (the line immediately before any currently-unresolved mistake, or the last written line if everything so far is correct).
