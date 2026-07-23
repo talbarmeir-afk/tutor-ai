@@ -272,6 +272,10 @@
       <p id="verdictFix"></p>
     </div>
 
+    <div class="actions hidden" id="watchResumeRow">
+      <button class="primary-btn" id="resumeBtn" type="button">Got it — keep writing</button>
+    </div>
+
     <div class="qa-section hidden" id="qaSection">
       <h3 class="qa-heading">Questions about this?</h3>
       <div class="qa-thread" id="qaThread"></div>
@@ -283,7 +287,6 @@
 
     <div class="reset-row">
       <button class="ghost-btn" id="resetBtn" type="button">Check another problem</button>
-      <button class="ghost-btn hidden" id="resumeBtn" type="button">Got it — keep writing</button>
     </div>
   </div>
 
@@ -333,6 +336,7 @@
   const startCameraBtn = document.getElementById('startCameraBtn');
   const stopCameraBtn = document.getElementById('stopCameraBtn');
   const checkNowBtn = document.getElementById('checkNowBtn');
+  const watchResumeRow = document.getElementById('watchResumeRow');
   const resumeBtn = document.getElementById('resumeBtn');
 
   let imageData = null; // { dataUrl, base64 }
@@ -658,7 +662,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     watchModeEl.classList.toggle('hidden', mode !== 'watch');
     hideResults(); hideError();
     resetBtn.classList.remove('hidden');
-    resumeBtn.classList.add('hidden');
+    watchResumeRow.classList.add('hidden');
     qaThread.innerHTML = '';
     qaSection.classList.add('hidden');
     conversation = [];
@@ -822,14 +826,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (motionIntervalId){ clearInterval(motionIntervalId); motionIntervalId = null; }
     watchModeEl.classList.add('hidden');
     resetBtn.classList.add('hidden');
-    resumeBtn.classList.remove('hidden');
+    watchResumeRow.classList.remove('hidden');
     renderResult(parsed, frame, buildWatchPrompt(priorStateSnapshot));
   }
 
   resumeBtn.addEventListener('click', () => {
     hideResults();
     watchModeEl.classList.remove('hidden');
-    resumeBtn.classList.add('hidden');
+    watchResumeRow.classList.add('hidden');
     resetBtn.classList.remove('hidden');
     qaThread.innerHTML = '';
     qaSection.classList.add('hidden');
