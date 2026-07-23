@@ -647,10 +647,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   let checkInFlight = false;
   let watchFrozen = false;
   let watchState = { reviewedThrough: null, pendingMistake: null };
+  let statusHoldUntil = 0;
 
-  function setCameraStatus(text, flash){
+  function setCameraStatus(text, flash, holdMs){
     cameraStatus.textContent = text;
     cameraStatus.classList.toggle('is-flash', !!flash);
+    statusHoldUntil = Date.now() + (holdMs || 0);
   }
 
   function setMode(mode){
@@ -760,7 +762,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const stableLongEnough = writingActive && (now - lastMotionAt) > MOTION_STABLE_MS;
     const cooledDown = (now - lastCheckAt) > MIN_CHECK_INTERVAL_MS;
 
-    if (SHOW_MOTION_DEBUG){
+    if (SHOW_MOTION_DEBUG && Date.now() > statusHoldUntil){
       const pct = (motionFraction * 100).toFixed(1);
       setCameraStatus(`Watching… motion ${pct}%${writingActive ? ' — writing detected' : ''}`);
     }
@@ -811,11 +813,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         showWatchResult(parsed, frame, priorStateSnapshot);
       } else {
         watchState = { reviewedThrough: parsed.reviewed_through || priorStateSnapshot.reviewedThrough, pendingMistake: null };
-        setCameraStatus(parsed.mistake_resolved ? "Nice — that's fixed! Watching…" : 'Watching…', !!parsed.mistake_resolved);
+        setCameraStatus(
+          parsed.mistake_resolved ? "Nice — that's fixed! Watching…" : 'Checked — no mistake yet. Watching…',
+          !!parsed.mistake_resolved,
+          2500
+        );
       }
     } catch(err){
       lastCheckAt = Date.now();
-      setCameraStatus("Couldn't check that step — still watching.");
+      setCameraStatus("Couldn't check that step — still watching.", false, 3000);
     } finally {
       checkInFlight = false;
     }
