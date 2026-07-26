@@ -245,10 +245,7 @@
   .history-group{ border:1px solid var(--paper-line); border-radius:10px; padding:12px; }
   .history-group-title{
     font-family:'Kalam', cursive; font-weight:700; font-size:16.5px;
-    color:var(--ink); margin-bottom:4px;
-  }
-  .history-group-meta{
-    font-size:12px; color:var(--ink-muted); margin-bottom:10px;
+    color:var(--ink); margin-bottom:10px;
     padding-bottom:8px; border-bottom:1px dashed var(--paper-line);
   }
   .history-steps{ display:flex; flex-direction:column; gap:10px; }
@@ -1236,7 +1233,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return groupList;
   }
 
-  function buildHistoryStep(entry){
+  function buildHistoryStep(entry, countLabel){
     const item = document.createElement('div');
     item.className = 'history-item';
 
@@ -1252,7 +1249,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const dateEl = document.createElement('div');
     dateEl.className = 'history-date';
     const when = new Date(entry.created_at).toLocaleString();
-    dateEl.textContent = `${when} · ${entry.mode === 'watch' ? 'Watch' : 'Upload'}`;
+    dateEl.textContent = countLabel ? `${when} · ${countLabel}` : when;
     info.appendChild(dateEl);
 
     const verdictEl = document.createElement('div');
@@ -1311,19 +1308,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         group.appendChild(titleEl);
       }
 
-      const meta = document.createElement('div');
-      meta.className = 'history-group-meta';
-
-      const count = document.createElement('span');
-      count.className = 'count';
-      count.textContent = steps.length === 1 ? '1 check' : `${steps.length} checks`;
-      meta.appendChild(count);
-
-      group.appendChild(meta);
+      const countLabel = steps.length === 1 ? '1 check' : `${steps.length} checks`;
 
       const stepsEl = document.createElement('div');
       stepsEl.className = 'history-steps';
-      steps.forEach((entry) => stepsEl.appendChild(buildHistoryStep(entry)));
+      steps.forEach((entry, i) => stepsEl.appendChild(buildHistoryStep(entry, i === 0 ? countLabel : null)));
       group.appendChild(stepsEl);
 
       historyList.appendChild(group);
