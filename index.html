@@ -217,12 +217,16 @@
   .lesson-timer.is-low{ color:var(--chalk-yellow); border-color:rgba(232,216,121,0.4); }
   .lesson-timer.is-ended{ color:#e8968f; border-color:rgba(214,72,63,0.4); }
 
-  .lesson-ended-note{
+  .lesson-note{
     margin-bottom:36px; background:var(--paper); color:var(--ink);
     border-radius:8px; padding:24px; box-shadow:0 12px 30px rgba(0,0,0,0.3);
   }
-  .lesson-ended-note h2{ font-family:'Kalam', cursive; font-size:21px; margin:0 0 8px; color:var(--pen-red); }
-  .lesson-ended-note p{ font-size:14px; color:var(--ink-muted); line-height:1.6; margin:0 0 16px; }
+  .lesson-note h2{ font-family:'Kalam', cursive; font-size:21px; margin:0 0 8px; color:var(--ink); }
+  #lessonEndedNote h2{ color:var(--pen-red); }
+  .lesson-note p{ font-size:14px; color:var(--ink-muted); line-height:1.6; margin:0 0 16px; }
+  .lesson-note-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  .lesson-note button.ghost-btn{ color:var(--ink); border-color:rgba(43,43,40,0.28); }
+  .lesson-note button.ghost-btn:hover{ border-color:var(--ink); }
 
   .history-lesson + .history-lesson{ padding-top:18px; border-top:1px solid var(--paper-line); }
   .history-lesson-header{
@@ -332,10 +336,19 @@
     <img id="lightboxImg" src="" alt="">
   </div>
 
-  <div class="lesson-ended-note hidden" id="lessonEndedNote">
+  <div class="lesson-note hidden" id="lessonStartPrompt">
+    <h2>Ready for a lesson?</h2>
+    <p>Start a 45-minute lesson to begin checking your work. Your checks and the time you spend are saved to your history.</p>
+    <button class="primary-btn" id="startLessonBtn" type="button">Start Lesson</button>
+  </div>
+
+  <div class="lesson-note hidden" id="lessonEndedNote">
     <h2>Lesson ended</h2>
-    <p id="lessonEndedText">This 45-minute lesson is over. You can still look back through your history — a new lesson will start next time you come back.</p>
-    <button class="primary-btn" id="lessonEndedHistoryBtn" type="button">View history</button>
+    <p id="lessonEndedText">This lesson has ended and can't be resumed. Start a new one to keep going, or look back through your history.</p>
+    <div class="lesson-note-actions">
+      <button class="primary-btn" id="startNewLessonBtn" type="button">Start a new lesson</button>
+      <button class="ghost-btn" id="lessonEndedHistoryBtn" type="button">View history</button>
+    </div>
   </div>
 
   <p class="eyebrow">AI math check</p>
@@ -514,47 +527,47 @@
   // resumeWatching(true) ("Start a new problem").
   let currentProblemId = crypto.randomUUID();
 
-  // Lesson timer — a lesson is a single 45-minute sitting, but it only runs
-  // while a student is signed in: the module script calls onSignIn/onSignOut
-  // (via window.mathTutorLesson) on every auth transition, so the clock
-  // pauses on logout and resumes from the same remaining time on login,
-  // scoped per user id so switching accounts on one device can't leak or
-  // clobber another student's remaining time.
+  // Lesson timer — a lesson only exists once a signed-in student explicitly
+  // clicks "Start Lesson": it then runs for 45 minutes and ends automatically
+  // on timeout or on logout. An ended lesson can never be resumed — the only
+  // way to keep going is to start a brand new one (fresh id, fresh 45
+  // minutes). window.mathTutorLesson is the bridge the auth module script
+  // uses to drive this from sign-in/out transitions.
   const LESSON_DURATION_MS = 45 * 60 * 1000;
-  const LESSON_STORAGE_PREFIX = 'mathTutorLesson:';
+  const ACTIVE_LESSON_STORAGE_PREFIX = 'mathTutorActiveLesson:';
   const lessonTimerEl = document.getElementById('lessonTimer');
+  const lessonStartPrompt = document.getElementById('lessonStartPrompt');
   const lessonEndedNote = document.getElementById('lessonEndedNote');
+  const lessonEndedText = document.getElementById('lessonEndedText');
   const lessonEndedHistoryBtn = document.getElementById('lessonEndedHistoryBtn');
-
-  // A lesson that ended more than this long ago counts as a new sitting —
-  // otherwise a student who used up their 45 minutes once would be locked
-  // out of checking forever, not just for the rest of that sitting.
-  const LESSON_RESET_GAP_MS = 3 * 60 * 60 * 1000;
+  const startLessonBtn = document.getElementById('startLessonBtn');
+  const startNewLessonBtn = document.getElementById('startNewLessonBtn');
 
   let currentLessonId = null;
   let lessonUserId = null;
-  let lessonRemainingMs = LESSON_DURATION_MS;
-  let lessonEnded = false;
-  let lessonEndedAt = null;
+  let lessonStartedAt = null;
   let lessonRunning = false;
   let lessonIntervalId = null;
-  let uiLockedForLessonEnd = false;
 
-  function lessonStorageKey(userId){ return LESSON_STORAGE_PREFIX + userId; }
+  function activeLessonKey(userId){ return ACTIVE_LESSON_STORAGE_PREFIX + userId; }
 
-  function loadLessonState(userId){
+  // Only an in-progress lesson is ever persisted — once ended there's
+  // nothing to resume, so the stored entry is removed.
+  function loadActiveLesson(userId){
     try {
-      const parsed = JSON.parse(localStorage.getItem(lessonStorageKey(userId)) || 'null');
-      if (parsed && parsed.id && typeof parsed.remainingMs === 'number') return parsed;
+      const parsed = JSON.parse(localStorage.getItem(activeLessonKey(userId)) || 'null');
+      if (parsed && parsed.id && typeof parsed.startedAt === 'number') return parsed;
     } catch (e) { /* ignore malformed storage */ }
     return null;
   }
 
-  function saveLessonState(){
+  function saveActiveLesson(){
     if (!lessonUserId) return;
-    localStorage.setItem(lessonStorageKey(lessonUserId), JSON.stringify({
-      id: currentLessonId, remainingMs: lessonRemainingMs, ended: lessonEnded, endedAt: lessonEndedAt,
-    }));
+    localStorage.setItem(activeLessonKey(lessonUserId), JSON.stringify({ id: currentLessonId, startedAt: lessonStartedAt }));
+  }
+
+  function clearActiveLesson(){
+    if (lessonUserId) localStorage.removeItem(activeLessonKey(lessonUserId));
   }
 
   function formatLessonTime(ms){
@@ -564,111 +577,154 @@
     return `${m}:${String(s).padStart(2, '0')}`;
   }
 
+  function lessonRemainingMs(){
+    if (!lessonStartedAt) return LESSON_DURATION_MS;
+    return Math.max(0, LESSON_DURATION_MS - (Date.now() - lessonStartedAt));
+  }
+
   function renderLessonTimer(){
-    lessonTimerEl.classList.remove('is-low', 'is-ended');
-    if (lessonEnded) {
-      lessonTimerEl.textContent = 'Lesson ended';
-      lessonTimerEl.classList.add('is-ended');
-    } else if (lessonRunning) {
-      lessonTimerEl.textContent = `Lesson: ${formatLessonTime(lessonRemainingMs)}`;
-      lessonTimerEl.classList.toggle('is-low', lessonRemainingMs <= 5 * 60 * 1000);
+    lessonTimerEl.classList.remove('is-low');
+    if (lessonRunning) {
+      const remaining = lessonRemainingMs();
+      lessonTimerEl.textContent = `Lesson: ${formatLessonTime(remaining)}`;
+      lessonTimerEl.classList.toggle('is-low', remaining <= 5 * 60 * 1000);
     } else if (lessonUserId) {
-      lessonTimerEl.textContent = `Lesson: ${formatLessonTime(lessonRemainingMs)} (paused — sign in to continue)`;
+      lessonTimerEl.textContent = 'No lesson running';
     } else {
-      lessonTimerEl.textContent = 'Sign in to start your lesson timer';
+      lessonTimerEl.textContent = 'Sign in to start a lesson';
     }
   }
 
-  function lockForLessonEnd(){
-    uiLockedForLessonEnd = true;
+  function hideAllLessonPanels(){
+    lessonStartPrompt.classList.add('hidden');
+    lessonEndedNote.classList.add('hidden');
     modeToggle.classList.add('hidden');
     uploadModeEl.classList.add('hidden');
     watchModeEl.classList.add('hidden');
     resultPaper.classList.add('hidden');
     errorNote.classList.add('hidden');
-    lessonEndedNote.classList.remove('hidden');
-    stopCamera();
-    stopTakePhotoStream();
   }
 
-  // A no-op unless the UI is actually locked, so calling this on every normal
-  // sign-in doesn't reset in-progress work just because someone logged in.
-  function unlockFromLessonEnd(){
-    if (!uiLockedForLessonEnd) return;
-    uiLockedForLessonEnd = false;
-    lessonEndedNote.classList.add('hidden');
+  function showCheckUI(){
+    hideAllLessonPanels();
     modeToggle.classList.remove('hidden');
     setMode(currentMode);
+  }
+
+  function showStartPrompt(){
+    hideAllLessonPanels();
+    stopCamera();
+    stopTakePhotoStream();
+    lessonStartPrompt.classList.remove('hidden');
+  }
+
+  function showEndedNote(durationSeconds){
+    hideAllLessonPanels();
+    stopCamera();
+    stopTakePhotoStream();
+    lessonEndedText.textContent = `You worked for ${formatLessonTime(durationSeconds * 1000)} this lesson — it's ended and can't be resumed. Start a new one to keep going, or look back through your history.`;
+    lessonEndedNote.classList.remove('hidden');
   }
 
   function clearLessonInterval(){
     if (lessonIntervalId) { clearInterval(lessonIntervalId); lessonIntervalId = null; }
   }
 
-  function endLesson(){
-    lessonEnded = true;
-    lessonEndedAt = Date.now();
+  // Stops the clock and reports the real elapsed time, whatever it was cut
+  // short by (timeout or logout) — this becomes the row saved to the
+  // `lessons` table, so history shows how long a lesson actually ran, not
+  // just whether it hit the full 45 minutes.
+  function finalizeActiveLesson(){
+    const durationSeconds = Math.round((Date.now() - lessonStartedAt) / 1000);
+    const endedLessonId = currentLessonId;
     lessonRunning = false;
     clearLessonInterval();
-    saveLessonState();
-    renderLessonTimer();
-    lockForLessonEnd();
+    clearActiveLesson();
+    const recordPromise = window.mathTutorHistory
+      ? window.mathTutorHistory.endLessonRecord(endedLessonId, durationSeconds)
+      : Promise.resolve();
+    return { durationSeconds, recordPromise };
   }
 
   function tickLesson(){
     if (!lessonRunning) return;
-    lessonRemainingMs = Math.max(0, lessonRemainingMs - 1000);
-    saveLessonState();
-    if (lessonRemainingMs <= 0) { endLesson(); return; }
-    renderLessonTimer();
-  }
-
-  // Lock/unlock state is deliberately NOT touched on sign-out (see
-  // lessonOnSignOut) — only sign-in re-evaluates it, so logging out of an
-  // ended lesson can't be used to sneak back into the checking UI.
-  function lessonOnSignIn(userId){
-    lessonUserId = userId;
-    const stored = loadLessonState(userId);
-    const now = Date.now();
-    const staleEnded = stored && stored.ended && (!stored.endedAt || (now - stored.endedAt) >= LESSON_RESET_GAP_MS);
-    if (!stored || staleEnded) {
-      currentLessonId = crypto.randomUUID();
-      lessonRemainingMs = LESSON_DURATION_MS;
-      lessonEnded = false;
-      lessonEndedAt = null;
-      saveLessonState();
-    } else {
-      currentLessonId = stored.id;
-      lessonRemainingMs = stored.remainingMs;
-      lessonEnded = !!stored.ended;
-      lessonEndedAt = stored.endedAt || null;
-    }
-    if (lessonEnded) {
-      lessonRunning = false;
-      clearLessonInterval();
-      lockForLessonEnd();
-    } else {
-      lessonRunning = true;
-      clearLessonInterval();
-      lessonIntervalId = setInterval(tickLesson, 1000);
-      unlockFromLessonEnd();
+    if (lessonRemainingMs() <= 0) {
+      const { durationSeconds } = finalizeActiveLesson();
+      renderLessonTimer();
+      showEndedNote(durationSeconds);
+      return;
     }
     renderLessonTimer();
   }
 
-  function lessonOnSignOut(){
-    lessonRunning = false;
+  function beginLesson(){
+    if (!lessonUserId) return;
+    currentLessonId = crypto.randomUUID();
+    lessonStartedAt = Date.now();
+    lessonRunning = true;
+    saveActiveLesson();
+    if (window.mathTutorHistory) window.mathTutorHistory.startLessonRecord(currentLessonId);
     clearLessonInterval();
-    saveLessonState();
+    lessonIntervalId = setInterval(tickLesson, 1000);
     renderLessonTimer();
+    showCheckUI();
   }
 
-  renderLessonTimer();
-  window.mathTutorLesson = { onSignIn: lessonOnSignIn, onSignOut: lessonOnSignOut };
-
+  startLessonBtn.addEventListener('click', beginLesson);
+  startNewLessonBtn.addEventListener('click', beginLesson);
   lessonEndedHistoryBtn.addEventListener('click', () => {
     if (window.mathTutorHistory) window.mathTutorHistory.openHistory();
   });
+
+  function lessonOnSignIn(userId){
+    lessonUserId = userId;
+    const stored = loadActiveLesson(userId);
+    if (stored) {
+      currentLessonId = stored.id;
+      lessonStartedAt = stored.startedAt;
+      lessonRunning = true;
+      if (lessonRemainingMs() <= 0) {
+        // The 45 minutes ran out while the tab was closed/asleep — finalize
+        // it now rather than silently resuming a lesson that's actually over.
+        const { durationSeconds } = finalizeActiveLesson();
+        renderLessonTimer();
+        showEndedNote(durationSeconds);
+      } else {
+        clearLessonInterval();
+        lessonIntervalId = setInterval(tickLesson, 1000);
+        renderLessonTimer();
+        showCheckUI();
+      }
+    } else {
+      currentLessonId = null;
+      lessonStartedAt = null;
+      lessonRunning = false;
+      renderLessonTimer();
+      showStartPrompt();
+    }
+  }
+
+  // Called by the auth module's sign-out handler BEFORE it actually signs
+  // out, while the session (and its RLS access) is still valid — otherwise
+  // the `lessons` update would arrive after the token's already invalidated.
+  async function endActiveLessonForLogout(){
+    if (!lessonRunning) return;
+    const { recordPromise } = finalizeActiveLesson();
+    await recordPromise;
+  }
+
+  function lessonOnSignOut(){
+    lessonUserId = null;
+    currentLessonId = null;
+    lessonStartedAt = null;
+    lessonRunning = false;
+    clearLessonInterval();
+    renderLessonTimer();
+    showCheckUI();
+  }
+
+  renderLessonTimer();
+  window.mathTutorLesson = { onSignIn: lessonOnSignIn, onSignOut: lessonOnSignOut, endActiveLessonForLogout };
 
   // Kept in sync with the ANALYSIS_PROMPT in lib/anthropic.js — this copy is
   // only used to reconstruct conversation history for follow-up questions,
@@ -1391,6 +1447,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   signOutBtn.addEventListener('click', async () => {
     if (!supabaseClient) return;
+    // Must happen before signOut() invalidates the session — the `lessons`
+    // update needs the still-valid auth token to pass RLS.
+    if (window.mathTutorLesson) await window.mathTutorLesson.endActiveLessonForLogout();
     await supabaseClient.auth.signOut();
   });
 
@@ -1492,7 +1551,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return item;
   }
 
-  function renderHistoryList(entries){
+  function formatDurationLabel(seconds){
+    if (typeof seconds !== 'number') return null;
+    if (seconds < 60) return `${Math.max(1, Math.round(seconds))} sec`;
+    const minutes = Math.round(seconds / 60);
+    return `${minutes} min`;
+  }
+
+  function renderHistoryList(entries, lessonDurations){
     historyList.innerHTML = '';
     if (!entries || !entries.length){
       const empty = document.createElement('p');
@@ -1512,7 +1578,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lessonHeader.className = 'history-lesson-header';
       const lessonWhen = new Date(lessonEntries[0].created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
       const problemLabel = problemGroups.length === 1 ? '1 problem' : `${problemGroups.length} problems`;
-      lessonHeader.textContent = `Lesson · ${lessonWhen} · ${problemLabel}`;
+      const lessonKey = lessonEntries[0].lesson_id;
+      const durationLabel = lessonDurations && lessonKey ? formatDurationLabel(lessonDurations.get(lessonKey)) : null;
+      const headerParts = ['Lesson', lessonWhen];
+      if (durationLabel) headerParts.push(durationLabel);
+      headerParts.push(problemLabel);
+      lessonHeader.textContent = headerParts.join(' · ');
       lessonEl.appendChild(lessonHeader);
 
       const groupsEl = document.createElement('div');
@@ -1556,7 +1627,22 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       console.warn('Could not load history', error);
       return;
     }
-    renderHistoryList(data);
+
+    const lessonDurations = new Map();
+    const lessonIds = Array.from(new Set(data.map((e) => e.lesson_id).filter(Boolean)));
+    if (lessonIds.length){
+      const { data: lessons, error: lessonsError } = await supabaseClient
+        .from('lessons')
+        .select('id, duration_seconds')
+        .in('id', lessonIds);
+      if (lessonsError){
+        console.warn('Could not load lesson durations', lessonsError);
+      } else {
+        lessons.forEach((l) => { if (l.duration_seconds != null) lessonDurations.set(l.id, l.duration_seconds); });
+      }
+    }
+
+    renderHistoryList(data, lessonDurations);
   }
 
   function makeThumbnail(dataUrl, maxDim){
@@ -1604,7 +1690,35 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel };
+  async function startLessonRecord(lessonId){
+    if (!supabaseClient || !currentSession) return;
+    try{
+      const { error } = await supabaseClient.from('lessons').insert({
+        id: lessonId,
+        user_id: currentSession.user.id,
+        started_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    } catch(err){
+      console.warn('Could not save lesson start', err);
+    }
+  }
+
+  async function endLessonRecord(lessonId, durationSeconds){
+    if (!supabaseClient || !currentSession) return;
+    try{
+      const { error } = await supabaseClient.from('lessons').update({
+        ended_at: new Date().toISOString(),
+        duration_seconds: durationSeconds,
+      }).eq('id', lessonId);
+      if (error) throw error;
+      if (!historyPanel.classList.contains('hidden')) loadHistory();
+    } catch(err){
+      console.warn('Could not save lesson end', err);
+    }
+  }
+
+  window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord };
 
   if (supabaseClient){
     supabaseClient.auth.onAuthStateChange((_event, session) => {

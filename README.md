@@ -34,20 +34,40 @@ not fixed values.
 
 ### Lesson timer
 
-Each signed-in student gets a 45-minute lesson clock, shown as a countdown
-pill in the top bar. It only runs while they're signed in — logging out
-pauses it (shown as "paused — sign in to continue"), and logging back in
-resumes from the same remaining time rather than granting a fresh 45
-minutes. When it reaches zero, the upload/watch UI is replaced by a "Lesson
-ended" note and the camera stops; only History stays reachable. Logging out
-of an ended lesson does **not** unlock checking again — the lock is only
-re-evaluated on sign-in, specifically so logging out can't be used to
-sidestep it. A lesson that ended more than `LESSON_RESET_GAP_MS` (3 hours)
-ago is treated as a new sitting on the next sign-in and gets a fresh 45
-minutes; otherwise a student would be locked out of checking forever after
-using up one lesson. State is per-user (`localStorage`, key
-`mathTutorLesson:<user id>`), so switching accounts on a shared device keeps
-each student's clock independent.
+A lesson only exists once a signed-in student clicks **Start Lesson** — there's
+no timer running before that. Clicking it starts a 45-minute countdown
+(shown as a pill in the top bar) and reveals the upload/watch UI, which is
+otherwise hidden behind the Start Lesson prompt. A lesson ends automatically
+when the countdown hits zero, or immediately on logout, and an ended lesson
+can never be resumed — the checking UI is replaced by a "Lesson ended" note
+with the actual time worked, and the only way to keep going is **Start a new
+lesson**, which gets a fresh id and a fresh 45 minutes.
+
+Each lesson is a row in the `lessons` table (`id`, `user_id`, `started_at`,
+`ended_at`, `duration_seconds`), written via `startLessonRecord`/
+`endLessonRecord` on `window.mathTutorHistory`. `duration_seconds` is the
+*actual* elapsed time — 45:00 if it timed out, less if it was cut short by
+logout — and is what the history panel's lesson header shows. On logout,
+the end record is written *before* `supabaseClient.auth.signOut()` runs,
+since the update needs the still-valid session to pass the `lessons` RLS
+policy. An in-progress (not yet ended) lesson's `{id, startedAt}` is cached
+in `localStorage` (key `mathTutorActiveLesson:<user id>`) purely so an
+accidental page refresh mid-lesson doesn't lose it — nothing is cached once
+a lesson ends. Migration:
+
+```sql
+create table if not exists lessons (
+  id uuid primary key,
+  user_id uuid references auth.users not null,
+  started_at timestamptz not null default now(),
+  ended_at timestamptz,
+  duration_seconds integer
+);
+alter table lessons enable row level security;
+create policy "Users can view their own lessons" on lessons for select using (auth.uid() = user_id);
+create policy "Users can insert their own lessons" on lessons for insert with check (auth.uid() = user_id);
+create policy "Users can update their own lessons" on lessons for update using (auth.uid() = user_id);
+```
 
 ### Login and history (Supabase)
 
