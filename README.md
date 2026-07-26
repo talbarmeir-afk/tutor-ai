@@ -32,6 +32,15 @@ time. See the constants at the top of the "Watch mode" section in
 fire too eagerly or too late for your setup — they're tuned starting points,
 not fixed values.
 
+### Lesson timer
+
+Every page load starts (or resumes) a 45-minute lesson: a countdown pill in
+the top bar counts down from `45:00`. When it hits zero, the upload/watch UI
+is hidden behind a "Lesson ended" note and the camera stops — the student
+can only view their history until they come back and start a new lesson.
+The timer's start time and id live in `localStorage` (`mathTutorLesson`), so
+refreshing the page mid-lesson doesn't reset the clock.
+
 ### Login and history (Supabase)
 
 Signing in lets a student's check history (thumbnail + verdict) follow them
@@ -68,6 +77,19 @@ check/analyze features.
 
   ```sql
   alter table history_entries add column problem_title text;
+  ```
+
+- Problem groups are further grouped under a lesson in the history panel.
+  A lesson is a single 45-minute sitting: `currentLessonId`/`lessonStartTime`
+  are generated on page load and cached in `localStorage` (`mathTutorLesson`)
+  so a refresh mid-lesson resumes the same countdown and id instead of
+  starting a new one; once 45 minutes have passed, the next page load mints a
+  fresh lesson. The countdown pill in the top bar reflects this client-side
+  timer only — there's no server-side lesson record beyond the `lesson_id`
+  stamped on each history row. Migration:
+
+  ```sql
+  alter table history_entries add column lesson_id uuid;
   ```
 
 ## Local development

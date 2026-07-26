@@ -207,7 +207,29 @@
   .error-note h2{ font-family:'Kalam', cursive; font-size:19px; color:#e8968f; margin:0 0 8px; }
   .error-note p{ font-size:14px; color:var(--chalk-muted); margin:0 0 14px; line-height:1.6; }
 
-  .auth-bar{ margin-bottom:28px; display:flex; justify-content:flex-end; }
+  .auth-bar{ margin-bottom:28px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .lesson-timer{
+    font-family:'Inter', sans-serif; font-weight:600; font-size:13px;
+    color:var(--chalk-muted); background:rgba(255,255,255,0.04);
+    border:1px solid rgba(255,255,255,0.1); border-radius:20px;
+    padding:6px 14px; letter-spacing:.02em; white-space:nowrap;
+  }
+  .lesson-timer.is-low{ color:var(--chalk-yellow); border-color:rgba(232,216,121,0.4); }
+  .lesson-timer.is-ended{ color:#e8968f; border-color:rgba(214,72,63,0.4); }
+
+  .lesson-ended-note{
+    margin-bottom:36px; background:var(--paper); color:var(--ink);
+    border-radius:8px; padding:24px; box-shadow:0 12px 30px rgba(0,0,0,0.3);
+  }
+  .lesson-ended-note h2{ font-family:'Kalam', cursive; font-size:21px; margin:0 0 8px; color:var(--pen-red); }
+  .lesson-ended-note p{ font-size:14px; color:var(--ink-muted); line-height:1.6; margin:0 0 16px; }
+
+  .history-lesson + .history-lesson{ padding-top:18px; border-top:1px solid var(--paper-line); }
+  .history-lesson-header{
+    font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+    color:var(--ink-muted); margin-bottom:12px;
+  }
+  .history-lesson-groups{ display:flex; flex-direction:column; gap:14px; }
   .auth-form{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
   .auth-form input{
     font-family:'Inter', sans-serif; font-size:13px; padding:8px 10px;
@@ -277,6 +299,7 @@
 <body>
 <div class="app">
   <div class="auth-bar" id="authBar">
+    <div class="lesson-timer" id="lessonTimer">Lesson: 45:00</div>
     <div id="authLoggedOut">
       <form class="auth-form" id="authForm">
         <input type="email" id="authEmail" placeholder="Email" required autocomplete="email">
@@ -307,6 +330,12 @@
 
   <div class="lightbox hidden" id="lightbox">
     <img id="lightboxImg" src="" alt="">
+  </div>
+
+  <div class="lesson-ended-note hidden" id="lessonEndedNote">
+    <h2>Lesson ended</h2>
+    <p id="lessonEndedText">This 45-minute lesson is over. You can still look back through your history — a new lesson will start next time you come back.</p>
+    <button class="primary-btn" id="lessonEndedHistoryBtn" type="button">View history</button>
   </div>
 
   <p class="eyebrow">AI math check</p>
@@ -484,6 +513,70 @@
   // see handleFile(), capturePhotoBtn's handler, startCamera(), and
   // resumeWatching(true) ("Start a new problem").
   let currentProblemId = crypto.randomUUID();
+
+  // Lesson timer — a lesson is a single 45-minute sitting. The start time is
+  // persisted so a page refresh mid-lesson resumes the same countdown instead
+  // of granting a fresh 45 minutes; once the stored start time is more than
+  // 45 minutes old, a new lesson (and id) is generated.
+  const LESSON_DURATION_MS = 45 * 60 * 1000;
+  const LESSON_STORAGE_KEY = 'mathTutorLesson';
+  const lessonTimerEl = document.getElementById('lessonTimer');
+  const lessonEndedNote = document.getElementById('lessonEndedNote');
+  const lessonEndedHistoryBtn = document.getElementById('lessonEndedHistoryBtn');
+  let currentLessonId;
+  let lessonStartTime;
+  let lessonEnded = false;
+
+  (function initLesson(){
+    let stored = null;
+    try { stored = JSON.parse(localStorage.getItem(LESSON_STORAGE_KEY) || 'null'); } catch (e) { stored = null; }
+    const now = Date.now();
+    if (stored && stored.id && stored.startTime && (now - stored.startTime) < LESSON_DURATION_MS) {
+      currentLessonId = stored.id;
+      lessonStartTime = stored.startTime;
+    } else {
+      currentLessonId = crypto.randomUUID();
+      lessonStartTime = now;
+      localStorage.setItem(LESSON_STORAGE_KEY, JSON.stringify({ id: currentLessonId, startTime: lessonStartTime }));
+    }
+  })();
+
+  function formatLessonTime(ms){
+    const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  }
+
+  function endLesson(){
+    if (lessonEnded) return;
+    lessonEnded = true;
+    lessonTimerEl.textContent = 'Lesson ended';
+    lessonTimerEl.classList.remove('is-low');
+    lessonTimerEl.classList.add('is-ended');
+    modeToggle.classList.add('hidden');
+    uploadModeEl.classList.add('hidden');
+    watchModeEl.classList.add('hidden');
+    resultPaper.classList.add('hidden');
+    errorNote.classList.add('hidden');
+    lessonEndedNote.classList.remove('hidden');
+    stopCamera();
+    stopTakePhotoStream();
+  }
+
+  function tickLessonTimer(){
+    if (lessonEnded) return;
+    const remaining = LESSON_DURATION_MS - (Date.now() - lessonStartTime);
+    if (remaining <= 0) { endLesson(); return; }
+    lessonTimerEl.textContent = `Lesson: ${formatLessonTime(remaining)}`;
+    lessonTimerEl.classList.toggle('is-low', remaining <= 5 * 60 * 1000);
+  }
+  tickLessonTimer();
+  setInterval(tickLessonTimer, 1000);
+
+  lessonEndedHistoryBtn.addEventListener('click', () => {
+    if (window.mathTutorHistory) window.mathTutorHistory.openHistory();
+  });
 
   // Kept in sync with the ANALYSIS_PROMPT in lib/anthropic.js — this copy is
   // only used to reconstruct conversation history for follow-up questions,
@@ -713,7 +806,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const parsed = parseModelJson(data.text);
       renderResult(parsed);
-      if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId);
+      if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId);
     } catch(err){
       showError("Something went wrong reading that photo. Try a clearer, well-lit photo, or check your connection, then try again.");
     } finally {
@@ -1071,7 +1164,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resetBtn.classList.add('hidden');
     watchResumeRow.classList.remove('hidden');
     renderResult(parsed, frame, buildWatchPrompt(priorStateSnapshot));
-    if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, frame, 'watch', currentProblemId);
+    if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, frame, 'watch', currentProblemId, currentLessonId);
   }
 
   // "Continue" keeps watchState as-is, so the next check still knows about
@@ -1200,10 +1293,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     await supabaseClient.auth.signOut();
   });
 
-  viewHistoryBtn.addEventListener('click', () => {
+  function openHistoryPanel(){
     historyPanel.classList.remove('hidden');
     loadHistory();
-  });
+  }
+
+  viewHistoryBtn.addEventListener('click', openHistoryPanel);
   closeHistoryBtn.addEventListener('click', () => {
     historyPanel.classList.add('hidden');
   });
@@ -1218,10 +1313,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     lightbox.classList.remove('hidden');
   }
 
-  function groupByProblem(entries){
+  function groupByKey(entries, keyFn){
     const groups = new Map();
     entries.forEach((entry) => {
-      const key = entry.problem_id || entry.id; // defensive fallback for any pre-migration rows
+      const key = keyFn(entry);
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(entry);
     });
@@ -1231,6 +1326,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
     groupList.sort((a, b) => new Date(b[b.length - 1].created_at) - new Date(a[a.length - 1].created_at));
     return groupList;
+  }
+
+  function groupByProblem(entries){
+    // Defensive fallback for any pre-migration rows with no problem_id.
+    return groupByKey(entries, (entry) => entry.problem_id || entry.id);
+  }
+
+  function groupByLesson(entries){
+    // Defensive fallback for any pre-migration rows with no lesson_id.
+    return groupByKey(entries, (entry) => entry.lesson_id || entry.problem_id || entry.id);
   }
 
   function buildHistoryStep(entry, countLabel){
@@ -1296,26 +1401,46 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       return;
     }
 
-    groupByProblem(entries).forEach((steps) => {
-      const group = document.createElement('div');
-      group.className = 'history-group';
+    groupByLesson(entries).forEach((lessonEntries) => {
+      const problemGroups = groupByProblem(lessonEntries);
 
-      const title = steps.find((s) => s.problem_title)?.problem_title;
-      if (title){
-        const titleEl = document.createElement('div');
-        titleEl.className = 'history-group-title';
-        titleEl.textContent = title;
-        group.appendChild(titleEl);
-      }
+      const lessonEl = document.createElement('div');
+      lessonEl.className = 'history-lesson';
 
-      const countLabel = steps.length === 1 ? '1 check' : `${steps.length} checks`;
+      const lessonHeader = document.createElement('div');
+      lessonHeader.className = 'history-lesson-header';
+      const lessonWhen = new Date(lessonEntries[0].created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      const problemLabel = problemGroups.length === 1 ? '1 problem' : `${problemGroups.length} problems`;
+      lessonHeader.textContent = `Lesson · ${lessonWhen} · ${problemLabel}`;
+      lessonEl.appendChild(lessonHeader);
 
-      const stepsEl = document.createElement('div');
-      stepsEl.className = 'history-steps';
-      steps.forEach((entry, i) => stepsEl.appendChild(buildHistoryStep(entry, i === 0 ? countLabel : null)));
-      group.appendChild(stepsEl);
+      const groupsEl = document.createElement('div');
+      groupsEl.className = 'history-lesson-groups';
 
-      historyList.appendChild(group);
+      problemGroups.forEach((steps) => {
+        const group = document.createElement('div');
+        group.className = 'history-group';
+
+        const title = steps.find((s) => s.problem_title)?.problem_title;
+        if (title){
+          const titleEl = document.createElement('div');
+          titleEl.className = 'history-group-title';
+          titleEl.textContent = title;
+          group.appendChild(titleEl);
+        }
+
+        const countLabel = steps.length === 1 ? '1 check' : `${steps.length} checks`;
+
+        const stepsEl = document.createElement('div');
+        stepsEl.className = 'history-steps';
+        steps.forEach((entry, i) => stepsEl.appendChild(buildHistoryStep(entry, i === 0 ? countLabel : null)));
+        group.appendChild(stepsEl);
+
+        groupsEl.appendChild(group);
+      });
+
+      lessonEl.appendChild(groupsEl);
+      historyList.appendChild(lessonEl);
     });
   }
 
@@ -1352,7 +1477,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
   }
 
-  async function saveEntry(parsed, frame, mode, problemId){
+  async function saveEntry(parsed, frame, mode, problemId, lessonId){
     if (!supabaseClient || !currentSession || !frame) return;
     try{
       // 480px/0.72 balances being genuinely viewable when expanded against
@@ -1362,6 +1487,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const { error } = await supabaseClient.from('history_entries').insert({
         user_id: currentSession.user.id,
         problem_id: problemId,
+        lesson_id: lessonId,
         problem_title: parsed.problem_title || '',
         mode,
         has_mistake: !!parsed.has_mistake,
@@ -1377,7 +1503,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  window.mathTutorHistory = { saveEntry };
+  window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel };
 
   if (supabaseClient){
     supabaseClient.auth.onAuthStateChange((_event, session) => {
