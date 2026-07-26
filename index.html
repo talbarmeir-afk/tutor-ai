@@ -1581,7 +1581,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const lessonKey = lessonEntries[0].lesson_id;
       const durationLabel = lessonDurations && lessonKey ? formatDurationLabel(lessonDurations.get(lessonKey)) : null;
       const headerParts = ['Lesson', lessonWhen];
-      if (durationLabel) headerParts.push(durationLabel);
+      if (durationLabel) headerParts.push(`Lesson duration: ${durationLabel}`);
       headerParts.push(problemLabel);
       lessonHeader.textContent = headerParts.join(' · ');
       lessonEl.appendChild(lessonHeader);
