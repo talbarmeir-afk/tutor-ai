@@ -248,7 +248,7 @@
     color:var(--ink); margin-bottom:4px;
   }
   .history-group-meta{
-    display:flex; justify-content:space-between; align-items:baseline;
+    display:flex; justify-content:flex-end; align-items:baseline;
     font-size:12.5px; color:var(--ink-muted); margin-bottom:10px;
     padding-bottom:8px; border-bottom:1px dashed var(--paper-line);
   }
@@ -1315,11 +1315,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
       const meta = document.createElement('div');
       meta.className = 'history-group-meta';
-
-      const rangeStart = new Date(steps[0].created_at).toLocaleString();
-      const label = document.createElement('span');
-      label.textContent = rangeStart;
-      meta.appendChild(label);
 
       const count = document.createElement('span');
       count.className = 'count';
