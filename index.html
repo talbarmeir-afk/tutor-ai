@@ -514,32 +514,48 @@
   // resumeWatching(true) ("Start a new problem").
   let currentProblemId = crypto.randomUUID();
 
-  // Lesson timer — a lesson is a single 45-minute sitting. The start time is
-  // persisted so a page refresh mid-lesson resumes the same countdown instead
-  // of granting a fresh 45 minutes; once the stored start time is more than
-  // 45 minutes old, a new lesson (and id) is generated.
+  // Lesson timer — a lesson is a single 45-minute sitting, but it only runs
+  // while a student is signed in: the module script calls onSignIn/onSignOut
+  // (via window.mathTutorLesson) on every auth transition, so the clock
+  // pauses on logout and resumes from the same remaining time on login,
+  // scoped per user id so switching accounts on one device can't leak or
+  // clobber another student's remaining time.
   const LESSON_DURATION_MS = 45 * 60 * 1000;
-  const LESSON_STORAGE_KEY = 'mathTutorLesson';
+  const LESSON_STORAGE_PREFIX = 'mathTutorLesson:';
   const lessonTimerEl = document.getElementById('lessonTimer');
   const lessonEndedNote = document.getElementById('lessonEndedNote');
   const lessonEndedHistoryBtn = document.getElementById('lessonEndedHistoryBtn');
-  let currentLessonId;
-  let lessonStartTime;
-  let lessonEnded = false;
 
-  (function initLesson(){
-    let stored = null;
-    try { stored = JSON.parse(localStorage.getItem(LESSON_STORAGE_KEY) || 'null'); } catch (e) { stored = null; }
-    const now = Date.now();
-    if (stored && stored.id && stored.startTime && (now - stored.startTime) < LESSON_DURATION_MS) {
-      currentLessonId = stored.id;
-      lessonStartTime = stored.startTime;
-    } else {
-      currentLessonId = crypto.randomUUID();
-      lessonStartTime = now;
-      localStorage.setItem(LESSON_STORAGE_KEY, JSON.stringify({ id: currentLessonId, startTime: lessonStartTime }));
-    }
-  })();
+  // A lesson that ended more than this long ago counts as a new sitting —
+  // otherwise a student who used up their 45 minutes once would be locked
+  // out of checking forever, not just for the rest of that sitting.
+  const LESSON_RESET_GAP_MS = 3 * 60 * 60 * 1000;
+
+  let currentLessonId = null;
+  let lessonUserId = null;
+  let lessonRemainingMs = LESSON_DURATION_MS;
+  let lessonEnded = false;
+  let lessonEndedAt = null;
+  let lessonRunning = false;
+  let lessonIntervalId = null;
+  let uiLockedForLessonEnd = false;
+
+  function lessonStorageKey(userId){ return LESSON_STORAGE_PREFIX + userId; }
+
+  function loadLessonState(userId){
+    try {
+      const parsed = JSON.parse(localStorage.getItem(lessonStorageKey(userId)) || 'null');
+      if (parsed && parsed.id && typeof parsed.remainingMs === 'number') return parsed;
+    } catch (e) { /* ignore malformed storage */ }
+    return null;
+  }
+
+  function saveLessonState(){
+    if (!lessonUserId) return;
+    localStorage.setItem(lessonStorageKey(lessonUserId), JSON.stringify({
+      id: currentLessonId, remainingMs: lessonRemainingMs, ended: lessonEnded, endedAt: lessonEndedAt,
+    }));
+  }
 
   function formatLessonTime(ms){
     const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
@@ -548,12 +564,23 @@
     return `${m}:${String(s).padStart(2, '0')}`;
   }
 
-  function endLesson(){
-    if (lessonEnded) return;
-    lessonEnded = true;
-    lessonTimerEl.textContent = 'Lesson ended';
-    lessonTimerEl.classList.remove('is-low');
-    lessonTimerEl.classList.add('is-ended');
+  function renderLessonTimer(){
+    lessonTimerEl.classList.remove('is-low', 'is-ended');
+    if (lessonEnded) {
+      lessonTimerEl.textContent = 'Lesson ended';
+      lessonTimerEl.classList.add('is-ended');
+    } else if (lessonRunning) {
+      lessonTimerEl.textContent = `Lesson: ${formatLessonTime(lessonRemainingMs)}`;
+      lessonTimerEl.classList.toggle('is-low', lessonRemainingMs <= 5 * 60 * 1000);
+    } else if (lessonUserId) {
+      lessonTimerEl.textContent = `Lesson: ${formatLessonTime(lessonRemainingMs)} (paused — sign in to continue)`;
+    } else {
+      lessonTimerEl.textContent = 'Sign in to start your lesson timer';
+    }
+  }
+
+  function lockForLessonEnd(){
+    uiLockedForLessonEnd = true;
     modeToggle.classList.add('hidden');
     uploadModeEl.classList.add('hidden');
     watchModeEl.classList.add('hidden');
@@ -564,15 +591,80 @@
     stopTakePhotoStream();
   }
 
-  function tickLessonTimer(){
-    if (lessonEnded) return;
-    const remaining = LESSON_DURATION_MS - (Date.now() - lessonStartTime);
-    if (remaining <= 0) { endLesson(); return; }
-    lessonTimerEl.textContent = `Lesson: ${formatLessonTime(remaining)}`;
-    lessonTimerEl.classList.toggle('is-low', remaining <= 5 * 60 * 1000);
+  // A no-op unless the UI is actually locked, so calling this on every normal
+  // sign-in doesn't reset in-progress work just because someone logged in.
+  function unlockFromLessonEnd(){
+    if (!uiLockedForLessonEnd) return;
+    uiLockedForLessonEnd = false;
+    lessonEndedNote.classList.add('hidden');
+    modeToggle.classList.remove('hidden');
+    setMode(currentMode);
   }
-  tickLessonTimer();
-  setInterval(tickLessonTimer, 1000);
+
+  function clearLessonInterval(){
+    if (lessonIntervalId) { clearInterval(lessonIntervalId); lessonIntervalId = null; }
+  }
+
+  function endLesson(){
+    lessonEnded = true;
+    lessonEndedAt = Date.now();
+    lessonRunning = false;
+    clearLessonInterval();
+    saveLessonState();
+    renderLessonTimer();
+    lockForLessonEnd();
+  }
+
+  function tickLesson(){
+    if (!lessonRunning) return;
+    lessonRemainingMs = Math.max(0, lessonRemainingMs - 1000);
+    saveLessonState();
+    if (lessonRemainingMs <= 0) { endLesson(); return; }
+    renderLessonTimer();
+  }
+
+  // Lock/unlock state is deliberately NOT touched on sign-out (see
+  // lessonOnSignOut) — only sign-in re-evaluates it, so logging out of an
+  // ended lesson can't be used to sneak back into the checking UI.
+  function lessonOnSignIn(userId){
+    lessonUserId = userId;
+    const stored = loadLessonState(userId);
+    const now = Date.now();
+    const staleEnded = stored && stored.ended && (!stored.endedAt || (now - stored.endedAt) >= LESSON_RESET_GAP_MS);
+    if (!stored || staleEnded) {
+      currentLessonId = crypto.randomUUID();
+      lessonRemainingMs = LESSON_DURATION_MS;
+      lessonEnded = false;
+      lessonEndedAt = null;
+      saveLessonState();
+    } else {
+      currentLessonId = stored.id;
+      lessonRemainingMs = stored.remainingMs;
+      lessonEnded = !!stored.ended;
+      lessonEndedAt = stored.endedAt || null;
+    }
+    if (lessonEnded) {
+      lessonRunning = false;
+      clearLessonInterval();
+      lockForLessonEnd();
+    } else {
+      lessonRunning = true;
+      clearLessonInterval();
+      lessonIntervalId = setInterval(tickLesson, 1000);
+      unlockFromLessonEnd();
+    }
+    renderLessonTimer();
+  }
+
+  function lessonOnSignOut(){
+    lessonRunning = false;
+    clearLessonInterval();
+    saveLessonState();
+    renderLessonTimer();
+  }
+
+  renderLessonTimer();
+  window.mathTutorLesson = { onSignIn: lessonOnSignIn, onSignOut: lessonOnSignOut };
 
   lessonEndedHistoryBtn.addEventListener('click', () => {
     if (window.mathTutorHistory) window.mathTutorHistory.openHistory();
@@ -1240,6 +1332,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   let authMode = 'signin'; // 'signin' | 'signup'
   let currentSession = null;
+  let lessonBoundUserId = null; // tracks which user the lesson timer is currently bound to
 
   function setAuthError(msg){
     authError.textContent = msg || '';
@@ -1252,6 +1345,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     authLoggedIn.classList.toggle('hidden', !loggedIn);
     if (loggedIn){
       authEmailLabel.textContent = currentSession.user.email || '';
+    }
+    const userId = loggedIn ? currentSession.user.id : null;
+    if (userId !== lessonBoundUserId){
+      lessonBoundUserId = userId;
+      if (window.mathTutorLesson){
+        if (userId) window.mathTutorLesson.onSignIn(userId);
+        else window.mathTutorLesson.onSignOut();
+      }
     }
   }
 

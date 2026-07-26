@@ -34,12 +34,20 @@ not fixed values.
 
 ### Lesson timer
 
-Every page load starts (or resumes) a 45-minute lesson: a countdown pill in
-the top bar counts down from `45:00`. When it hits zero, the upload/watch UI
-is hidden behind a "Lesson ended" note and the camera stops — the student
-can only view their history until they come back and start a new lesson.
-The timer's start time and id live in `localStorage` (`mathTutorLesson`), so
-refreshing the page mid-lesson doesn't reset the clock.
+Each signed-in student gets a 45-minute lesson clock, shown as a countdown
+pill in the top bar. It only runs while they're signed in — logging out
+pauses it (shown as "paused — sign in to continue"), and logging back in
+resumes from the same remaining time rather than granting a fresh 45
+minutes. When it reaches zero, the upload/watch UI is replaced by a "Lesson
+ended" note and the camera stops; only History stays reachable. Logging out
+of an ended lesson does **not** unlock checking again — the lock is only
+re-evaluated on sign-in, specifically so logging out can't be used to
+sidestep it. A lesson that ended more than `LESSON_RESET_GAP_MS` (3 hours)
+ago is treated as a new sitting on the next sign-in and gets a fresh 45
+minutes; otherwise a student would be locked out of checking forever after
+using up one lesson. State is per-user (`localStorage`, key
+`mathTutorLesson:<user id>`), so switching accounts on a shared device keeps
+each student's clock independent.
 
 ### Login and history (Supabase)
 
