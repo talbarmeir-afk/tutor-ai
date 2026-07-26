@@ -32,6 +32,28 @@ time. See the constants at the top of the "Watch mode" section in
 fire too eagerly or too late for your setup — they're tuned starting points,
 not fixed values.
 
+### Login and history (Supabase)
+
+Signing in lets a student's check history (thumbnail + verdict) follow them
+across devices. This is powered by [Supabase](https://supabase.com) — free
+tier, handles both auth and the database — wired up in a second `<script
+type="module">` block at the end of `index.html`, kept deliberately separate
+from the main script so a Supabase/CDN failure can't break the core
+check/analyze features.
+
+- The Supabase **URL** and **anon public key** are hardcoded in that script.
+  This is intentional and safe: unlike the Anthropic key, Supabase's anon key
+  is designed to be public — access is enforced by the Row Level Security
+  policies on the `history_entries` table (each user can only read/write
+  their own rows), not by keeping the key secret.
+- To point this at your own Supabase project: create one, run the SQL in the
+  project's setup notes (creates `history_entries` with RLS policies scoped
+  to `auth.uid() = user_id`), then swap `SUPABASE_URL` and
+  `SUPABASE_ANON_KEY` in `index.html` for your project's values (Project
+  Settings → API).
+- History is saved after every upload-mode check, and after every watch-mode
+  check that finds a mistake (not on every silent "still watching" tick).
+
 ## Local development
 
 You'll need a free Anthropic API key: https://console.anthropic.com/settings/keys

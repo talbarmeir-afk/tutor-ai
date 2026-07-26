@@ -185,6 +185,8 @@
      to dark-on-light there so they're not nearly invisible against it. */
   .paper button.ghost-btn{ color:var(--ink); border-color:rgba(43,43,40,0.28); }
   .paper button.ghost-btn:hover{ border-color:var(--ink); }
+  .history-panel-inner button.ghost-btn{ color:var(--ink); border-color:rgba(43,43,40,0.28); }
+  .history-panel-inner button.ghost-btn:hover{ border-color:var(--ink); }
 
   .qa-section{ margin-top:26px; padding-top:20px; border-top:1px dashed var(--paper-line); }
   .qa-heading{ font-family:'Kalam', cursive; font-size:17px; margin:0 0 12px; color:var(--ink); font-weight:700; }
@@ -204,10 +206,84 @@
   }
   .error-note h2{ font-family:'Kalam', cursive; font-size:19px; color:#e8968f; margin:0 0 8px; }
   .error-note p{ font-size:14px; color:var(--chalk-muted); margin:0 0 14px; line-height:1.6; }
+
+  .auth-bar{ margin-bottom:28px; display:flex; justify-content:flex-end; }
+  .auth-form{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+  .auth-form input{
+    font-family:'Inter', sans-serif; font-size:13px; padding:8px 10px;
+    border-radius:8px; border:1px solid rgba(242,239,227,0.25);
+    background:rgba(255,255,255,0.04); color:var(--chalk); min-width:150px;
+  }
+  .auth-form input::placeholder{ color:var(--chalk-muted); }
+  .auth-form input:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
+  button.link-btn{
+    background:none; border:none; color:var(--chalk-muted); font-size:12.5px;
+    text-decoration:underline; cursor:pointer; font-family:'Inter', sans-serif; padding:0;
+  }
+  button.link-btn:hover{ color:var(--chalk); }
+  .auth-error{ color:#e8968f; font-size:12.5px; margin:6px 0 0; text-align:right; }
+  #authLoggedIn{ display:flex; align-items:center; gap:10px; font-size:13px; color:var(--chalk-muted); }
+  #authEmailLabel{ color:var(--chalk); }
+  .auth-submit-btn{
+    font-family:'Inter', sans-serif; font-weight:600; font-size:13px;
+    background:var(--chalk-yellow); color:#2b2612; border:none;
+    border-radius:8px; padding:8px 14px; cursor:pointer;
+  }
+
+  .history-panel{
+    position:fixed; inset:0; background:rgba(10,20,14,0.75);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:56px 20px; z-index:50; overflow-y:auto;
+  }
+  .history-panel-inner{
+    background:var(--paper); color:var(--ink); border-radius:12px;
+    max-width:560px; width:100%; padding:24px; box-shadow:0 20px 50px rgba(0,0,0,0.4);
+  }
+  .history-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+  .history-header h2{ font-family:'Kalam', cursive; font-size:22px; margin:0; color:var(--ink); }
+  .history-list{ display:flex; flex-direction:column; gap:12px; max-height:65vh; overflow-y:auto; }
+  .history-item{ display:flex; gap:12px; padding:10px; border:1px solid var(--paper-line); border-radius:8px; }
+  .history-item img{ width:64px; height:64px; object-fit:cover; border-radius:6px; flex-shrink:0; background:#00000010; }
+  .history-info{ flex:1; min-width:0; }
+  .history-date{ font-size:12px; color:var(--ink-muted); margin-bottom:4px; }
+  .history-verdict{ font-weight:600; font-size:14px; }
+  .history-verdict.is-mistake{ color:var(--pen-red); }
+  .history-verdict.is-ok{ color:#4d7a49; }
+  .history-quote{ font-size:13px; font-style:italic; color:var(--ink-muted); margin-top:2px; }
+  .history-empty{ color:var(--ink-muted); font-size:14px; }
 </style>
 </head>
 <body>
 <div class="app">
+  <div class="auth-bar" id="authBar">
+    <div id="authLoggedOut">
+      <form class="auth-form" id="authForm">
+        <input type="email" id="authEmail" placeholder="Email" required autocomplete="email">
+        <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password" minlength="6">
+        <button type="submit" class="auth-submit-btn" id="authSubmitBtn">Sign in</button>
+      </form>
+      <div style="text-align:right">
+        <button type="button" class="link-btn" id="authToggleModeBtn">Need an account? Sign up</button>
+      </div>
+      <p class="auth-error hidden" id="authError"></p>
+    </div>
+    <div id="authLoggedIn" class="hidden">
+      <span id="authEmailLabel"></span>
+      <button class="ghost-btn" id="viewHistoryBtn" type="button">History</button>
+      <button class="ghost-btn" id="signOutBtn" type="button">Log out</button>
+    </div>
+  </div>
+
+  <div class="history-panel hidden" id="historyPanel">
+    <div class="history-panel-inner">
+      <div class="history-header">
+        <h2>Your history</h2>
+        <button class="ghost-btn" id="closeHistoryBtn" type="button">Close</button>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </div>
+  </div>
+
   <p class="eyebrow">AI math check</p>
   <h1>Show your work.</h1>
   <p class="lede">Upload a photo of a problem you solved by hand, or let your camera watch as you write. I'll read through your steps and mark exactly where it goes wrong — like a teacher circling it in red.</p>
@@ -602,6 +678,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const parsed = parseModelJson(data.text);
       renderResult(parsed);
+      if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload');
     } catch(err){
       showError("Something went wrong reading that photo. Try a clearer, well-lit photo, or check your connection, then try again.");
     } finally {
@@ -957,6 +1034,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resetBtn.classList.add('hidden');
     watchResumeRow.classList.remove('hidden');
     renderResult(parsed, frame, buildWatchPrompt(priorStateSnapshot));
+    if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, frame, 'watch');
   }
 
   // "Continue" keeps watchState as-is, so the next check still knows about
@@ -988,6 +1066,222 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   continueBtn.addEventListener('click', () => resumeWatching(false));
   newProblemBtn.addEventListener('click', () => resumeWatching(true));
+})();
+</script>
+
+<script type="module">
+// Isolated from the main script on purpose: if the Supabase CDN import fails
+// (network issue, blocked resource, etc.), the core check/analyze features
+// above must keep working — login/history is strictly additive. The only
+// thing exposed to the main script is window.mathTutorHistory.saveEntry.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+(function(){
+  // The anon/public key is safe to embed client-side by design — Supabase
+  // enforces access via the Row Level Security policies on the table, not by
+  // keeping this key secret. This is not the same as the Anthropic API key.
+  const SUPABASE_URL = 'https://obmesjsljpbrbaewzsyq.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibWVzanNsanBicmJhZXd6c3lxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNjY3MTIsImV4cCI6MjEwMDY0MjcxMn0.0A1Z5_tmWEyVN-BsO8SColQMBr0kTjStBub0Lpgfbjc';
+
+  let supabaseClient = null;
+  try{
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch(err){
+    console.warn('Supabase failed to initialize; login/history disabled.', err);
+  }
+
+  const authLoggedOut = document.getElementById('authLoggedOut');
+  const authLoggedIn = document.getElementById('authLoggedIn');
+  const authForm = document.getElementById('authForm');
+  const authEmail = document.getElementById('authEmail');
+  const authPassword = document.getElementById('authPassword');
+  const authSubmitBtn = document.getElementById('authSubmitBtn');
+  const authToggleModeBtn = document.getElementById('authToggleModeBtn');
+  const authError = document.getElementById('authError');
+  const authEmailLabel = document.getElementById('authEmailLabel');
+  const signOutBtn = document.getElementById('signOutBtn');
+  const viewHistoryBtn = document.getElementById('viewHistoryBtn');
+  const historyPanel = document.getElementById('historyPanel');
+  const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+  const historyList = document.getElementById('historyList');
+
+  let authMode = 'signin'; // 'signin' | 'signup'
+  let currentSession = null;
+
+  function setAuthError(msg){
+    authError.textContent = msg || '';
+    authError.classList.toggle('hidden', !msg);
+  }
+
+  function updateAuthUI(){
+    const loggedIn = !!currentSession;
+    authLoggedOut.classList.toggle('hidden', loggedIn);
+    authLoggedIn.classList.toggle('hidden', !loggedIn);
+    if (loggedIn){
+      authEmailLabel.textContent = currentSession.user.email || '';
+    }
+  }
+
+  authToggleModeBtn.addEventListener('click', () => {
+    authMode = authMode === 'signin' ? 'signup' : 'signin';
+    authSubmitBtn.textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
+    authToggleModeBtn.textContent = authMode === 'signin'
+      ? 'Need an account? Sign up'
+      : 'Already have an account? Sign in';
+    setAuthError('');
+  });
+
+  authForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!supabaseClient){ setAuthError('Login is unavailable right now.'); return; }
+    setAuthError('');
+    authSubmitBtn.disabled = true;
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+    try{
+      const { error } = authMode === 'signin'
+        ? await supabaseClient.auth.signInWithPassword({ email, password })
+        : await supabaseClient.auth.signUp({ email, password });
+      if (error) throw error;
+      if (authMode === 'signup' && !currentSession){
+        setAuthError('Check your email to confirm your account, then sign in.');
+      } else {
+        authPassword.value = '';
+      }
+    } catch(err){
+      setAuthError(err.message || 'Something went wrong.');
+    } finally {
+      authSubmitBtn.disabled = false;
+    }
+  });
+
+  signOutBtn.addEventListener('click', async () => {
+    if (!supabaseClient) return;
+    await supabaseClient.auth.signOut();
+  });
+
+  viewHistoryBtn.addEventListener('click', () => {
+    historyPanel.classList.remove('hidden');
+    loadHistory();
+  });
+  closeHistoryBtn.addEventListener('click', () => {
+    historyPanel.classList.add('hidden');
+  });
+  historyPanel.addEventListener('click', (e) => {
+    if (e.target === historyPanel) historyPanel.classList.add('hidden');
+  });
+
+  function renderHistoryList(entries){
+    historyList.innerHTML = '';
+    if (!entries || !entries.length){
+      const empty = document.createElement('p');
+      empty.className = 'history-empty';
+      empty.textContent = 'No checks yet.';
+      historyList.appendChild(empty);
+      return;
+    }
+    entries.forEach((entry) => {
+      const item = document.createElement('div');
+      item.className = 'history-item';
+
+      const img = document.createElement('img');
+      img.src = entry.thumbnail || '';
+      img.alt = '';
+      item.appendChild(img);
+
+      const info = document.createElement('div');
+      info.className = 'history-info';
+
+      const dateEl = document.createElement('div');
+      dateEl.className = 'history-date';
+      const when = new Date(entry.created_at).toLocaleString();
+      dateEl.textContent = `${when} · ${entry.mode === 'watch' ? 'Watch' : 'Upload'}`;
+      info.appendChild(dateEl);
+
+      const verdictEl = document.createElement('div');
+      verdictEl.className = 'history-verdict ' + (entry.has_mistake ? 'is-mistake' : 'is-ok');
+      verdictEl.textContent = entry.has_mistake ? 'Mistake found' : 'Looks correct';
+      info.appendChild(verdictEl);
+
+      if (entry.has_mistake && entry.line_quote){
+        const quoteEl = document.createElement('div');
+        quoteEl.className = 'history-quote';
+        quoteEl.textContent = `"${entry.line_quote}"`;
+        info.appendChild(quoteEl);
+      }
+
+      item.appendChild(info);
+      historyList.appendChild(item);
+    });
+  }
+
+  async function loadHistory(){
+    if (!supabaseClient || !currentSession) return;
+    const { data, error } = await supabaseClient
+      .from('history_entries')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error){
+      console.warn('Could not load history', error);
+      return;
+    }
+    renderHistoryList(data);
+  }
+
+  function makeThumbnail(dataUrl, maxDim){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('thumbnail-decode-failed'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim){
+          if (width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  async function saveEntry(parsed, frame, mode){
+    if (!supabaseClient || !currentSession || !frame) return;
+    try{
+      const thumbnail = await makeThumbnail(frame.dataUrl, 240);
+      const { error } = await supabaseClient.from('history_entries').insert({
+        user_id: currentSession.user.id,
+        mode,
+        has_mistake: !!parsed.has_mistake,
+        line_quote: parsed.line_quote || '',
+        explanation: parsed.explanation || '',
+        fix: parsed.fix || '',
+        thumbnail,
+      });
+      if (error) throw error;
+      if (!historyPanel.classList.contains('hidden')) loadHistory();
+    } catch(err){
+      console.warn('Could not save history entry', err);
+    }
+  }
+
+  window.mathTutorHistory = { saveEntry };
+
+  if (supabaseClient){
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      currentSession = session;
+      updateAuthUI();
+    });
+    supabaseClient.auth.getSession().then(({ data }) => {
+      currentSession = data.session;
+      updateAuthUI();
+    });
+  } else {
+    setAuthError('Login is unavailable right now.');
+  }
 })();
 </script>
 </body>
