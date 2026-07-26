@@ -53,6 +53,14 @@ check/analyze features.
   Settings → API).
 - History is saved after every upload-mode check, and after every watch-mode
   check that finds a mistake (not on every silent "still watching" tick).
+- Entries are grouped by `problem_id` in the history panel — a fresh id is
+  generated whenever the user starts genuinely new work (new photo/capture,
+  camera start, or "Start a new problem"); "Continue this problem" reuses the
+  current one. Run this migration if upgrading from an earlier version:
+
+  ```sql
+  alter table history_entries add column problem_id uuid not null default gen_random_uuid();
+  ```
 
 ## Local development
 
