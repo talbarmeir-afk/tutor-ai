@@ -61,6 +61,14 @@ check/analyze features.
   ```sql
   alter table history_entries add column problem_id uuid not null default gen_random_uuid();
   ```
+- Each group is labeled with a `problem_title` the model generates alongside
+  its usual verdict — the original equation verbatim for straightforward
+  equation problems, or a one-line "Topic: description" for anything else
+  (geometry, word problems, etc.). Migration:
+
+  ```sql
+  alter table history_entries add column problem_title text;
+  ```
 
 ## Local development
 

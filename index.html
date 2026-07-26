@@ -243,12 +243,16 @@
   .history-header h2{ font-family:'Kalam', cursive; font-size:22px; margin:0; color:var(--ink); }
   .history-list{ display:flex; flex-direction:column; gap:20px; max-height:70vh; overflow-y:auto; }
   .history-group{ border:1px solid var(--paper-line); border-radius:10px; padding:12px; }
-  .history-group-header{
+  .history-group-title{
+    font-family:'Kalam', cursive; font-weight:700; font-size:16.5px;
+    color:var(--ink); margin-bottom:4px;
+  }
+  .history-group-meta{
     display:flex; justify-content:space-between; align-items:baseline;
     font-size:12.5px; color:var(--ink-muted); margin-bottom:10px;
     padding-bottom:8px; border-bottom:1px dashed var(--paper-line);
   }
-  .history-group-header .count{ font-weight:600; color:var(--ink); }
+  .history-group-meta .count{ font-weight:600; color:var(--ink); }
   .history-steps{ display:flex; flex-direction:column; gap:10px; }
   .history-item{ display:flex; gap:12px; padding:8px; border-radius:8px; }
   .history-item + .history-item{ border-top:1px dashed var(--paper-line); padding-top:14px; }
@@ -499,8 +503,10 @@ STEP 3 — Among the remaining (non-crossed-out) lines only, find the first one 
 
 STEP 4 — Before answering, check: does the line you're about to report as the mistake match any line in your Step 1 list? If so, that's wrong — go back and use the next non-crossed-out line instead. A line from your Step 1 list must never be the line_quote you report.
 
+Also produce a short problem_title describing the overall problem being solved: if it's a straightforward equation-solving problem, use the original equation exactly as first written as the title (e.g. "2x + 5 = 15"). If it's a different kind of problem — geometry, a word problem, multi-part, etc. — write a brief one-line description in the style "Topic: short description" (e.g. "Geometry: Pythagorean triangle calculation").
+
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
+{"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
 
 For x and y: point at the exact wrong token itself (e.g. the specific incorrect number or sign), not the start of the line and not the line's overall center — if the error is a number partway through or at the end of the line, x/y should land on that number, not on the beginning of the equation. Look directly at that token's pixel position in the photo; do not estimate it from the line's position in a numbered sequence or assume lines are evenly spaced. The photo may be tilted, rotated, or taken at an angle — base x/y on the token's actual pixel position in the photo exactly as captured, not on where it would sit if the page were flattened and upright.`;
 
@@ -532,9 +538,10 @@ Now look at the current photo and report on the CURRENT state of the work:
 - If there was no pending mistake, check only the content written since the last reviewed line: if it's all correct so far, has_mistake should be false; if there's a mistake in it, has_mistake should be true.
 - Either way, set reviewed_through to a short exact snippet of the last written line that is now confirmed fully correct (the line immediately before any currently-unresolved mistake, or the last written line if everything so far is correct).
 - Before answering, check: does the line you're about to report as the mistake match any line in your crossed-out list? If so, that's wrong — go back and use the next non-crossed-out line instead.
+- Also produce a short problem_title describing the overall problem: if it's a straightforward equation-solving problem, use the original equation exactly as first written as the title (e.g. "2x + 5 = 15"). If it's a different kind of problem — geometry, a word problem, multi-part, etc. — write a brief one-line description in the style "Topic: short description" (e.g. "Geometry: Pythagorean triangle calculation").
 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "mistake_resolved": true or false, "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
+{"has_mistake": true or false, "mistake_resolved": true or false, "problem_title": "short label for the overall problem, per the instructions above", "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
 
 For x and y (only when has_mistake is true): point at the exact wrong token itself — the specific incorrect number, sign, or term — not the start of the line. The photo may be tilted, rotated, or taken at an angle — base x/y on the token's actual pixel position in the photo exactly as captured, not on where it would sit if the page were flattened and upright.`;
   }
@@ -1298,20 +1305,28 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const group = document.createElement('div');
       group.className = 'history-group';
 
-      const header = document.createElement('div');
-      header.className = 'history-group-header';
+      const title = steps.find((s) => s.problem_title)?.problem_title;
+      if (title){
+        const titleEl = document.createElement('div');
+        titleEl.className = 'history-group-title';
+        titleEl.textContent = title;
+        group.appendChild(titleEl);
+      }
+
+      const meta = document.createElement('div');
+      meta.className = 'history-group-meta';
 
       const rangeStart = new Date(steps[0].created_at).toLocaleString();
       const label = document.createElement('span');
       label.textContent = rangeStart;
-      header.appendChild(label);
+      meta.appendChild(label);
 
       const count = document.createElement('span');
       count.className = 'count';
       count.textContent = steps.length === 1 ? '1 check' : `${steps.length} checks`;
-      header.appendChild(count);
+      meta.appendChild(count);
 
-      group.appendChild(header);
+      group.appendChild(meta);
 
       const stepsEl = document.createElement('div');
       stepsEl.className = 'history-steps';
@@ -1365,6 +1380,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const { error } = await supabaseClient.from('history_entries').insert({
         user_id: currentSession.user.id,
         problem_id: problemId,
+        problem_title: parsed.problem_title || '',
         mode,
         has_mistake: !!parsed.has_mistake,
         line_quote: parsed.line_quote || '',
