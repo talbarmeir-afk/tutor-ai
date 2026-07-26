@@ -241,16 +241,38 @@
   }
   .history-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
   .history-header h2{ font-family:'Kalam', cursive; font-size:22px; margin:0; color:var(--ink); }
-  .history-list{ display:flex; flex-direction:column; gap:12px; max-height:65vh; overflow-y:auto; }
-  .history-item{ display:flex; gap:12px; padding:10px; border:1px solid var(--paper-line); border-radius:8px; }
-  .history-item img{ width:64px; height:64px; object-fit:cover; border-radius:6px; flex-shrink:0; background:#00000010; }
+  .history-list{ display:flex; flex-direction:column; gap:20px; max-height:70vh; overflow-y:auto; }
+  .history-group{ border:1px solid var(--paper-line); border-radius:10px; padding:12px; }
+  .history-group-header{
+    display:flex; justify-content:space-between; align-items:baseline;
+    font-size:12.5px; color:var(--ink-muted); margin-bottom:10px;
+    padding-bottom:8px; border-bottom:1px dashed var(--paper-line);
+  }
+  .history-group-header .count{ font-weight:600; color:var(--ink); }
+  .history-steps{ display:flex; flex-direction:column; gap:10px; }
+  .history-item{ display:flex; gap:12px; padding:8px; border-radius:8px; }
+  .history-item + .history-item{ border-top:1px dashed var(--paper-line); padding-top:14px; }
+  .history-item img{
+    width:64px; height:64px; object-fit:cover; border-radius:6px;
+    flex-shrink:0; background:#00000010; cursor:pointer;
+  }
   .history-info{ flex:1; min-width:0; }
   .history-date{ font-size:12px; color:var(--ink-muted); margin-bottom:4px; }
   .history-verdict{ font-weight:600; font-size:14px; }
   .history-verdict.is-mistake{ color:var(--pen-red); }
   .history-verdict.is-ok{ color:#4d7a49; }
   .history-quote{ font-size:13px; font-style:italic; color:var(--ink-muted); margin-top:2px; }
+  .history-explanation{ font-size:13px; color:var(--ink); margin-top:4px; line-height:1.5; }
+  .history-fix{ font-size:13px; color:var(--ink); margin-top:2px; line-height:1.5; }
+  .history-fix .fix-label{ font-weight:600; }
   .history-empty{ color:var(--ink-muted); font-size:14px; }
+
+  .lightbox{
+    position:fixed; inset:0; background:rgba(10,20,14,0.9);
+    display:flex; align-items:center; justify-content:center;
+    padding:24px; z-index:60; cursor:zoom-out;
+  }
+  .lightbox img{ max-width:100%; max-height:100%; border-radius:6px; box-shadow:0 20px 50px rgba(0,0,0,0.5); }
 </style>
 </head>
 <body>
@@ -282,6 +304,10 @@
       </div>
       <div class="history-list" id="historyList"></div>
     </div>
+  </div>
+
+  <div class="lightbox hidden" id="lightbox">
+    <img id="lightboxImg" src="" alt="">
   </div>
 
   <p class="eyebrow">AI math check</p>
@@ -453,6 +479,12 @@
 
   let imageData = null; // { dataUrl, base64 }
   let conversation = [];
+  // Groups related history entries together (e.g. every incremental watch-mode
+  // check on the same problem, or a re-check of the same uploaded photo).
+  // Regenerated whenever the user starts working on a genuinely new problem —
+  // see handleFile(), capturePhotoBtn's handler, startCamera(), and
+  // resumeWatching(true) ("Start a new problem").
+  let currentProblemId = crypto.randomUUID();
 
   // Kept in sync with the ANALYSIS_PROMPT in lib/anthropic.js — this copy is
   // only used to reconstruct conversation history for follow-up questions,
@@ -550,6 +582,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     hideResults();
     try{
       imageData = await resizeImage(file, 1600);
+      currentProblemId = crypto.randomUUID();
       previewThumb.src = imageData.dataUrl;
       previewName.textContent = file.name;
       previewRow.classList.remove('hidden');
@@ -678,7 +711,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const parsed = parseModelJson(data.text);
       renderResult(parsed);
-      if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload');
+      if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId);
     } catch(err){
       showError("Something went wrong reading that photo. Try a clearer, well-lit photo, or check your connection, then try again.");
     } finally {
@@ -823,6 +856,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     checkNowBtn.classList.remove('hidden');
     rotateCameraBtn.classList.remove('hidden');
     watchState = { reviewedThrough: null, pendingMistake: null };
+    currentProblemId = crypto.randomUUID();
     lastSmallFrame = null;
     writingActive = false;
     lastCheckAt = 0;
@@ -979,6 +1013,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     takePhotoSection.classList.add('hidden');
     hideError(); hideResults();
     imageData = frame;
+    currentProblemId = crypto.randomUUID();
     previewThumb.src = imageData.dataUrl;
     previewName.textContent = 'Photo taken just now';
     previewRow.classList.remove('hidden');
@@ -1034,7 +1069,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resetBtn.classList.add('hidden');
     watchResumeRow.classList.remove('hidden');
     renderResult(parsed, frame, buildWatchPrompt(priorStateSnapshot));
-    if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, frame, 'watch');
+    if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, frame, 'watch', currentProblemId);
   }
 
   // "Continue" keeps watchState as-is, so the next check still knows about
@@ -1054,6 +1089,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     watchFrozen = false;
     if (resetState){
       watchState = { reviewedThrough: null, pendingMistake: null };
+      currentProblemId = crypto.randomUUID();
     }
     if (cameraStream){
       setCameraStatus(resetState ? 'Watching for a new problem…' : 'Watching…');
@@ -1104,6 +1140,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const historyPanel = document.getElementById('historyPanel');
   const closeHistoryBtn = document.getElementById('closeHistoryBtn');
   const historyList = document.getElementById('historyList');
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightboxImg');
 
   let authMode = 'signin'; // 'signin' | 'signup'
   let currentSession = null;
@@ -1171,6 +1209,81 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (e.target === historyPanel) historyPanel.classList.add('hidden');
   });
 
+  lightbox.addEventListener('click', () => lightbox.classList.add('hidden'));
+
+  function openLightbox(src){
+    lightboxImg.src = src;
+    lightbox.classList.remove('hidden');
+  }
+
+  function groupByProblem(entries){
+    const groups = new Map();
+    entries.forEach((entry) => {
+      const key = entry.problem_id || entry.id; // defensive fallback for any pre-migration rows
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(entry);
+    });
+    const groupList = Array.from(groups.values()).map((steps) => {
+      steps.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+      return steps;
+    });
+    groupList.sort((a, b) => new Date(b[b.length - 1].created_at) - new Date(a[a.length - 1].created_at));
+    return groupList;
+  }
+
+  function buildHistoryStep(entry){
+    const item = document.createElement('div');
+    item.className = 'history-item';
+
+    const img = document.createElement('img');
+    img.src = entry.thumbnail || '';
+    img.alt = 'Click to view full size';
+    img.addEventListener('click', () => openLightbox(entry.thumbnail));
+    item.appendChild(img);
+
+    const info = document.createElement('div');
+    info.className = 'history-info';
+
+    const dateEl = document.createElement('div');
+    dateEl.className = 'history-date';
+    const when = new Date(entry.created_at).toLocaleString();
+    dateEl.textContent = `${when} · ${entry.mode === 'watch' ? 'Watch' : 'Upload'}`;
+    info.appendChild(dateEl);
+
+    const verdictEl = document.createElement('div');
+    verdictEl.className = 'history-verdict ' + (entry.has_mistake ? 'is-mistake' : 'is-ok');
+    verdictEl.textContent = entry.has_mistake ? 'Mistake found' : 'Looks correct';
+    info.appendChild(verdictEl);
+
+    if (entry.has_mistake && entry.line_quote){
+      const quoteEl = document.createElement('div');
+      quoteEl.className = 'history-quote';
+      quoteEl.textContent = `"${entry.line_quote}"`;
+      info.appendChild(quoteEl);
+    }
+
+    if (entry.explanation){
+      const explEl = document.createElement('div');
+      explEl.className = 'history-explanation';
+      explEl.textContent = entry.explanation;
+      info.appendChild(explEl);
+    }
+
+    if (entry.has_mistake && entry.fix){
+      const fixEl = document.createElement('div');
+      fixEl.className = 'history-fix';
+      const label = document.createElement('span');
+      label.className = 'fix-label';
+      label.textContent = 'Try this instead: ';
+      fixEl.appendChild(label);
+      fixEl.appendChild(document.createTextNode(entry.fix));
+      info.appendChild(fixEl);
+    }
+
+    item.appendChild(info);
+    return item;
+  }
+
   function renderHistoryList(entries){
     historyList.innerHTML = '';
     if (!entries || !entries.length){
@@ -1180,38 +1293,32 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       historyList.appendChild(empty);
       return;
     }
-    entries.forEach((entry) => {
-      const item = document.createElement('div');
-      item.className = 'history-item';
 
-      const img = document.createElement('img');
-      img.src = entry.thumbnail || '';
-      img.alt = '';
-      item.appendChild(img);
+    groupByProblem(entries).forEach((steps) => {
+      const group = document.createElement('div');
+      group.className = 'history-group';
 
-      const info = document.createElement('div');
-      info.className = 'history-info';
+      const header = document.createElement('div');
+      header.className = 'history-group-header';
 
-      const dateEl = document.createElement('div');
-      dateEl.className = 'history-date';
-      const when = new Date(entry.created_at).toLocaleString();
-      dateEl.textContent = `${when} · ${entry.mode === 'watch' ? 'Watch' : 'Upload'}`;
-      info.appendChild(dateEl);
+      const rangeStart = new Date(steps[0].created_at).toLocaleString();
+      const label = document.createElement('span');
+      label.textContent = rangeStart;
+      header.appendChild(label);
 
-      const verdictEl = document.createElement('div');
-      verdictEl.className = 'history-verdict ' + (entry.has_mistake ? 'is-mistake' : 'is-ok');
-      verdictEl.textContent = entry.has_mistake ? 'Mistake found' : 'Looks correct';
-      info.appendChild(verdictEl);
+      const count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = steps.length === 1 ? '1 check' : `${steps.length} checks`;
+      header.appendChild(count);
 
-      if (entry.has_mistake && entry.line_quote){
-        const quoteEl = document.createElement('div');
-        quoteEl.className = 'history-quote';
-        quoteEl.textContent = `"${entry.line_quote}"`;
-        info.appendChild(quoteEl);
-      }
+      group.appendChild(header);
 
-      item.appendChild(info);
-      historyList.appendChild(item);
+      const stepsEl = document.createElement('div');
+      stepsEl.className = 'history-steps';
+      steps.forEach((entry) => stepsEl.appendChild(buildHistoryStep(entry)));
+      group.appendChild(stepsEl);
+
+      historyList.appendChild(group);
     });
   }
 
@@ -1242,18 +1349,22 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         const canvas = document.createElement('canvas');
         canvas.width = width; canvas.height = height;
         canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.6));
+        resolve(canvas.toDataURL('image/jpeg', 0.72));
       };
       img.src = dataUrl;
     });
   }
 
-  async function saveEntry(parsed, frame, mode){
+  async function saveEntry(parsed, frame, mode, problemId){
     if (!supabaseClient || !currentSession || !frame) return;
     try{
-      const thumbnail = await makeThumbnail(frame.dataUrl, 240);
+      // 480px/0.72 balances being genuinely viewable when expanded against
+      // Postgres row size — this is the only image kept per check, there's
+      // no separate low-res "thumbnail" vs full-res "photo".
+      const thumbnail = await makeThumbnail(frame.dataUrl, 480);
       const { error } = await supabaseClient.from('history_entries').insert({
         user_id: currentSession.user.id,
+        problem_id: problemId,
         mode,
         has_mistake: !!parsed.has_mistake,
         line_quote: parsed.line_quote || '',
