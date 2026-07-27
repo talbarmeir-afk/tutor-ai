@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23FF3B30'/%3E%3Ccircle cx='50' cy='52' r='28' fill='none' stroke='%23fff' stroke-width='10' stroke-linecap='round' pathLength='100' stroke-dasharray='82 18' stroke-dashoffset='41'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Karla:wght@400;500;600;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg: #F4F3EF;
@@ -99,7 +99,18 @@
   }
   .camera-status.is-flash{ color:var(--chalk-yellow); }
 
+  .check-card{
+    background:var(--paper); border:1px solid var(--paper-line); border-radius:16px;
+    padding:24px; box-shadow:0 1px 3px rgba(0,0,0,0.05); margin-bottom:36px;
+  }
+  .check-card-title{
+    font-family:'Nunito', sans-serif; font-weight:800; font-size:19px;
+    color:var(--ink); margin:0 0 18px;
+  }
+  .check-card .mode-toggle{ margin-bottom:20px; }
+
   .dropzone{
+    position:relative; overflow:hidden;
     border:2px dashed rgba(24,24,22,0.22);
     border-radius:14px;
     background:rgba(24,24,22,0.02);
@@ -116,6 +127,14 @@
   .dropzone svg{ display:block; margin:0 auto 14px; }
   .dropzone .primary{ font-size:15px; font-weight:500; margin:0 0 4px; }
   .dropzone .secondary{ font-size:13px; color:var(--chalk-muted); margin:0; }
+  .dropzone > *{ position:relative; z-index:1; }
+  .dropzone-sample{
+    position:absolute; inset:0; width:100%; height:100%; z-index:0;
+    opacity:0.14; color:var(--ink); pointer-events:none;
+  }
+  .dropzone-sample text{ font-family:'Kalam', cursive; }
+  .dropzone-sample .work-line{ fill:currentColor; }
+  .dropzone-sample .mark{ fill:none; stroke:var(--pen-red); stroke-width:2.5; }
   input[type=file]{ display:none; }
 
   .camera-option-row{
@@ -503,6 +522,8 @@
 
   <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
 
+  <div class="check-card" id="checkCard">
+  <h2 class="check-card-title">Check my scribbled work</h2>
   <div class="mode-toggle" id="modeToggle" role="tablist">
     <button class="mode-btn is-active" type="button" data-mode="upload">Upload a photo <span class="caret">▾</span></button>
     <button class="mode-btn" type="button" data-mode="watch">Watch with camera <span class="gate-badge" id="watchGateBadge">Sign in</span></button>
@@ -521,6 +542,12 @@
 
   <div id="uploadMode">
     <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
+      <svg class="dropzone-sample" viewBox="0 0 500 220" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+        <text class="work-line" x="55" y="60" font-size="30" transform="rotate(-3 55 60)">2x + 5 = 15</text>
+        <text class="work-line" x="85" y="112" font-size="30" transform="rotate(2 85 112)">2x = 10</text>
+        <text class="work-line" x="105" y="164" font-size="32" transform="rotate(-2 105 164)">x = 5</text>
+        <ellipse class="mark" cx="148" cy="153" rx="44" ry="23" transform="rotate(-6 148 153)"/>
+      </svg>
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--chalk-muted)">
         <path d="M12 16V4M12 4l-4 4M12 4l4 4"/>
         <path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>
@@ -574,6 +601,7 @@
       <button class="ghost-btn hidden" id="stopCameraBtn" type="button">Stop watching</button>
       <button class="primary-btn" id="startCameraBtn" type="button">Start watching</button>
     </div>
+  </div>
   </div>
 
   <div id="resultPaper" class="paper hidden">
@@ -763,6 +791,7 @@
   const errorNote = document.getElementById('errorNote');
   const errorText = document.getElementById('errorText');
   const retryBtn = document.getElementById('retryBtn');
+  const checkCard = document.getElementById('checkCard');
   const modeToggle = document.getElementById('modeToggle');
   const uploadModeEl = document.getElementById('uploadMode');
   const watchModeEl = document.getElementById('watchMode');
@@ -866,7 +895,7 @@
     lessonStartPrompt.classList.add('hidden');
     lessonEndedNote.classList.add('hidden');
     lessonTimerEl.classList.add('hidden');
-    modeToggle.classList.add('hidden');
+    checkCard.classList.add('hidden');
     uploadModeEl.classList.add('hidden');
     watchModeEl.classList.add('hidden');
     resultPaper.classList.add('hidden');
@@ -879,7 +908,7 @@
   // is running unhide lessonTimerEl explicitly right after calling this.
   function showCheckUI(){
     hideAllLessonPanels();
-    modeToggle.classList.remove('hidden');
+    checkCard.classList.remove('hidden');
     setMode(currentMode);
   }
 
