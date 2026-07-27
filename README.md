@@ -120,6 +120,77 @@ check/analyze features.
   alter table history_entries add column lesson_id uuid;
   ```
 
+### Tabs: Dashboard, Profile, Settings
+
+Once signed in, a tab bar (Home / Dashboard / Profile / Settings) appears
+above the main panel — hidden entirely for guests, who only ever see Home,
+same as before tabs existed. Each tab's data loads lazily the first time
+it's opened (`window.mathTutorProfile.loadDashboard/loadProfile/loadSettings`),
+not eagerly on sign-in.
+
+- **Home** is unchanged — the Start Lesson flow and the History button.
+- **Dashboard** shows lessons-this-week vs. a weekly target, a streak (
+  consecutive weeks meeting that target — a week still in progress doesn't
+  break the streak, only a completed week that fell short does), an 8-week
+  bar chart, and a per-topic mastery list. Mastery is a simple
+  correct-checks ÷ total-checks ratio per topic (Mastered ≥85%, Proficient
+  ≥60%, Developing ≥35%, else Needs practice), gated behind a minimum of 3
+  checks so one lucky or unlucky answer can't swing the label — see
+  `masteryFor()`. This is a heuristic, not a real assessment model; there's
+  no other signal available from check history to base it on.
+- **Profile** holds student info (name, school, class, country, language),
+  a weekly AI-lesson schedule (day/time/duration — **stored only**, nothing
+  sends reminders or auto-starts a lesson from it, since there's no
+  notification infrastructure), and a simple add/delete list of tests
+  (subject, date, optional score).
+- **Settings** has account (email, password change via
+  `supabaseClient.auth.updateUser`), and placeholder Billing/Integrations
+  sections — no real payment processing or third-party connections exist
+  yet; wiring either up is a separate project.
+
+Topics come from a fixed list the model chooses from (`TOPICS` in
+`lib/anthropic.js`) — added to both `ANALYSIS_PROMPT` and `buildWatchPrompt`
+(and their client-side copy in `index.html`) so Dashboard grouping is
+consistent rather than parsing free-text titles. Migration (combines
+everything tabs need — topic column, `profiles`, `exams`):
+
+```sql
+alter table history_entries add column if not exists topic text;
+
+create table if not exists profiles (
+  user_id uuid primary key references auth.users,
+  first_name text,
+  last_name text,
+  school text,
+  class_name text,
+  country text,
+  language text,
+  schedule_day text,
+  schedule_time text,
+  schedule_duration_minutes integer default 45,
+  weekly_target_lessons integer default 3,
+  updated_at timestamptz not null default now()
+);
+alter table profiles enable row level security;
+create policy "Users can view their own profile" on profiles for select using (auth.uid() = user_id);
+create policy "Users can insert their own profile" on profiles for insert with check (auth.uid() = user_id);
+create policy "Users can update their own profile" on profiles for update using (auth.uid() = user_id);
+
+create table if not exists exams (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users not null,
+  subject text not null,
+  exam_date date not null,
+  score integer,
+  created_at timestamptz not null default now()
+);
+alter table exams enable row level security;
+create policy "Users can view their own exams" on exams for select using (auth.uid() = user_id);
+create policy "Users can insert their own exams" on exams for insert with check (auth.uid() = user_id);
+create policy "Users can update their own exams" on exams for update using (auth.uid() = user_id);
+create policy "Users can delete their own exams" on exams for delete using (auth.uid() = user_id);
+```
+
 ## Local development
 
 You'll need a free Anthropic API key: https://console.anthropic.com/settings/keys

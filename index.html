@@ -182,6 +182,8 @@
     border-radius:9px; padding:10px 18px; cursor:pointer;
   }
   button.ghost-btn:hover{ border-color:var(--chalk); }
+  button.ghost-btn:disabled{ opacity:.5; cursor:not-allowed; }
+  button.ghost-btn:disabled:hover{ border-color:rgba(24,24,22,0.22); }
 
   .qa-section{ margin-top:26px; padding-top:20px; border-top:1px dashed var(--paper-line); }
   .qa-heading{ font-family:'Nunito', sans-serif; font-size:17px; margin:0 0 12px; color:var(--ink); font-weight:800; }
@@ -292,6 +294,101 @@
     padding:24px; z-index:60; cursor:zoom-out;
   }
   .lightbox img{ max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 20px 50px rgba(0,0,0,0.5); }
+
+  /* Tab bar + panels */
+  .tab-bar{ display:flex; gap:6px; margin:0 0 28px; border-bottom:1px solid var(--paper-line); }
+  .tab-btn{
+    font-family:'Karla', sans-serif; font-weight:700; font-size:14px;
+    background:none; border:none; color:var(--ink-muted);
+    padding:10px 4px; margin-right:18px; cursor:pointer;
+    border-bottom:2px solid transparent; margin-bottom:-1px;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .tab-btn:hover{ color:var(--ink); }
+  .tab-btn.is-active{ color:var(--ink); border-bottom-color:var(--pen-red); }
+  .tab-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+
+  .panel-heading{
+    font-family:'Nunito', sans-serif; font-weight:800; font-size:17px;
+    color:var(--ink); margin:32px 0 14px;
+  }
+  .panel-heading:first-child{ margin-top:0; }
+  .empty-note{ color:var(--ink-muted); font-size:14px; }
+
+  .stat-row{ display:flex; gap:14px; }
+  .stat-card{
+    flex:1; background:var(--paper); border:1px solid var(--paper-line); border-radius:12px;
+    padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  }
+  .stat-label{ font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-muted); }
+  .stat-value{ font-family:'Nunito', sans-serif; font-weight:800; font-size:30px; color:var(--ink); margin-top:6px; }
+  .stat-value .stat-of{ font-size:16px; font-weight:700; color:var(--ink-muted); }
+  .stat-sub{ font-size:13px; color:var(--ink-muted); margin-top:2px; }
+
+  .weekly-chart{ display:flex; align-items:flex-end; gap:8px; height:100px; padding:0 2px; }
+  .week-bar-wrap{ flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%; justify-content:flex-end; }
+  .week-bar{ width:100%; max-width:26px; background:var(--chalk-yellow); border-radius:4px 4px 2px 2px; min-height:3px; }
+  .week-bar-label{ font-size:10.5px; color:var(--ink-muted); white-space:nowrap; }
+
+  .topics-list{ display:flex; flex-direction:column; gap:10px; }
+  .topic-row{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    background:var(--paper); border:1px solid var(--paper-line); border-radius:10px; padding:12px 14px;
+  }
+  .topic-name{ font-weight:600; font-size:14px; color:var(--ink); }
+  .topic-count{ font-size:12.5px; color:var(--ink-muted); margin-top:2px; }
+  .topic-mastery{ font-size:12.5px; font-weight:700; padding:4px 10px; border-radius:20px; white-space:nowrap; }
+  .topic-mastery.m-mastered{ color:var(--chalk-green); background:rgba(47,179,80,0.12); }
+  .topic-mastery.m-proficient{ color:var(--chalk-green); background:rgba(47,179,80,0.08); }
+  .topic-mastery.m-developing{ color:var(--ink-muted); background:rgba(24,24,22,0.06); }
+  .topic-mastery.m-needs-practice{ color:var(--pen-red); background:rgba(255,59,48,0.1); }
+  .topic-mastery.m-more-data{ color:var(--ink-muted); background:rgba(24,24,22,0.05); }
+
+  .profile-form, .password-form{ display:flex; flex-direction:column; gap:14px; }
+  .field-row{ display:flex; gap:14px; flex-wrap:wrap; }
+  .field-row label{
+    flex:1; min-width:140px; display:flex; flex-direction:column; gap:6px;
+    font-size:12.5px; font-weight:700; color:var(--ink-muted);
+  }
+  .field-row input, .field-row select,
+  .password-form input, .exam-form input{
+    font-family:'Karla', sans-serif; font-size:14px; color:var(--ink);
+    padding:10px 12px; border-radius:8px; border:1px solid rgba(24,24,22,0.18);
+    background:#fff;
+  }
+  .field-row input:focus-visible, .field-row select:focus-visible,
+  .password-form input:focus-visible, .exam-form input:focus-visible{
+    outline:2px solid var(--chalk-yellow); outline-offset:1px;
+  }
+  .form-actions{ display:flex; align-items:center; gap:12px; }
+  .save-status{ font-size:13px; color:var(--chalk-green); }
+  .save-status.is-error{ color:var(--pen-red); }
+
+  .exams-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:14px; }
+  .exam-item{
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+    background:var(--paper); border:1px solid var(--paper-line); border-radius:10px; padding:12px 14px;
+  }
+  .exam-item .subject{ font-weight:600; font-size:14px; color:var(--ink); }
+  .exam-item .meta{ font-size:12.5px; color:var(--ink-muted); margin-top:2px; }
+  .exam-item .score{ font-size:13px; font-weight:700; color:var(--ink); white-space:nowrap; }
+  .exam-item .remove-btn{
+    background:none; border:none; color:var(--ink-muted); cursor:pointer; font-size:18px; line-height:1;
+    padding:0 2px;
+  }
+  .exam-item .remove-btn:hover{ color:var(--pen-red); }
+  .exam-form{ display:flex; gap:10px; flex-wrap:wrap; }
+  .exam-form input{ flex:1; min-width:120px; }
+
+  .settings-card{
+    background:var(--paper); border:1px solid var(--paper-line); border-radius:12px;
+    padding:16px 18px; margin-bottom:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05);
+  }
+  .settings-row{ display:flex; align-items:center; justify-content:space-between; padding:8px 0; font-size:14px; }
+  .settings-row + .settings-row{ border-top:1px solid var(--paper-line); }
+  .settings-value{ color:var(--ink); font-weight:600; }
+  .settings-value.muted{ color:var(--ink-muted); font-weight:400; }
+  .settings-note{ font-size:13px; color:var(--ink-muted); margin:8px 0 12px; }
 </style>
 </head>
 <body>
@@ -330,6 +427,21 @@
     <img id="lightboxImg" src="" alt="">
   </div>
 
+  <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
+    <circle cx="50" cy="52" r="30" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="82 18" stroke-dashoffset="41"/>
+  </svg>
+  <p class="eyebrow">Your AI Teacher</p>
+  <h1>Claruno</h1>
+  <p class="lede">Upload a photo of a problem you solved by hand, or let your camera watch as you write. Claruno reads through your steps and circles exactly where it goes wrong — then explains why.</p>
+
+  <nav class="tab-bar hidden" id="tabBar" role="tablist">
+    <button class="tab-btn is-active" type="button" data-tab="home">Home</button>
+    <button class="tab-btn" type="button" data-tab="dashboard">Dashboard</button>
+    <button class="tab-btn" type="button" data-tab="profile">Profile</button>
+    <button class="tab-btn" type="button" data-tab="settings">Settings</button>
+  </nav>
+
+  <div id="tabHome">
   <div class="lesson-note hidden" id="lessonStartPrompt">
     <h2>Ready for a lesson?</h2>
     <p>Start a 45-minute lesson to begin checking your work. Your checks and the time you spend are saved to your history.</p>
@@ -344,13 +456,6 @@
       <button class="ghost-btn" id="lessonEndedHistoryBtn" type="button">View history</button>
     </div>
   </div>
-
-  <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
-    <circle cx="50" cy="52" r="30" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="82 18" stroke-dashoffset="41"/>
-  </svg>
-  <p class="eyebrow">Your AI Teacher</p>
-  <h1>Claruno</h1>
-  <p class="lede">Upload a photo of a problem you solved by hand, or let your camera watch as you write. Claruno reads through your steps and circles exactly where it goes wrong — then explains why.</p>
 
   <div class="mode-toggle" id="modeToggle" role="tablist">
     <button class="mode-btn is-active" type="button" data-mode="upload">Upload a photo</button>
@@ -461,6 +566,116 @@
     <h2>Couldn't read that photo</h2>
     <p id="errorText">Something went wrong. Try a clearer, well-lit photo, or check your connection.</p>
     <button class="ghost-btn" id="retryBtn" type="button">Try again</button>
+  </div>
+  </div>
+
+  <div id="tabDashboard" class="hidden">
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-label">This week</div>
+        <div class="stat-value"><span id="statWeekLessons">0</span><span class="stat-of" id="statWeekTarget"> / 0</span></div>
+        <div class="stat-sub">lessons</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Streak</div>
+        <div class="stat-value" id="statStreak">0</div>
+        <div class="stat-sub">weeks on target</div>
+      </div>
+    </div>
+
+    <h2 class="panel-heading">Lessons per week</h2>
+    <div id="weeklyChart" class="weekly-chart"></div>
+
+    <h2 class="panel-heading">Topics covered</h2>
+    <div id="topicsList" class="topics-list">
+      <p class="empty-note">No checks yet — topics will show up here once a lesson includes some.</p>
+    </div>
+  </div>
+
+  <div id="tabProfile" class="hidden">
+    <h2 class="panel-heading">About the student</h2>
+    <form id="profileForm" class="profile-form">
+      <div class="field-row">
+        <label>First name<input type="text" id="profileFirstName" autocomplete="given-name"></label>
+        <label>Last name<input type="text" id="profileLastName" autocomplete="family-name"></label>
+      </div>
+      <div class="field-row">
+        <label>School<input type="text" id="profileSchool"></label>
+        <label>Class / grade<input type="text" id="profileClass"></label>
+      </div>
+      <div class="field-row">
+        <label>Country<input type="text" id="profileCountry" autocomplete="country-name"></label>
+        <label>Language<input type="text" id="profileLanguage"></label>
+      </div>
+
+      <h2 class="panel-heading">Weekly AI lesson schedule</h2>
+      <div class="field-row">
+        <label>Day
+          <select id="profileScheduleDay">
+            <option value="">No fixed day</option>
+            <option value="mon">Monday</option>
+            <option value="tue">Tuesday</option>
+            <option value="wed">Wednesday</option>
+            <option value="thu">Thursday</option>
+            <option value="fri">Friday</option>
+            <option value="sat">Saturday</option>
+            <option value="sun">Sunday</option>
+          </select>
+        </label>
+        <label>Time<input type="time" id="profileScheduleTime"></label>
+        <label>Duration
+          <select id="profileScheduleDuration">
+            <option value="30">30 min</option>
+            <option value="45" selected>45 min</option>
+            <option value="60">60 min</option>
+          </select>
+        </label>
+      </div>
+      <div class="field-row">
+        <label>Weekly lesson target<input type="number" id="profileWeeklyTarget" min="1" max="14" value="3"></label>
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="primary-btn">Save profile</button>
+        <span class="save-status" id="profileSaveStatus"></span>
+      </div>
+    </form>
+
+    <h2 class="panel-heading">Tests &amp; exams</h2>
+    <div id="examsList" class="exams-list">
+      <p class="empty-note">No tests added yet.</p>
+    </div>
+    <form id="examForm" class="exam-form">
+      <input type="text" id="examSubject" placeholder="Subject / material (e.g. Algebra ch. 4-6)" required>
+      <input type="date" id="examDate" required>
+      <input type="number" id="examScore" placeholder="Score (optional)" min="0" max="100">
+      <button type="submit" class="ghost-btn">Add test</button>
+    </form>
+  </div>
+
+  <div id="tabSettings" class="hidden">
+    <h2 class="panel-heading">Account</h2>
+    <div class="settings-card">
+      <div class="settings-row"><span>Email</span><span class="settings-value" id="settingsEmail"></span></div>
+    </div>
+    <form id="passwordForm" class="password-form">
+      <input type="password" id="newPassword" placeholder="New password" minlength="6" required autocomplete="new-password">
+      <button type="submit" class="primary-btn">Update password</button>
+      <span class="save-status" id="passwordSaveStatus"></span>
+    </form>
+
+    <h2 class="panel-heading">Billing</h2>
+    <div class="settings-card">
+      <div class="settings-row"><span>Plan</span><span class="settings-value">Free</span></div>
+      <p class="settings-note">Paid plans are coming soon.</p>
+      <button class="ghost-btn" type="button" disabled>Upgrade</button>
+    </div>
+
+    <h2 class="panel-heading">Integrations</h2>
+    <div class="settings-card">
+      <div class="settings-row"><span>Google Classroom</span><span class="settings-value muted">Coming soon</span></div>
+      <div class="settings-row"><span>Khan Academy</span><span class="settings-value muted">Coming soon</span></div>
+    </div>
   </div>
 </div>
 
@@ -613,6 +828,7 @@
     stopCamera();
     stopTakePhotoStream();
     lessonStartPrompt.classList.remove('hidden');
+    switchTab('home');
   }
 
   function showEndedNote(durationSeconds){
@@ -621,6 +837,7 @@
     stopTakePhotoStream();
     lessonEndedText.textContent = `You worked for ${formatLessonTime(durationSeconds * 1000)} this lesson — it's ended and can't be resumed. Start a new one to keep going, or look back through your history.`;
     lessonEndedNote.classList.remove('hidden');
+    switchTab('home');
   }
 
   function clearLessonInterval(){
@@ -673,8 +890,41 @@
     if (window.mathTutorHistory) window.mathTutorHistory.openHistory();
   });
 
+  // Tabs — the bar itself is only shown while signed in (Dashboard/Profile/
+  // Settings need a real account); guests just see Home, matching the old
+  // pre-tabs layout exactly.
+  const tabBar = document.getElementById('tabBar');
+  const tabPanels = {
+    home: document.getElementById('tabHome'),
+    dashboard: document.getElementById('tabDashboard'),
+    profile: document.getElementById('tabProfile'),
+    settings: document.getElementById('tabSettings'),
+  };
+
+  function switchTab(name){
+    if (!tabPanels[name]) return;
+    Object.keys(tabPanels).forEach((key) => {
+      tabPanels[key].classList.toggle('hidden', key !== name);
+    });
+    tabBar.querySelectorAll('.tab-btn').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.tab === name);
+    });
+    if (window.mathTutorProfile) {
+      if (name === 'dashboard') window.mathTutorProfile.loadDashboard();
+      if (name === 'profile') window.mathTutorProfile.loadProfile();
+      if (name === 'settings') window.mathTutorProfile.loadSettings();
+    }
+  }
+
+  tabBar.addEventListener('click', (e) => {
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    switchTab(btn.dataset.tab);
+  });
+
   function lessonOnSignIn(userId){
     lessonUserId = userId;
+    tabBar.classList.remove('hidden');
     const stored = loadActiveLesson(userId);
     if (stored) {
       currentLessonId = stored.id;
@@ -717,6 +967,8 @@
     lessonRunning = false;
     clearLessonInterval();
     renderLessonTimer();
+    tabBar.classList.add('hidden');
+    switchTab('home');
     showCheckUI();
   }
 
@@ -738,8 +990,10 @@ STEP 4 — Before answering, check: does the line you're about to report as the 
 
 Also produce a short problem_title describing the overall problem being solved: if it's a straightforward equation-solving problem, use the original equation exactly as first written as the title (e.g. "2x + 5 = 15"). If it's a different kind of problem — geometry, a word problem, multi-part, etc. — write a brief one-line description in the style "Topic: short description" (e.g. "Geometry: Pythagorean triangle calculation").
 
+Also classify the problem into exactly one topic from this fixed list, choosing whichever fits best even if imperfectly: "Algebra", "Geometry", "Arithmetic", "Fractions & Decimals", "Word Problems", "Trigonometry", "Calculus", "Statistics & Probability", "Other".
+
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
+{"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
 
 For x and y: point at the exact wrong token itself (e.g. the specific incorrect number or sign), not the start of the line and not the line's overall center — if the error is a number partway through or at the end of the line, x/y should land on that number, not on the beginning of the equation. Look directly at that token's pixel position in the photo; do not estimate it from the line's position in a numbered sequence or assume lines are evenly spaced. The photo may be tilted, rotated, or taken at an angle — base x/y on the token's actual pixel position in the photo exactly as captured, not on where it would sit if the page were flattened and upright.`;
 
@@ -772,9 +1026,10 @@ Now look at the current photo and report on the CURRENT state of the work:
 - Either way, set reviewed_through to a short exact snippet of the last written line that is now confirmed fully correct (the line immediately before any currently-unresolved mistake, or the last written line if everything so far is correct).
 - Before answering, check: does the line you're about to report as the mistake match any line in your crossed-out list? If so, that's wrong — go back and use the next non-crossed-out line instead.
 - Also produce a short problem_title describing the overall problem: if it's a straightforward equation-solving problem, use the original equation exactly as first written as the title (e.g. "2x + 5 = 15"). If it's a different kind of problem — geometry, a word problem, multi-part, etc. — write a brief one-line description in the style "Topic: short description" (e.g. "Geometry: Pythagorean triangle calculation").
+- Also classify the problem into exactly one topic from this fixed list, choosing whichever fits best even if imperfectly: "Algebra", "Geometry", "Arithmetic", "Fractions & Decimals", "Word Problems", "Trigonometry", "Calculus", "Statistics & Probability", "Other".
 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "mistake_resolved": true or false, "problem_title": "short label for the overall problem, per the instructions above", "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
+{"has_mistake": true or false, "mistake_resolved": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
 
 For x and y (only when has_mistake is true): point at the exact wrong token itself — the specific incorrect number, sign, or term — not the start of the line. The photo may be tilted, rotated, or taken at an angle — base x/y on the token's actual pixel position in the photo exactly as captured, not on where it would sit if the page were flattened and upright.`;
   }
@@ -1383,6 +1638,36 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const lightbox = document.getElementById('lightbox');
   const lightboxImg = document.getElementById('lightboxImg');
 
+  const statWeekLessons = document.getElementById('statWeekLessons');
+  const statWeekTarget = document.getElementById('statWeekTarget');
+  const statStreak = document.getElementById('statStreak');
+  const weeklyChart = document.getElementById('weeklyChart');
+  const topicsList = document.getElementById('topicsList');
+
+  const profileForm = document.getElementById('profileForm');
+  const profileFirstName = document.getElementById('profileFirstName');
+  const profileLastName = document.getElementById('profileLastName');
+  const profileSchool = document.getElementById('profileSchool');
+  const profileClass = document.getElementById('profileClass');
+  const profileCountry = document.getElementById('profileCountry');
+  const profileLanguage = document.getElementById('profileLanguage');
+  const profileScheduleDay = document.getElementById('profileScheduleDay');
+  const profileScheduleTime = document.getElementById('profileScheduleTime');
+  const profileScheduleDuration = document.getElementById('profileScheduleDuration');
+  const profileWeeklyTarget = document.getElementById('profileWeeklyTarget');
+  const profileSaveStatus = document.getElementById('profileSaveStatus');
+
+  const examsList = document.getElementById('examsList');
+  const examForm = document.getElementById('examForm');
+  const examSubject = document.getElementById('examSubject');
+  const examDate = document.getElementById('examDate');
+  const examScore = document.getElementById('examScore');
+
+  const settingsEmail = document.getElementById('settingsEmail');
+  const passwordForm = document.getElementById('passwordForm');
+  const newPassword = document.getElementById('newPassword');
+  const passwordSaveStatus = document.getElementById('passwordSaveStatus');
+
   let authMode = 'signin'; // 'signin' | 'signup'
   let currentSession = null;
   let lessonBoundUserId = null; // tracks which user the lesson timer is currently bound to
@@ -1673,6 +1958,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         problem_id: problemId,
         lesson_id: lessonId,
         problem_title: parsed.problem_title || '',
+        topic: parsed.topic || '',
         mode,
         has_mistake: !!parsed.has_mistake,
         line_quote: parsed.line_quote || '',
@@ -1716,6 +2002,296 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   }
 
   window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord };
+
+  // ---- Profile, exams, dashboard, settings ----
+  // Loaded lazily (on tab switch, via window.mathTutorProfile) rather than
+  // eagerly on sign-in, since most of a session is spent on Home.
+
+  function mondayOf(date){
+    const d = new Date(date);
+    const day = d.getDay(); // 0=Sun..6=Sat
+    const diff = (day === 0 ? -6 : 1) - day;
+    d.setDate(d.getDate() + diff);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+  function weekKey(date){ return mondayOf(date).toISOString().slice(0, 10); }
+
+  async function loadProfile(){
+    if (!supabaseClient || !currentSession) return;
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('*')
+      .eq('user_id', currentSession.user.id)
+      .maybeSingle();
+    if (error){ console.warn('Could not load profile', error); return; }
+    profileFirstName.value = (data && data.first_name) || '';
+    profileLastName.value = (data && data.last_name) || '';
+    profileSchool.value = (data && data.school) || '';
+    profileClass.value = (data && data.class_name) || '';
+    profileCountry.value = (data && data.country) || '';
+    profileLanguage.value = (data && data.language) || '';
+    profileScheduleDay.value = (data && data.schedule_day) || '';
+    profileScheduleTime.value = (data && data.schedule_time) || '';
+    profileScheduleDuration.value = data && data.schedule_duration_minutes ? String(data.schedule_duration_minutes) : '45';
+    profileWeeklyTarget.value = (data && data.weekly_target_lessons) || 3;
+    loadExams();
+  }
+
+  profileForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!supabaseClient || !currentSession) return;
+    profileSaveStatus.classList.remove('is-error');
+    profileSaveStatus.textContent = 'Saving…';
+    try{
+      const { error } = await supabaseClient.from('profiles').upsert({
+        user_id: currentSession.user.id,
+        first_name: profileFirstName.value.trim(),
+        last_name: profileLastName.value.trim(),
+        school: profileSchool.value.trim(),
+        class_name: profileClass.value.trim(),
+        country: profileCountry.value.trim(),
+        language: profileLanguage.value.trim(),
+        schedule_day: profileScheduleDay.value,
+        schedule_time: profileScheduleTime.value || null,
+        schedule_duration_minutes: Number(profileScheduleDuration.value),
+        weekly_target_lessons: Math.max(1, Number(profileWeeklyTarget.value) || 3),
+      }, { onConflict: 'user_id' });
+      if (error) throw error;
+      profileSaveStatus.textContent = 'Saved';
+      setTimeout(() => { profileSaveStatus.textContent = ''; }, 2000);
+    } catch(err){
+      profileSaveStatus.classList.add('is-error');
+      profileSaveStatus.textContent = 'Could not save — try again.';
+      console.warn('Could not save profile', err);
+    }
+  });
+
+  function renderExams(exams){
+    examsList.innerHTML = '';
+    if (!exams || !exams.length){
+      const empty = document.createElement('p');
+      empty.className = 'empty-note';
+      empty.textContent = 'No tests added yet.';
+      examsList.appendChild(empty);
+      return;
+    }
+    exams.forEach((exam) => {
+      const item = document.createElement('div');
+      item.className = 'exam-item';
+
+      const info = document.createElement('div');
+      const subjectEl = document.createElement('div');
+      subjectEl.className = 'subject';
+      subjectEl.textContent = exam.subject;
+      const metaEl = document.createElement('div');
+      metaEl.className = 'meta';
+      metaEl.textContent = new Date(`${exam.exam_date}T00:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+      info.appendChild(subjectEl);
+      info.appendChild(metaEl);
+      item.appendChild(info);
+
+      if (exam.score !== null && exam.score !== undefined){
+        const scoreEl = document.createElement('span');
+        scoreEl.className = 'score';
+        scoreEl.textContent = `${exam.score}%`;
+        item.appendChild(scoreEl);
+      }
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-btn';
+      removeBtn.textContent = '×';
+      removeBtn.setAttribute('aria-label', 'Remove test');
+      removeBtn.addEventListener('click', () => deleteExam(exam.id));
+      item.appendChild(removeBtn);
+
+      examsList.appendChild(item);
+    });
+  }
+
+  async function loadExams(){
+    if (!supabaseClient || !currentSession) return;
+    const { data, error } = await supabaseClient
+      .from('exams')
+      .select('*')
+      .eq('user_id', currentSession.user.id)
+      .order('exam_date', { ascending: true });
+    if (error){ console.warn('Could not load exams', error); return; }
+    renderExams(data);
+  }
+
+  async function deleteExam(id){
+    if (!supabaseClient || !currentSession) return;
+    try{
+      const { error } = await supabaseClient.from('exams').delete().eq('id', id);
+      if (error) throw error;
+      loadExams();
+    } catch(err){
+      console.warn('Could not delete exam', err);
+    }
+  }
+
+  examForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!supabaseClient || !currentSession) return;
+    try{
+      const { error } = await supabaseClient.from('exams').insert({
+        user_id: currentSession.user.id,
+        subject: examSubject.value.trim(),
+        exam_date: examDate.value,
+        score: examScore.value ? Number(examScore.value) : null,
+      });
+      if (error) throw error;
+      examForm.reset();
+      loadExams();
+    } catch(err){
+      console.warn('Could not save exam', err);
+    }
+  });
+
+  function loadSettings(){
+    if (!currentSession) return;
+    settingsEmail.textContent = currentSession.user.email || '';
+  }
+
+  passwordForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!supabaseClient) return;
+    passwordSaveStatus.classList.remove('is-error');
+    passwordSaveStatus.textContent = 'Updating…';
+    try{
+      const { error } = await supabaseClient.auth.updateUser({ password: newPassword.value });
+      if (error) throw error;
+      passwordSaveStatus.textContent = 'Password updated';
+      passwordForm.reset();
+      setTimeout(() => { passwordSaveStatus.textContent = ''; }, 2500);
+    } catch(err){
+      passwordSaveStatus.classList.add('is-error');
+      passwordSaveStatus.textContent = err.message || 'Could not update password.';
+    }
+  });
+
+  // Mastery is a simple correct/total ratio per topic — the only signal
+  // available from check history — gated behind a minimum sample size so a
+  // single lucky/unlucky check doesn't swing straight to Mastered/Needs practice.
+  function masteryFor(stats){
+    if (stats.total < 3) return { label: 'More data needed', cls: 'm-more-data' };
+    const ratio = stats.correct / stats.total;
+    if (ratio >= 0.85) return { label: 'Mastered', cls: 'm-mastered' };
+    if (ratio >= 0.6) return { label: 'Proficient', cls: 'm-proficient' };
+    if (ratio >= 0.35) return { label: 'Developing', cls: 'm-developing' };
+    return { label: 'Needs practice', cls: 'm-needs-practice' };
+  }
+
+  async function loadDashboard(){
+    if (!supabaseClient || !currentSession) return;
+    const [lessonsRes, entriesRes, profileRes] = await Promise.all([
+      supabaseClient.from('lessons').select('started_at').eq('user_id', currentSession.user.id),
+      supabaseClient.from('history_entries').select('topic, has_mistake').eq('user_id', currentSession.user.id),
+      supabaseClient.from('profiles').select('weekly_target_lessons').eq('user_id', currentSession.user.id).maybeSingle(),
+    ]);
+    if (lessonsRes.error) console.warn('Could not load lessons for dashboard', lessonsRes.error);
+    if (entriesRes.error) console.warn('Could not load history for dashboard', entriesRes.error);
+
+    const weeklyTarget = (profileRes.data && profileRes.data.weekly_target_lessons) || 3;
+    const lessons = lessonsRes.data || [];
+    const entries = entriesRes.data || [];
+
+    const weekCounts = new Map();
+    lessons.forEach((l) => {
+      const key = weekKey(new Date(l.started_at));
+      weekCounts.set(key, (weekCounts.get(key) || 0) + 1);
+    });
+
+    statWeekLessons.textContent = weekCounts.get(weekKey(new Date())) || 0;
+    statWeekTarget.textContent = ` / ${weeklyTarget}`;
+
+    // Streak: consecutive weeks meeting the target, walking backward from the
+    // most recent COMPLETED week if the current week hasn't hit target yet
+    // (so a lesson still in progress this week can't prematurely break it).
+    let streak = 0;
+    const cursor = mondayOf(new Date());
+    if ((weekCounts.get(weekKey(cursor)) || 0) < weeklyTarget) cursor.setDate(cursor.getDate() - 7);
+    let guard = 0;
+    while (guard < 520){
+      guard++;
+      const count = weekCounts.get(weekKey(cursor)) || 0;
+      if (count < weeklyTarget) break;
+      streak++;
+      cursor.setDate(cursor.getDate() - 7);
+    }
+    statStreak.textContent = streak;
+
+    weeklyChart.innerHTML = '';
+    const weeks = [];
+    const wCursor = mondayOf(new Date());
+    for (let i = 0; i < 8; i++){
+      weeks.unshift(new Date(wCursor));
+      wCursor.setDate(wCursor.getDate() - 7);
+    }
+    const maxCount = Math.max(1, ...weeks.map((w) => weekCounts.get(weekKey(w)) || 0));
+    weeks.forEach((w) => {
+      const count = weekCounts.get(weekKey(w)) || 0;
+      const wrap = document.createElement('div');
+      wrap.className = 'week-bar-wrap';
+      const bar = document.createElement('div');
+      bar.className = 'week-bar';
+      bar.style.height = `${Math.max(4, (count / maxCount) * 100)}%`;
+      bar.title = `${count} lesson${count === 1 ? '' : 's'}`;
+      const label = document.createElement('div');
+      label.className = 'week-bar-label';
+      label.textContent = w.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      wrap.appendChild(bar);
+      wrap.appendChild(label);
+      weeklyChart.appendChild(wrap);
+    });
+
+    const topicStats = new Map();
+    entries.forEach((e) => {
+      const topic = e.topic || 'Other';
+      if (!topicStats.has(topic)) topicStats.set(topic, { total: 0, correct: 0 });
+      const t = topicStats.get(topic);
+      t.total++;
+      if (!e.has_mistake) t.correct++;
+    });
+
+    topicsList.innerHTML = '';
+    if (!topicStats.size){
+      const empty = document.createElement('p');
+      empty.className = 'empty-note';
+      empty.textContent = 'No checks yet — topics will show up here once a lesson includes some.';
+      topicsList.appendChild(empty);
+    } else {
+      Array.from(topicStats.entries())
+        .sort((a, b) => b[1].total - a[1].total)
+        .forEach(([topic, stats]) => {
+          const row = document.createElement('div');
+          row.className = 'topic-row';
+
+          const info = document.createElement('div');
+          const nameEl = document.createElement('div');
+          nameEl.className = 'topic-name';
+          nameEl.textContent = topic;
+          const countEl = document.createElement('div');
+          countEl.className = 'topic-count';
+          countEl.textContent = `${stats.total} check${stats.total === 1 ? '' : 's'}`;
+          info.appendChild(nameEl);
+          info.appendChild(countEl);
+          row.appendChild(info);
+
+          const { label, cls } = masteryFor(stats);
+          const mastery = document.createElement('span');
+          mastery.className = `topic-mastery ${cls}`;
+          mastery.textContent = label;
+          row.appendChild(mastery);
+
+          topicsList.appendChild(row);
+        });
+    }
+  }
+
+  window.mathTutorProfile = { loadDashboard, loadProfile, loadSettings };
 
   if (supabaseClient){
     supabaseClient.auth.onAuthStateChange((_event, session) => {
