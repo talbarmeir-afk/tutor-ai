@@ -206,7 +206,7 @@
   .error-note h2{ font-family:'Nunito', sans-serif; font-weight:800; font-size:19px; color:var(--pen-red); margin:0 0 8px; }
   .error-note p{ font-size:14px; color:var(--chalk-muted); margin:0 0 14px; line-height:1.6; }
 
-  .auth-bar{ margin-bottom:28px; display:flex; justify-content:flex-start; align-items:center; gap:12px; flex-wrap:wrap; }
+  .auth-bar{ margin-bottom:28px; display:flex; justify-content:flex-end; align-items:center; gap:12px; flex-wrap:wrap; }
   .lesson-timer{
     display:inline-block;
     font-family:'Karla', sans-serif; font-weight:700; font-size:13px;
@@ -234,7 +234,7 @@
     color:var(--ink-muted); margin-bottom:12px;
   }
   .history-lesson-groups{ display:flex; flex-direction:column; gap:14px; }
-  .auth-form{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-start; }
+  .auth-form{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
   .auth-form input{
     font-family:'Karla', sans-serif; font-size:13px; padding:8px 10px;
     border-radius:8px; border:1px solid rgba(24,24,22,0.18);
@@ -247,7 +247,7 @@
     text-decoration:underline; cursor:pointer; font-family:'Karla', sans-serif; padding:0;
   }
   button.link-btn:hover{ color:var(--chalk); }
-  .auth-error{ color:var(--pen-red); font-size:12.5px; margin:6px 0 0; text-align:left; }
+  .auth-error{ color:var(--pen-red); font-size:12.5px; margin:6px 0 0; text-align:right; }
   #authLoggedIn{ display:flex; align-items:center; gap:10px; font-size:13px; color:var(--chalk-muted); }
   #authEmailLabel{ color:var(--chalk); }
   .auth-submit-btn{
@@ -404,7 +404,7 @@
         <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password" minlength="6">
         <button type="submit" class="auth-submit-btn" id="authSubmitBtn">Sign in</button>
       </form>
-      <div style="text-align:left">
+      <div style="text-align:right">
         <button type="button" class="link-btn" id="authToggleModeBtn">Need an account? Sign up</button>
       </div>
       <p class="auth-error hidden" id="authError"></p>
