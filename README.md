@@ -1,7 +1,7 @@
-# Show your work — math mistake finder
+# Claruno — Your AI Teacher
 
 Upload a photo of handwritten math work, or let your camera watch as you
-write. AI finds the first mistake, draws a red-pen-style arrow at it,
+write. Claruno finds the first mistake, draws a red-pen-style arrow at it,
 explains what went wrong, and answers follow-up questions.
 
 ## How it's structured
