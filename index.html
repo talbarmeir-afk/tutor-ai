@@ -52,7 +52,7 @@
   }
   .lede{ color:var(--chalk-muted); font-size:16px; line-height:1.6; max-width:52ch; margin:24px 0 40px; }
 
-  .mode-toggle{ display:flex; gap:8px; margin:0 0 28px; position:relative; }
+  .mode-toggle{ display:inline-flex; gap:8px; margin:0 0 28px; position:relative; }
   .mode-btn{
     font-family:'Karla', sans-serif; font-weight:600; font-size:13.5px;
     background:rgba(24,24,22,0.035); color:var(--chalk-muted);
@@ -127,7 +127,7 @@
   .dropzone .primary{ font-size:15px; font-weight:500; margin:0 0 4px; }
   .dropzone .secondary{ font-size:13px; color:var(--chalk-muted); margin:12px 0 0; }
   .dropzone > *{ position:relative; z-index:1; }
-  .dropzone .mode-toggle{ justify-content:center; margin:0 0 4px; }
+  .dropzone .mode-toggle{ margin:0 0 4px; }
   /* Clips just the illustration to the dropzone's rounded corners — kept
      separate from .dropzone itself, which must stay overflow:visible so the
      mode-toggle's dropdown/popover (now nested inside) aren't cut off. */
@@ -546,7 +546,8 @@
         <button class="mode-btn is-active" type="button" data-mode="upload">Check a Photo <span class="caret">▾</span></button>
         <button class="mode-btn" type="button" data-mode="watch">Check Live <span class="gate-badge" id="watchGateBadge">Sign in</span></button>
         <div class="camera-option-row hidden" id="cameraOptionRow">
-          <button class="ghost-btn" id="takePhotoBtn" type="button">Take a photo instead</button>
+          <button class="ghost-btn" id="uploadMenuBtn" type="button">Upload a photo</button>
+          <button class="ghost-btn" id="takePhotoBtn" type="button">Take a photo</button>
         </div>
         <div class="feature-gate hidden" id="featureGatePopover">
           <h3>Unlock more with an account</h3>
@@ -807,6 +808,7 @@
   const rotateCameraBtn = document.getElementById('rotateCameraBtn');
   const cameraOptionRow = document.getElementById('cameraOptionRow');
   const takePhotoBtn = document.getElementById('takePhotoBtn');
+  const uploadMenuBtn = document.getElementById('uploadMenuBtn');
   const watchGateBadge = document.getElementById('watchGateBadge');
   const featureGatePopover = document.getElementById('featureGatePopover');
   const gateLoginBtn = document.getElementById('gateLoginBtn');
@@ -1626,6 +1628,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     dropzone.classList.remove('hidden');
     cameraOptionRow.classList.remove('hidden');
   }
+
+  uploadMenuBtn.addEventListener('click', () => {
+    cameraOptionRow.classList.add('hidden');
+    fileInput.click();
+  });
 
   takePhotoBtn.addEventListener('click', async () => {
     hideError(); hideResults();
