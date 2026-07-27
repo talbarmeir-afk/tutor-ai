@@ -64,6 +64,22 @@
   .mode-btn.is-active{ background:var(--chalk-yellow); color:#fff; border-color:var(--chalk-yellow); }
   .mode-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
   .mode-btn .caret{ font-size:10px; margin-left:5px; opacity:0.75; display:inline-block; }
+  .gate-badge{
+    font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+    background:rgba(24,24,22,0.08); color:var(--ink-muted); padding:2px 6px;
+    border-radius:10px; margin-left:6px; vertical-align:middle;
+  }
+  .mode-btn.is-active .gate-badge{ background:rgba(255,255,255,0.25); color:#fff; }
+  .guest-hint{ font-size:13px; color:var(--ink-muted); margin:-24px 0 40px; }
+  .feature-gate{
+    position:absolute; top:calc(100% + 6px); right:0; z-index:6; width:280px;
+    background:var(--paper); border:1px solid var(--paper-line); border-radius:12px;
+    padding:18px; box-shadow:0 14px 34px rgba(0,0,0,0.16); text-align:left;
+  }
+  .feature-gate h3{ font-family:'Nunito', sans-serif; font-weight:800; font-size:15px; margin:0 0 8px; color:var(--ink); }
+  .feature-gate p{ font-size:13px; color:var(--ink-muted); line-height:1.5; margin:0 0 14px; }
+  .feature-gate-actions{ display:flex; gap:8px; }
+  .feature-gate-actions button{ font-size:13px; padding:8px 14px; }
 
   .camera-wrap{
     position:relative; border-radius:14px; overflow:hidden;
@@ -457,6 +473,8 @@
 
   <p class="lede">Upload a photo of a problem you solved by hand, or let your camera watch as you write. Claruno reads through your steps and circles exactly where it goes wrong — then explains why.</p>
 
+  <p class="guest-hint" id="guestHint">Free with an account: real-time camera watching, saved history, weekly progress tracking, and lesson scheduling.</p>
+
   <nav class="tab-bar hidden" id="tabBar" role="tablist">
     <button class="tab-btn is-active" type="button" data-tab="home">Home</button>
     <button class="tab-btn" type="button" data-tab="dashboard">Dashboard</button>
@@ -487,9 +505,17 @@
 
   <div class="mode-toggle" id="modeToggle" role="tablist">
     <button class="mode-btn is-active" type="button" data-mode="upload">Upload a photo <span class="caret">▾</span></button>
-    <button class="mode-btn" type="button" data-mode="watch">Watch with camera</button>
+    <button class="mode-btn" type="button" data-mode="watch">Watch with camera <span class="gate-badge" id="watchGateBadge">Sign in</span></button>
     <div class="camera-option-row hidden" id="cameraOptionRow">
       <button class="ghost-btn" id="takePhotoBtn" type="button">Take a photo instead</button>
+    </div>
+    <div class="feature-gate hidden" id="featureGatePopover">
+      <h3>Unlock more with an account</h3>
+      <p>Sign in to watch in real time as you write — Claruno checks in and flags mistakes as you go. You'll also get saved history, weekly progress tracking, and lesson scheduling.</p>
+      <div class="feature-gate-actions">
+        <button type="button" class="ghost-btn" id="gateLoginBtn">Log in</button>
+        <button type="button" class="primary-btn" id="gateGetStartedBtn">Get started</button>
+      </div>
     </div>
   </div>
 
@@ -748,6 +774,11 @@
   const rotateCameraBtn = document.getElementById('rotateCameraBtn');
   const cameraOptionRow = document.getElementById('cameraOptionRow');
   const takePhotoBtn = document.getElementById('takePhotoBtn');
+  const watchGateBadge = document.getElementById('watchGateBadge');
+  const guestHint = document.getElementById('guestHint');
+  const featureGatePopover = document.getElementById('featureGatePopover');
+  const gateLoginBtn = document.getElementById('gateLoginBtn');
+  const gateGetStartedBtn = document.getElementById('gateGetStartedBtn');
   const takePhotoSection = document.getElementById('takePhotoSection');
   const takePhotoVideo = document.getElementById('takePhotoVideo');
   const rotateTakePhotoBtn = document.getElementById('rotateTakePhotoBtn');
@@ -955,6 +986,9 @@
   function lessonOnSignIn(userId){
     lessonUserId = userId;
     tabBar.classList.remove('hidden');
+    watchGateBadge.classList.add('hidden');
+    guestHint.classList.add('hidden');
+    featureGatePopover.classList.add('hidden');
     const stored = loadActiveLesson(userId);
     if (stored) {
       currentLessonId = stored.id;
@@ -999,6 +1033,10 @@
     clearLessonInterval();
     renderLessonTimer();
     tabBar.classList.add('hidden');
+    watchGateBadge.classList.remove('hidden');
+    guestHint.classList.remove('hidden');
+    // Watch mode requires an account — bounce back to upload if it was active.
+    if (currentMode === 'watch') currentMode = 'upload';
     switchTab('home');
     showCheckUI();
   }
@@ -1364,6 +1402,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   modeToggle.addEventListener('click', (e) => {
     const btn = e.target.closest('.mode-btn');
     if (!btn) return;
+    if (btn.dataset.mode === 'watch' && !lessonUserId) {
+      // Real-time watch mode requires an account — show what signing in
+      // unlocks instead of switching modes.
+      cameraOptionRow.classList.add('hidden');
+      featureGatePopover.classList.toggle('hidden');
+      return;
+    }
+    featureGatePopover.classList.add('hidden');
     if (btn.dataset.mode === currentMode) {
       // Clicking the already-active Upload tab again opens/closes the
       // "Take a photo instead" dropdown — only meaningful in the empty
@@ -1376,9 +1422,21 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     setMode(btn.dataset.mode);
   });
 
+  gateLoginBtn.addEventListener('click', () => {
+    featureGatePopover.classList.add('hidden');
+    if (window.mathTutorAuth) window.mathTutorAuth.openLogin();
+  });
+  gateGetStartedBtn.addEventListener('click', () => {
+    featureGatePopover.classList.add('hidden');
+    if (window.mathTutorAuth) window.mathTutorAuth.openSignup();
+  });
+
   document.addEventListener('click', (e) => {
     if (!cameraOptionRow.classList.contains('hidden') && !modeToggle.contains(e.target)) {
       cameraOptionRow.classList.add('hidden');
+    }
+    if (!featureGatePopover.classList.contains('hidden') && !modeToggle.contains(e.target)) {
+      featureGatePopover.classList.add('hidden');
     }
   });
 
@@ -1740,6 +1798,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       ? 'Need an account? Sign up'
       : 'Already have an account? Sign in';
     setAuthError('');
+    // Triggered from lower on the page (e.g. the feature-gate popover), so
+    // bring the form into view rather than leaving it off-screen above.
+    authForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    authEmail.focus({ preventScroll: true });
   }
 
   function resetAuthChoice(){
@@ -1775,6 +1837,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   authToggleModeBtn.addEventListener('click', () => {
     openAuthForm(authMode === 'signin' ? 'signup' : 'signin');
   });
+
+  // Lets the classic script's feature-gate popover (e.g. clicking "Watch
+  // with camera" while signed out) open the form here without duplicating
+  // auth logic.
+  window.mathTutorAuth = {
+    openLogin: () => openAuthForm('signin'),
+    openSignup: () => openAuthForm('signup'),
+  };
 
   authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
