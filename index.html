@@ -235,6 +235,8 @@
     color:var(--ink-muted); margin-bottom:12px;
   }
   .history-lesson-groups{ display:flex; flex-direction:column; gap:14px; }
+  .auth-choice{ display:flex; gap:8px; }
+  .auth-choice button.ghost-btn, .auth-choice button.primary-btn{ padding:9px 18px; font-size:13.5px; }
   .auth-form{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
   .auth-form input{
     font-family:'Karla', sans-serif; font-size:13px; padding:8px 10px;
@@ -411,12 +413,16 @@
 
     <div class="auth-bar" id="authBar">
       <div id="authLoggedOut">
-        <form class="auth-form" id="authForm">
+        <div class="auth-choice" id="authChoice">
+          <button type="button" class="ghost-btn" id="authLoginBtn">Log in</button>
+          <button type="button" class="primary-btn" id="authGetStartedBtn">Get started</button>
+        </div>
+        <form class="auth-form hidden" id="authForm">
           <input type="email" id="authEmail" placeholder="Email" required autocomplete="email">
           <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password" minlength="6">
           <button type="submit" class="auth-submit-btn" id="authSubmitBtn">Sign in</button>
         </form>
-        <div style="text-align:right">
+        <div class="hidden" id="authFormFooter" style="text-align:right">
           <button type="button" class="link-btn" id="authToggleModeBtn">Need an account? Sign up</button>
         </div>
         <p class="auth-error hidden" id="authError"></p>
@@ -1642,7 +1648,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   const authLoggedOut = document.getElementById('authLoggedOut');
   const authLoggedIn = document.getElementById('authLoggedIn');
+  const authChoice = document.getElementById('authChoice');
+  const authLoginBtn = document.getElementById('authLoginBtn');
+  const authGetStartedBtn = document.getElementById('authGetStartedBtn');
   const authForm = document.getElementById('authForm');
+  const authFormFooter = document.getElementById('authFormFooter');
   const authEmail = document.getElementById('authEmail');
   const authPassword = document.getElementById('authPassword');
   const authSubmitBtn = document.getElementById('authSubmitBtn');
@@ -1696,12 +1706,37 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     authError.classList.toggle('hidden', !msg);
   }
 
+  // Shows the actual email/password form in the given mode, replacing the
+  // two-button Log in / Get started choice.
+  function openAuthForm(mode){
+    authMode = mode;
+    authChoice.classList.add('hidden');
+    authForm.classList.remove('hidden');
+    authFormFooter.classList.remove('hidden');
+    authSubmitBtn.textContent = mode === 'signin' ? 'Sign in' : 'Sign up';
+    authToggleModeBtn.textContent = mode === 'signin'
+      ? 'Need an account? Sign up'
+      : 'Already have an account? Sign in';
+    setAuthError('');
+  }
+
+  function resetAuthChoice(){
+    authMode = 'signin';
+    authChoice.classList.remove('hidden');
+    authForm.classList.add('hidden');
+    authFormFooter.classList.add('hidden');
+    authForm.reset();
+    setAuthError('');
+  }
+
   function updateAuthUI(){
     const loggedIn = !!currentSession;
     authLoggedOut.classList.toggle('hidden', loggedIn);
     authLoggedIn.classList.toggle('hidden', !loggedIn);
     if (loggedIn){
       authEmailLabel.textContent = currentSession.user.email || '';
+    } else {
+      resetAuthChoice();
     }
     const userId = loggedIn ? currentSession.user.id : null;
     if (userId !== lessonBoundUserId){
@@ -1713,13 +1748,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
+  authLoginBtn.addEventListener('click', () => openAuthForm('signin'));
+  authGetStartedBtn.addEventListener('click', () => openAuthForm('signup'));
   authToggleModeBtn.addEventListener('click', () => {
-    authMode = authMode === 'signin' ? 'signup' : 'signin';
-    authSubmitBtn.textContent = authMode === 'signin' ? 'Sign in' : 'Sign up';
-    authToggleModeBtn.textContent = authMode === 'signin'
-      ? 'Need an account? Sign up'
-      : 'Already have an account? Sign in';
-    setAuthError('');
+    openAuthForm(authMode === 'signin' ? 'signup' : 'signin');
   });
 
   authForm.addEventListener('submit', async (e) => {
