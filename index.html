@@ -206,7 +206,7 @@
   .error-note h2{ font-family:'Nunito', sans-serif; font-weight:800; font-size:19px; color:var(--pen-red); margin:0 0 8px; }
   .error-note p{ font-size:14px; color:var(--chalk-muted); margin:0 0 14px; line-height:1.6; }
 
-  .auth-bar{ margin-bottom:28px; display:flex; justify-content:flex-end; align-items:center; gap:12px; flex-wrap:wrap; }
+  .auth-bar{ margin-bottom:28px; display:flex; justify-content:flex-start; align-items:center; gap:12px; flex-wrap:wrap; }
   .lesson-timer{
     display:inline-block;
     font-family:'Karla', sans-serif; font-weight:700; font-size:13px;
@@ -234,7 +234,7 @@
     color:var(--ink-muted); margin-bottom:12px;
   }
   .history-lesson-groups{ display:flex; flex-direction:column; gap:14px; }
-  .auth-form{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+  .auth-form{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:flex-start; }
   .auth-form input{
     font-family:'Karla', sans-serif; font-size:13px; padding:8px 10px;
     border-radius:8px; border:1px solid rgba(24,24,22,0.18);
@@ -247,7 +247,7 @@
     text-decoration:underline; cursor:pointer; font-family:'Karla', sans-serif; padding:0;
   }
   button.link-btn:hover{ color:var(--chalk); }
-  .auth-error{ color:var(--pen-red); font-size:12.5px; margin:6px 0 0; text-align:right; }
+  .auth-error{ color:var(--pen-red); font-size:12.5px; margin:6px 0 0; text-align:left; }
   #authLoggedIn{ display:flex; align-items:center; gap:10px; font-size:13px; color:var(--chalk-muted); }
   #authEmailLabel{ color:var(--chalk); }
   .auth-submit-btn{
@@ -404,7 +404,7 @@
         <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password" minlength="6">
         <button type="submit" class="auth-submit-btn" id="authSubmitBtn">Sign in</button>
       </form>
-      <div style="text-align:right">
+      <div style="text-align:left">
         <button type="button" class="link-btn" id="authToggleModeBtn">Need an account? Sign up</button>
       </div>
       <p class="auth-error hidden" id="authError"></p>
@@ -805,17 +805,14 @@
     return Math.max(0, LESSON_DURATION_MS - (Date.now() - lessonStartedAt));
   }
 
+  // The pill is only ever unhidden while lessonRunning is true (see
+  // beginLesson() and the resume branch of lessonOnSignIn()) — there's no
+  // "no lesson" or "sign in" text state to render here anymore.
   function renderLessonTimer(){
-    lessonTimerEl.classList.remove('is-low');
-    if (lessonRunning) {
-      const remaining = lessonRemainingMs();
-      lessonTimerEl.textContent = `Lesson: ${formatLessonTime(remaining)}`;
-      lessonTimerEl.classList.toggle('is-low', remaining <= 5 * 60 * 1000);
-    } else if (lessonUserId) {
-      lessonTimerEl.textContent = 'No lesson running';
-    } else {
-      lessonTimerEl.textContent = 'Sign in to start a lesson';
-    }
+    if (!lessonRunning) return;
+    const remaining = lessonRemainingMs();
+    lessonTimerEl.textContent = `Lesson: ${formatLessonTime(remaining)}`;
+    lessonTimerEl.classList.toggle('is-low', remaining <= 5 * 60 * 1000);
   }
 
   function hideAllLessonPanels(){
@@ -829,9 +826,12 @@
     errorNote.classList.add('hidden');
   }
 
+  // Shared by both "a lesson is actually running" and "signed-out guest
+  // browsing" contexts — it must NOT unhide the lesson timer itself, since
+  // callers like lessonOnSignOut() use it too. Callers that know a lesson
+  // is running unhide lessonTimerEl explicitly right after calling this.
   function showCheckUI(){
     hideAllLessonPanels();
-    lessonTimerEl.classList.remove('hidden');
     modeToggle.classList.remove('hidden');
     setMode(currentMode);
   }
@@ -895,6 +895,7 @@
     lessonIntervalId = setInterval(tickLesson, 1000);
     renderLessonTimer();
     showCheckUI();
+    lessonTimerEl.classList.remove('hidden');
   }
 
   startLessonBtn.addEventListener('click', beginLesson);
@@ -954,6 +955,7 @@
         lessonIntervalId = setInterval(tickLesson, 1000);
         renderLessonTimer();
         showCheckUI();
+        lessonTimerEl.classList.remove('hidden');
       }
     } else {
       currentLessonId = null;
