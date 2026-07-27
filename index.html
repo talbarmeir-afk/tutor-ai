@@ -64,12 +64,6 @@
   .mode-btn.is-active{ background:var(--chalk-yellow); color:#fff; border-color:var(--chalk-yellow); }
   .mode-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
   .mode-btn .caret{ font-size:10px; margin-left:5px; opacity:0.75; display:inline-block; }
-  .gate-badge{
-    font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
-    background:rgba(24,24,22,0.08); color:var(--ink-muted); padding:2px 6px;
-    border-radius:10px; margin-left:6px; vertical-align:middle;
-  }
-  .mode-btn.is-active .gate-badge{ background:rgba(255,255,255,0.25); color:#fff; }
   .feature-gate{
     position:absolute; top:calc(100% + 6px); right:0; z-index:6; width:280px;
     background:var(--paper); border:1px solid var(--paper-line); border-radius:12px;
@@ -544,7 +538,7 @@
       </svg>
       <div class="mode-toggle" id="modeToggle" role="tablist">
         <button class="mode-btn is-active" type="button" data-mode="upload">Check a Photo <span class="caret">▾</span></button>
-        <button class="mode-btn" type="button" data-mode="watch">Check Live <span class="gate-badge" id="watchGateBadge">Sign in</span></button>
+        <button class="mode-btn" type="button" data-mode="watch">Check Live</button>
         <div class="camera-option-row hidden" id="cameraOptionRow">
           <button class="ghost-btn" id="uploadMenuBtn" type="button">Upload a photo</button>
           <button class="ghost-btn" id="takePhotoBtn" type="button">Take a photo</button>
@@ -809,7 +803,6 @@
   const cameraOptionRow = document.getElementById('cameraOptionRow');
   const takePhotoBtn = document.getElementById('takePhotoBtn');
   const uploadMenuBtn = document.getElementById('uploadMenuBtn');
-  const watchGateBadge = document.getElementById('watchGateBadge');
   const featureGatePopover = document.getElementById('featureGatePopover');
   const gateLoginBtn = document.getElementById('gateLoginBtn');
   const gateGetStartedBtn = document.getElementById('gateGetStartedBtn');
@@ -1020,7 +1013,6 @@
   function lessonOnSignIn(userId){
     lessonUserId = userId;
     tabBar.classList.remove('hidden');
-    watchGateBadge.classList.add('hidden');
     featureGatePopover.classList.add('hidden');
     const stored = loadActiveLesson(userId);
     if (stored) {
@@ -1066,7 +1058,6 @@
     clearLessonInterval();
     renderLessonTimer();
     tabBar.classList.add('hidden');
-    watchGateBadge.classList.remove('hidden');
     // Watch mode requires an account — bounce back to upload if it was active.
     if (currentMode === 'watch') currentMode = 'upload';
     switchTab('home');
