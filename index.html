@@ -38,7 +38,8 @@
     min-height:100vh;
   }
   .app{ max-width:640px; margin:0 auto; padding:56px 24px 96px; }
-  .brand-header{ margin:0 0 36px; }
+  .top-bar{ display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px 24px; margin-bottom:36px; }
+  .brand-header{ margin:0; }
   .brand-lockup{ display:flex; align-items:center; gap:10px; }
   .brand-mark{ width:26px; height:26px; color:var(--pen-red); flex-shrink:0; }
   .brand-lockup h1{
@@ -206,7 +207,7 @@
   .error-note h2{ font-family:'Nunito', sans-serif; font-weight:800; font-size:19px; color:var(--pen-red); margin:0 0 8px; }
   .error-note p{ font-size:14px; color:var(--chalk-muted); margin:0 0 14px; line-height:1.6; }
 
-  .auth-bar{ margin-bottom:28px; display:flex; justify-content:flex-end; align-items:center; gap:12px; flex-wrap:wrap; }
+  .auth-bar{ display:flex; justify-content:flex-end; align-items:center; gap:12px; flex-wrap:wrap; }
   .lesson-timer{
     display:inline-block;
     font-family:'Karla', sans-serif; font-weight:700; font-size:13px;
@@ -238,7 +239,7 @@
   .auth-form input{
     font-family:'Karla', sans-serif; font-size:13px; padding:8px 10px;
     border-radius:8px; border:1px solid rgba(24,24,22,0.18);
-    background:#fff; color:var(--ink); min-width:150px;
+    background:#fff; color:var(--ink); width:110px;
   }
   .auth-form input::placeholder{ color:var(--chalk-muted); }
   .auth-form input:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
@@ -397,21 +398,33 @@
 </head>
 <body>
 <div class="app">
-  <div class="auth-bar" id="authBar">
-    <div id="authLoggedOut">
-      <form class="auth-form" id="authForm">
-        <input type="email" id="authEmail" placeholder="Email" required autocomplete="email">
-        <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password" minlength="6">
-        <button type="submit" class="auth-submit-btn" id="authSubmitBtn">Sign in</button>
-      </form>
-      <div style="text-align:right">
-        <button type="button" class="link-btn" id="authToggleModeBtn">Need an account? Sign up</button>
+  <div class="top-bar">
+    <div class="brand-header">
+      <div class="brand-lockup">
+        <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="52" r="30" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="82 18" stroke-dashoffset="41"/>
+        </svg>
+        <h1>Claruno</h1>
       </div>
-      <p class="auth-error hidden" id="authError"></p>
+      <p class="eyebrow">Your AI Teacher</p>
     </div>
-    <div id="authLoggedIn" class="hidden">
-      <span id="authEmailLabel"></span>
-      <button class="ghost-btn" id="signOutBtn" type="button">Log out</button>
+
+    <div class="auth-bar" id="authBar">
+      <div id="authLoggedOut">
+        <form class="auth-form" id="authForm">
+          <input type="email" id="authEmail" placeholder="Email" required autocomplete="email">
+          <input type="password" id="authPassword" placeholder="Password" required autocomplete="current-password" minlength="6">
+          <button type="submit" class="auth-submit-btn" id="authSubmitBtn">Sign in</button>
+        </form>
+        <div style="text-align:right">
+          <button type="button" class="link-btn" id="authToggleModeBtn">Need an account? Sign up</button>
+        </div>
+        <p class="auth-error hidden" id="authError"></p>
+      </div>
+      <div id="authLoggedIn" class="hidden">
+        <span id="authEmailLabel"></span>
+        <button class="ghost-btn" id="signOutBtn" type="button">Log out</button>
+      </div>
     </div>
   </div>
 
@@ -429,15 +442,6 @@
     <img id="lightboxImg" src="" alt="">
   </div>
 
-  <div class="brand-header">
-    <div class="brand-lockup">
-      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
-        <circle cx="50" cy="52" r="30" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="82 18" stroke-dashoffset="41"/>
-      </svg>
-      <h1>Claruno</h1>
-    </div>
-    <p class="eyebrow">Your AI Teacher</p>
-  </div>
   <p class="lede">Upload a photo of a problem you solved by hand, or let your camera watch as you write. Claruno reads through your steps and circles exactly where it goes wrong — then explains why.</p>
 
   <nav class="tab-bar hidden" id="tabBar" role="tablist">
