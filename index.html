@@ -38,16 +38,18 @@
     min-height:100vh;
   }
   .app{ max-width:640px; margin:0 auto; padding:56px 24px 96px; }
-  .brand-mark{ width:34px; height:34px; color:var(--pen-red); display:block; margin-bottom:14px; }
+  .brand-header{ margin:0 0 36px; }
+  .brand-lockup{ display:flex; align-items:center; gap:10px; }
+  .brand-mark{ width:26px; height:26px; color:var(--pen-red); flex-shrink:0; }
+  .brand-lockup h1{
+    font-family:'Nunito', sans-serif; font-weight:800;
+    font-size:26px; line-height:1; margin:0;
+  }
   .eyebrow{
     font-size:12px; letter-spacing:.14em; text-transform:uppercase;
-    color:var(--chalk-muted); font-weight:700; margin:0 0 14px;
+    color:var(--chalk-muted); font-weight:700; margin:6px 0 0 36px;
   }
-  h1{
-    font-family:'Nunito', sans-serif; font-weight:800;
-    font-size:clamp(32px, 6vw, 44px); line-height:1.15; margin:0 0 16px;
-  }
-  .lede{ color:var(--chalk-muted); font-size:16px; line-height:1.6; max-width:52ch; margin:0 0 40px; }
+  .lede{ color:var(--chalk-muted); font-size:16px; line-height:1.6; max-width:52ch; margin:24px 0 40px; }
 
   .mode-toggle{ display:flex; gap:8px; margin:0 0 28px; }
   .mode-btn{
@@ -427,11 +429,15 @@
     <img id="lightboxImg" src="" alt="">
   </div>
 
-  <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
-    <circle cx="50" cy="52" r="30" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="82 18" stroke-dashoffset="41"/>
-  </svg>
-  <p class="eyebrow">Your AI Teacher</p>
-  <h1>Claruno</h1>
+  <div class="brand-header">
+    <div class="brand-lockup">
+      <svg class="brand-mark" viewBox="0 0 100 100" aria-hidden="true">
+        <circle cx="50" cy="52" r="30" fill="none" stroke="currentColor" stroke-width="11" stroke-linecap="round" pathLength="100" stroke-dasharray="82 18" stroke-dashoffset="41"/>
+      </svg>
+      <h1>Claruno</h1>
+    </div>
+    <p class="eyebrow">Your AI Teacher</p>
+  </div>
   <p class="lede">Upload a photo of a problem you solved by hand, or let your camera watch as you write. Claruno reads through your steps and circles exactly where it goes wrong — then explains why.</p>
 
   <nav class="tab-bar hidden" id="tabBar" role="tablist">
