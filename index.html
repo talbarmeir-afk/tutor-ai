@@ -37,7 +37,7 @@
     font-family:'Karla', system-ui, sans-serif;
     min-height:100vh;
   }
-  .app{ max-width:640px; margin:0 auto; padding:56px 24px 96px; }
+  .app{ max-width:800px; margin:0 auto; padding:56px 24px 96px; }
   .top-bar{ display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px 24px; margin-bottom:36px; }
   .brand-header{ margin:0; }
   .brand-lockup{ display:flex; align-items:center; gap:10px; }
@@ -70,7 +70,6 @@
     border-radius:10px; margin-left:6px; vertical-align:middle;
   }
   .mode-btn.is-active .gate-badge{ background:rgba(255,255,255,0.25); color:#fff; }
-  .guest-hint{ font-size:13px; color:var(--ink-muted); margin:-24px 0 40px; }
   .feature-gate{
     position:absolute; top:calc(100% + 6px); right:0; z-index:6; width:280px;
     background:var(--paper); border:1px solid var(--paper-line); border-radius:12px;
@@ -499,8 +498,6 @@
 
   <p class="lede">Upload a photo of a problem you solved by hand, or let your camera watch as you write. Claruno reads through your steps and circles exactly where it goes wrong — then explains why.</p>
 
-  <p class="guest-hint" id="guestHint">Free with an account: real-time camera watching, saved history, weekly progress tracking, and lesson scheduling.</p>
-
   <nav class="tab-bar hidden" id="tabBar" role="tablist">
     <button class="tab-btn is-active" type="button" data-tab="home">Home</button>
     <button class="tab-btn" type="button" data-tab="dashboard">Dashboard</button>
@@ -811,7 +808,6 @@
   const cameraOptionRow = document.getElementById('cameraOptionRow');
   const takePhotoBtn = document.getElementById('takePhotoBtn');
   const watchGateBadge = document.getElementById('watchGateBadge');
-  const guestHint = document.getElementById('guestHint');
   const featureGatePopover = document.getElementById('featureGatePopover');
   const gateLoginBtn = document.getElementById('gateLoginBtn');
   const gateGetStartedBtn = document.getElementById('gateGetStartedBtn');
@@ -1023,7 +1019,6 @@
     lessonUserId = userId;
     tabBar.classList.remove('hidden');
     watchGateBadge.classList.add('hidden');
-    guestHint.classList.add('hidden');
     featureGatePopover.classList.add('hidden');
     const stored = loadActiveLesson(userId);
     if (stored) {
@@ -1070,7 +1065,6 @@
     renderLessonTimer();
     tabBar.classList.add('hidden');
     watchGateBadge.classList.remove('hidden');
-    guestHint.classList.remove('hidden');
     // Watch mode requires an account — bounce back to upload if it was active.
     if (currentMode === 'watch') currentMode = 'upload';
     switchTab('home');
