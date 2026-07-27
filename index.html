@@ -52,7 +52,7 @@
   }
   .lede{ color:var(--chalk-muted); font-size:16px; line-height:1.6; max-width:52ch; margin:24px 0 40px; }
 
-  .mode-toggle{ display:flex; gap:8px; margin:0 0 28px; }
+  .mode-toggle{ display:flex; gap:8px; margin:0 0 28px; position:relative; }
   .mode-btn{
     font-family:'Karla', sans-serif; font-weight:600; font-size:13.5px;
     background:rgba(24,24,22,0.035); color:var(--chalk-muted);
@@ -63,6 +63,7 @@
   .mode-btn:hover{ color:var(--chalk); }
   .mode-btn.is-active{ background:var(--chalk-yellow); color:#fff; border-color:var(--chalk-yellow); }
   .mode-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+  .mode-btn .caret{ font-size:10px; margin-left:5px; opacity:0.75; display:inline-block; }
 
   .camera-wrap{
     position:relative; border-radius:14px; overflow:hidden;
@@ -101,7 +102,13 @@
   .dropzone .secondary{ font-size:13px; color:var(--chalk-muted); margin:0; }
   input[type=file]{ display:none; }
 
-  .camera-option-row{ margin-top:14px; text-align:center; }
+  .camera-option-row{
+    position:absolute; top:calc(100% + 6px); left:0; z-index:5;
+    background:var(--paper); border:1px solid var(--paper-line); border-radius:10px;
+    padding:6px; box-shadow:0 10px 24px rgba(0,0,0,0.14);
+  }
+  .camera-option-row button.ghost-btn{ display:block; width:100%; white-space:nowrap; border:none; text-align:left; }
+  .camera-option-row button.ghost-btn:hover{ background:rgba(24,24,22,0.05); }
 
   .preview-row{
     display:flex; align-items:center; gap:14px;
@@ -479,8 +486,11 @@
   <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
 
   <div class="mode-toggle" id="modeToggle" role="tablist">
-    <button class="mode-btn is-active" type="button" data-mode="upload">Upload a photo</button>
+    <button class="mode-btn is-active" type="button" data-mode="upload">Upload a photo <span class="caret">▾</span></button>
     <button class="mode-btn" type="button" data-mode="watch">Watch with camera</button>
+    <div class="camera-option-row hidden" id="cameraOptionRow">
+      <button class="ghost-btn" id="takePhotoBtn" type="button">Take a photo instead</button>
+    </div>
   </div>
 
   <div id="uploadMode">
@@ -493,10 +503,6 @@
       <p class="secondary">JPG or PNG · one problem at a time</p>
     </div>
     <input type="file" id="fileInput" accept="image/*">
-
-    <div class="camera-option-row" id="cameraOptionRow">
-      <button class="ghost-btn" id="takePhotoBtn" type="button">Take a photo instead</button>
-    </div>
 
     <div id="takePhotoSection" class="hidden">
       <div class="camera-wrap" id="takePhotoWrap">
@@ -1352,12 +1358,28 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     conversation = [];
     if (mode !== 'watch') stopCamera();
     if (!takePhotoSection.classList.contains('hidden')) cancelTakePhoto();
+    cameraOptionRow.classList.add('hidden');
   }
 
   modeToggle.addEventListener('click', (e) => {
     const btn = e.target.closest('.mode-btn');
-    if (!btn || btn.dataset.mode === currentMode) return;
+    if (!btn) return;
+    if (btn.dataset.mode === currentMode) {
+      // Clicking the already-active Upload tab again opens/closes the
+      // "Take a photo instead" dropdown — only meaningful in the empty
+      // (dropzone-visible) state; once a photo's selected there's nothing to offer.
+      if (btn.dataset.mode === 'upload' && !dropzone.classList.contains('hidden')) {
+        cameraOptionRow.classList.toggle('hidden');
+      }
+      return;
+    }
     setMode(btn.dataset.mode);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!cameraOptionRow.classList.contains('hidden') && !modeToggle.contains(e.target)) {
+      cameraOptionRow.classList.add('hidden');
+    }
   });
 
   async function startCamera(){
