@@ -545,10 +545,9 @@
         </div>
         <div class="feature-gate hidden" id="featureGatePopover">
           <h3>Unlock more with an account</h3>
-          <p>Sign in to watch in real time as you write — Claruno checks in and flags mistakes as you go. You'll also get saved history, weekly progress tracking, and lesson scheduling.</p>
+          <p>Sign in to watch in real time, save your history, and track progress.</p>
           <div class="feature-gate-actions">
-            <button type="button" class="ghost-btn" id="gateLoginBtn">Log in</button>
-            <button type="button" class="primary-btn" id="gateGetStartedBtn">Get started</button>
+            <button type="button" class="primary-btn" id="gateLoginBtn">Log in</button>
           </div>
         </div>
       </div>
@@ -805,7 +804,6 @@
   const uploadMenuBtn = document.getElementById('uploadMenuBtn');
   const featureGatePopover = document.getElementById('featureGatePopover');
   const gateLoginBtn = document.getElementById('gateLoginBtn');
-  const gateGetStartedBtn = document.getElementById('gateGetStartedBtn');
   const takePhotoSection = document.getElementById('takePhotoSection');
   const takePhotoVideo = document.getElementById('takePhotoVideo');
   const rotateTakePhotoBtn = document.getElementById('rotateTakePhotoBtn');
@@ -1463,10 +1461,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   gateLoginBtn.addEventListener('click', () => {
     featureGatePopover.classList.add('hidden');
     if (window.mathTutorAuth) window.mathTutorAuth.openLogin();
-  });
-  gateGetStartedBtn.addEventListener('click', () => {
-    featureGatePopover.classList.add('hidden');
-    if (window.mathTutorAuth) window.mathTutorAuth.openSignup();
   });
 
   document.addEventListener('click', (e) => {
