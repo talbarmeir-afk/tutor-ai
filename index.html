@@ -206,12 +206,14 @@
   .error-note h2{ font-family:'Nunito', sans-serif; font-weight:800; font-size:19px; color:var(--pen-red); margin:0 0 8px; }
   .error-note p{ font-size:14px; color:var(--chalk-muted); margin:0 0 14px; line-height:1.6; }
 
-  .auth-bar{ margin-bottom:28px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+  .auth-bar{ margin-bottom:28px; display:flex; justify-content:flex-end; align-items:center; gap:12px; flex-wrap:wrap; }
   .lesson-timer{
+    display:inline-block;
     font-family:'Karla', sans-serif; font-weight:700; font-size:13px;
     color:var(--chalk-muted); background:rgba(24,24,22,0.035);
     border:1px solid rgba(24,24,22,0.14); border-radius:20px;
     padding:6px 14px; letter-spacing:.02em; white-space:nowrap;
+    margin:0 0 20px;
   }
   .lesson-timer.is-low{ color:var(--chalk-yellow); border-color:rgba(255,59,48,0.4); }
   .lesson-timer.is-ended{ color:var(--ink-muted); border-color:rgba(24,24,22,0.2); }
@@ -396,7 +398,6 @@
 <body>
 <div class="app">
   <div class="auth-bar" id="authBar">
-    <div class="lesson-timer" id="lessonTimer">Lesson: 45:00</div>
     <div id="authLoggedOut">
       <form class="auth-form" id="authForm">
         <input type="email" id="authEmail" placeholder="Email" required autocomplete="email">
@@ -464,6 +465,8 @@
       <button class="ghost-btn" id="lessonEndedHistoryBtn" type="button">View history</button>
     </div>
   </div>
+
+  <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
 
   <div class="mode-toggle" id="modeToggle" role="tablist">
     <button class="mode-btn is-active" type="button" data-mode="upload">Upload a photo</button>
@@ -818,6 +821,7 @@
   function hideAllLessonPanels(){
     lessonStartPrompt.classList.add('hidden');
     lessonEndedNote.classList.add('hidden');
+    lessonTimerEl.classList.add('hidden');
     modeToggle.classList.add('hidden');
     uploadModeEl.classList.add('hidden');
     watchModeEl.classList.add('hidden');
@@ -827,6 +831,7 @@
 
   function showCheckUI(){
     hideAllLessonPanels();
+    lessonTimerEl.classList.remove('hidden');
     modeToggle.classList.remove('hidden');
     setMode(currentMode);
   }
