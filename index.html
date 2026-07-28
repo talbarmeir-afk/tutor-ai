@@ -119,7 +119,6 @@
   .dropzone:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:3px; }
   .dropzone svg:not(.dropzone-sample){ display:block; margin:0 auto 14px; }
   .dropzone .primary{ font-size:15px; font-weight:500; margin:0 0 4px; }
-  .dropzone .secondary{ font-size:13px; color:var(--chalk-muted); margin:12px 0 0; }
   .dropzone > *{ position:relative; z-index:1; }
   .dropzone .mode-toggle{ margin:0 0 4px; }
   /* Clips just the illustration to the dropzone's rounded corners — kept
@@ -551,7 +550,6 @@
           </div>
         </div>
       </div>
-      <p class="secondary">JPG or PNG · one problem at a time</p>
     </div>
     <input type="file" id="fileInput" accept="image/*">
 
@@ -1420,7 +1418,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // where its buttons are shown) but has to move back out — dropzone
     // itself is hidden in watch mode — so it stays reachable to switch back.
     if (mode === 'upload') {
-      dropzone.insertBefore(modeToggle, dropzone.querySelector('.secondary'));
+      dropzone.appendChild(modeToggle);
     } else {
       checkCard.insertBefore(modeToggle, uploadModeEl);
     }
