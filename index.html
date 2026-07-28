@@ -374,7 +374,61 @@
     text-shadow: 0 1px 0 rgba(255,255,255,0.5);
   }
 
-  .verdict{ margin-top:20px; }
+  .feedback-row{ display:flex; gap:12px; align-items:flex-start; margin-top:20px; }
+  .ring-mascot{ width:76px; height:88px; flex-shrink:0; transform-origin:center bottom; }
+  @media (prefers-reduced-motion: no-preference){
+    .ring-mascot{ animation:rmBreathe 3s ease-in-out infinite; }
+  }
+  @keyframes rmBreathe{ 0%, 100%{ transform:translateY(0); } 50%{ transform:translateY(-3px); } }
+  .ring-mascot.is-celebrating{ animation:rmJump .6s ease-out 2; }
+  @keyframes rmJump{
+    0%{ transform:translateY(0); }
+    30%{ transform:translateY(-16px); }
+    50%{ transform:translateY(-16px); }
+    70%{ transform:translateY(0); }
+    100%{ transform:translateY(0); }
+  }
+  .ring-mascot .rm-body{ fill:var(--paper); stroke:var(--pen-red); stroke-width:3; transition:stroke .3s ease; }
+  .ring-mascot .rm-ring{
+    fill:none; stroke:var(--pen-red); stroke-width:7; stroke-linecap:round;
+    stroke-dasharray:283 62; transition:stroke .3s ease;
+  }
+  .ring-mascot .rm-foot{ fill:var(--paper); stroke:var(--pen-red); stroke-width:2.5; transition:stroke .3s ease; }
+  .ring-mascot .rm-arm{ stroke:var(--pen-red); stroke-width:3.5; stroke-linecap:round; transition:stroke .3s ease; }
+  .ring-mascot .rm-hand{ fill:var(--paper); stroke:var(--pen-red); stroke-width:2; transition:stroke .3s ease; }
+  .ring-mascot .rm-blush{ fill:#FFB3A7; opacity:.6; }
+  .ring-mascot .rm-eye{ fill:var(--ink); }
+  .ring-mascot .rm-brow{ fill:none; stroke:var(--ink); stroke-width:2; stroke-linecap:round; opacity:0; }
+  .ring-mascot .rm-mouth{ fill:none; stroke:var(--ink); stroke-width:2.5; stroke-linecap:round; transition:opacity .15s ease; }
+  .ring-mascot .rm-mouth-happy{ fill:var(--ink); opacity:0; transition:opacity .15s ease; }
+  .ring-mascot .rm-mouth-talk{ fill:var(--ink); opacity:0; transform-box:fill-box; transform-origin:center; }
+  .ring-mascot.is-mistake .rm-body,
+  .ring-mascot.is-mistake .rm-ring,
+  .ring-mascot.is-mistake .rm-foot,
+  .ring-mascot.is-mistake .rm-arm,
+  .ring-mascot.is-mistake .rm-hand{ stroke:var(--pen-red); }
+  .ring-mascot.is-mistake .rm-brow{ opacity:1; }
+  .ring-mascot.is-ok .rm-body,
+  .ring-mascot.is-ok .rm-ring,
+  .ring-mascot.is-ok .rm-foot,
+  .ring-mascot.is-ok .rm-arm,
+  .ring-mascot.is-ok .rm-hand{ stroke:var(--chalk-green); }
+  .ring-mascot.is-ok .rm-mouth{ opacity:0; }
+  .ring-mascot.is-ok .rm-mouth-happy{ opacity:1; }
+  .ring-mascot.is-talking .rm-mouth,
+  .ring-mascot.is-talking .rm-mouth-happy{ opacity:0; }
+  @media (prefers-reduced-motion: no-preference){
+    .ring-mascot.is-talking .rm-mouth-talk{ animation:rmTalk .5s steps(2) infinite; }
+  }
+  @media (prefers-reduced-motion: reduced){
+    .ring-mascot.is-talking .rm-mouth-talk{ opacity:1; }
+  }
+  @keyframes rmTalk{
+    0%, 100%{ opacity:1; transform:scaleY(1); }
+    50%{ opacity:1; transform:scaleY(.4); }
+  }
+
+  .verdict{ flex:1; min-width:0; }
   .verdict h2{
     font-family:'Nunito', sans-serif; font-weight:800; font-size:22px; margin:0 0 10px;
     color:var(--pen-red);
@@ -833,11 +887,32 @@
       </svg>
       <div class="ann-flag" id="annFlag"></div>
     </div>
-    <div class="verdict" id="verdict">
-      <h2 id="verdictHeading"></h2>
-      <p class="quote" id="verdictQuote"></p>
-      <p id="verdictExplanation"></p>
-      <p id="verdictFix"></p>
+    <div class="feedback-row">
+      <svg class="ring-mascot" id="ringMascot" viewBox="0 0 140 160" aria-hidden="true" focusable="false">
+        <ellipse class="rm-foot" cx="55" cy="140" rx="11" ry="6"/>
+        <ellipse class="rm-foot" cx="85" cy="140" rx="11" ry="6"/>
+        <circle class="rm-ring" cx="70" cy="80" r="55" transform="rotate(-50 70 80)"/>
+        <circle class="rm-body" cx="70" cy="80" r="47"/>
+        <line class="rm-arm" x1="28" y1="80" x2="10" y2="94"/>
+        <circle class="rm-hand" cx="10" cy="94" r="4"/>
+        <line class="rm-arm" x1="112" y1="80" x2="130" y2="94"/>
+        <circle class="rm-hand" cx="130" cy="94" r="4"/>
+        <ellipse class="rm-blush" cx="53" cy="86" rx="7" ry="4"/>
+        <ellipse class="rm-blush" cx="87" cy="86" rx="7" ry="4"/>
+        <path class="rm-brow" d="M46,58 L56,63"/>
+        <path class="rm-brow" d="M94,58 L84,63"/>
+        <circle class="rm-eye" cx="57" cy="70" r="4.5"/>
+        <circle class="rm-eye" cx="83" cy="70" r="4.5"/>
+        <path class="rm-mouth" d="M58,90 Q70,94 82,90"/>
+        <path class="rm-mouth-happy" d="M55,88 Q70,108 85,88 Q70,100 55,88 Z"/>
+        <ellipse class="rm-mouth-talk" cx="70" cy="93" rx="9" ry="7"/>
+      </svg>
+      <div class="verdict" id="verdict">
+        <h2 id="verdictHeading"></h2>
+        <p class="quote" id="verdictQuote"></p>
+        <p id="verdictExplanation"></p>
+        <p id="verdictFix"></p>
+      </div>
     </div>
 
     <div class="actions hidden" id="watchResumeRow">
@@ -994,6 +1069,7 @@
   const annGroup = document.getElementById('annGroup');
   const annFlag = document.getElementById('annFlag');
   const verdict = document.getElementById('verdict');
+  const ringMascot = document.getElementById('ringMascot');
   const verdictHeading = document.getElementById('verdictHeading');
   const verdictQuote = document.getElementById('verdictQuote');
   const verdictExplanation = document.getElementById('verdictExplanation');
@@ -1461,12 +1537,24 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     annFlag.style.color = isMistake ? 'var(--pen-red)' : 'var(--chalk-green)';
   }
 
+  function animateMascot(isOk){
+    if (!ringMascot) return;
+    ringMascot.classList.remove('is-ok', 'is-mistake', 'is-celebrating', 'is-talking');
+    ringMascot.classList.add(isOk ? 'is-ok' : 'is-mistake');
+    requestAnimationFrame(() => {
+      if (isOk) ringMascot.classList.add('is-celebrating');
+      ringMascot.classList.add('is-talking');
+    });
+    setTimeout(() => ringMascot.classList.remove('is-talking'), 2200);
+  }
+
   function renderResult(parsed, frameOverride, promptTextOverride){
     const frame = frameOverride || imageData;
     resultImg.src = frame.dataUrl;
     resultImg.onload = () => buildOverlay(computeLocation(parsed), !!parsed.has_mistake);
 
     verdict.classList.toggle('is-ok', !parsed.has_mistake);
+    animateMascot(!parsed.has_mistake);
     verdictHeading.textContent = parsed.has_mistake ? "Here's where it breaks" : "Looks solid";
     verdictQuote.textContent = parsed.line_quote ? `"${parsed.line_quote}"` : '';
     verdictQuote.style.display = parsed.line_quote ? '' : 'none';
