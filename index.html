@@ -1498,7 +1498,7 @@ Also produce a short problem_title describing the overall problem being solved: 
 Also classify the problem into exactly one topic from this fixed list, choosing whichever fits best even if imperfectly: "Algebra", "Geometry", "Arithmetic", "Fractions & Decimals", "Word Problems", "Trigonometry", "Calculus", "Statistics & Probability", "Other".
 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
+{"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "wrong_token": "the exact incorrect number, sign, or term as written (empty string if no mistake)", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
 
 A light blue coordinate grid with percent labels is drawn over the photo purely to help you report positions: the numbers along the top edge are x percentages and the numbers along the left edge are y percentages. The grid is NOT part of the student's work — ignore it when reading the math. Read x and y directly off the nearest gridlines instead of estimating proportions by eye.
 
@@ -1537,7 +1537,7 @@ Now look at the current photo and report on the CURRENT state of the work:
 - Also classify the problem into exactly one topic from this fixed list, choosing whichever fits best even if imperfectly: "Algebra", "Geometry", "Arithmetic", "Fractions & Decimals", "Word Problems", "Trigonometry", "Calculus", "Statistics & Probability", "Other".
 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "mistake_resolved": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
+{"has_mistake": true or false, "mistake_resolved": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "wrong_token": "the exact incorrect number, sign, or term as written, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
 
 A light blue coordinate grid with percent labels is drawn over the photo purely to help you report positions: the numbers along the top edge are x percentages and the numbers along the left edge are y percentages. The grid is NOT part of the student's work — ignore it when reading the math. Read x and y directly off the nearest gridlines instead of estimating proportions by eye.
 
@@ -1620,6 +1620,91 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       };
       img.src = dataUrl;
     });
+  }
+
+  // Zooms into the checker's first x/y guess (3x, with margin), and draws a
+  // FINE grid on the crop — lines every 2% of the FULL image, labels every
+  // 4%, in full-image coordinates — so the second-pass /api/locate call can
+  // read the wrong token's exact position instead of estimating it on a
+  // whole page.
+  function cropWithGrid(dataUrl, cxPct, cyPct){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('crop-failed'));
+      img.onload = () => {
+        const w = img.width, h = img.height;
+        const cw = Math.min(w, w * 0.36), ch = Math.min(h, h * 0.26);
+        let x0 = w * cxPct / 100 - cw / 2, y0 = h * cyPct / 100 - ch / 2;
+        x0 = Math.max(0, Math.min(w - cw, x0));
+        y0 = Math.max(0, Math.min(h - ch, y0));
+        const scale = 3;
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(cw * scale);
+        canvas.height = Math.round(ch * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, x0, y0, cw, ch, 0, 0, canvas.width, canvas.height);
+        const fontPx = Math.max(14, Math.round(canvas.height * 0.032));
+        for (let p = 0; p <= 100; p += 2){
+          const fx = w * p / 100;
+          if (fx >= x0 && fx <= x0 + cw){
+            const px = (fx - x0) * scale;
+            ctx.strokeStyle = 'rgba(30,144,255,0.45)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, canvas.height); ctx.stroke();
+            if (p % 4 === 0 && px > fontPx * 2.4){
+              ctx.font = fontPx + 'px monospace';
+              ctx.lineWidth = Math.max(2, Math.round(fontPx / 5));
+              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+              ctx.fillStyle = 'rgba(20,110,220,0.95)';
+              ctx.strokeText(String(p), px + 3, fontPx + 3);
+              ctx.fillText(String(p), px + 3, fontPx + 3);
+            }
+          }
+          const fy = h * p / 100;
+          if (fy >= y0 && fy <= y0 + ch){
+            const py = (fy - y0) * scale;
+            ctx.strokeStyle = 'rgba(30,144,255,0.45)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(canvas.width, py); ctx.stroke();
+            if (p % 4 === 0 && py > fontPx * 2.4){
+              ctx.font = fontPx + 'px monospace';
+              ctx.lineWidth = Math.max(2, Math.round(fontPx / 5));
+              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+              ctx.fillStyle = 'rgba(20,110,220,0.95)';
+              ctx.strokeText(String(p), 3, py - 4);
+              ctx.fillText(String(p), 3, py - 4);
+            }
+          }
+        }
+        resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  // Second pass for pointer accuracy: zoom into the first guess and have
+  // the model re-read the wrong token's coordinates off the fine grid.
+  // Any failure falls back silently to the first-pass location.
+  async function refineMistakeLocation(parsed, dataUrl){
+    if (!parsed || !parsed.has_mistake) return parsed;
+    const token = (parsed.wrong_token || '').trim();
+    if (!token) return parsed;
+    try{
+      const cropBase64 = await cropWithGrid(dataUrl, numOr(parsed.x, 50), numOr(parsed.y, 50));
+      const response = await fetch('/api/locate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: cropBase64, mediaType: 'image/jpeg', token, line: parsed.line_quote || '' })
+      });
+      const data = await response.json();
+      if (!response.ok) return parsed;
+      const loc = parseModelJson(data.text);
+      if (loc && loc.found && Number.isFinite(Number(loc.x)) && Number.isFinite(Number(loc.y))){
+        parsed.x = Number(loc.x);
+        parsed.y = Number(loc.y);
+      }
+    } catch(err){ /* keep first-pass location */ }
+    return parsed;
   }
 
   async function handleFile(file){
@@ -1936,6 +2021,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const parsed = parseModelJson(data.text);
+      if (parsed.has_mistake){
+        statusText.textContent = 'Pinpointing the exact spot…';
+        await refineMistakeLocation(parsed, imageData.dataUrl);
+      }
       renderResult(parsed);
       if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId);
     } catch(err){
@@ -2333,6 +2422,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       lastCheckAt = Date.now();
 
       if (parsed.has_mistake){
+        await refineMistakeLocation(parsed, frame.dataUrl);
         watchState = {
           reviewedThrough: parsed.reviewed_through || priorStateSnapshot.reviewedThrough,
           pendingMistake: { line_quote: parsed.line_quote || '', explanation: parsed.explanation || '', fix: parsed.fix || '' }
