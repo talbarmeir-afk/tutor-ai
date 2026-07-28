@@ -367,15 +367,20 @@
   .image-wrap{ position:relative; border-radius:8px; overflow:hidden; background:#00000010; }
   .image-wrap img{ display:block; width:100%; height:auto; }
   .image-wrap svg.overlay{ position:absolute; inset:0; width:100%; height:100%; }
-  .ann-flag{
-    position:absolute; transform:translate(-50%, -50%);
-    font-family:'Nunito', sans-serif; font-weight:800; font-size:14px;
-    white-space:nowrap; pointer-events:none;
-    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
-  }
 
-  .feedback-row{ display:flex; gap:12px; align-items:flex-start; margin-top:20px; }
+  /* The mascot + verdict live right on top of the photo, like a teacher
+     leaning over your shoulder and pointing at the page, instead of in a
+     separate block after it — keeps the student's focus on their work
+     instead of splitting attention between the photo and a disconnected
+     card below it. */
+  .teacher-bar{
+    position:absolute; left:0; right:0; bottom:0;
+    display:flex; align-items:flex-end; gap:10px;
+    padding:34px 14px 12px;
+    background:linear-gradient(to top, rgba(10,9,7,0.82) 0%, rgba(10,9,7,0.6) 55%, rgba(10,9,7,0) 100%);
+  }
   .ring-mascot{ width:76px; height:88px; flex-shrink:0; transform-origin:center bottom; }
+  .teacher-bar .ring-mascot{ width:52px; height:60px; margin-bottom:2px; }
   @media (prefers-reduced-motion: no-preference){
     .ring-mascot{ animation:rmBreathe 3s ease-in-out infinite; }
   }
@@ -388,20 +393,20 @@
     70%{ transform:translateY(0); }
     100%{ transform:translateY(0); }
   }
-  .ring-mascot .rm-body{ fill:var(--paper); stroke:var(--pen-red); stroke-width:3; transition:stroke .3s ease; }
+  .ring-mascot .rm-body{ fill:#F4F3EF; stroke:var(--pen-red); stroke-width:3; transition:stroke .3s ease; }
   .ring-mascot .rm-ring{
     fill:none; stroke:var(--pen-red); stroke-width:7; stroke-linecap:round;
     stroke-dasharray:283 62; transition:stroke .3s ease;
   }
-  .ring-mascot .rm-foot{ fill:var(--paper); stroke:var(--pen-red); stroke-width:2.5; transition:stroke .3s ease; }
+  .ring-mascot .rm-foot{ fill:#F4F3EF; stroke:var(--pen-red); stroke-width:2.5; transition:stroke .3s ease; }
   .ring-mascot .rm-arm{ stroke:var(--pen-red); stroke-width:3.5; stroke-linecap:round; transition:stroke .3s ease; }
-  .ring-mascot .rm-hand{ fill:var(--paper); stroke:var(--pen-red); stroke-width:2; transition:stroke .3s ease; }
+  .ring-mascot .rm-hand{ fill:#F4F3EF; stroke:var(--pen-red); stroke-width:2; transition:stroke .3s ease; }
   .ring-mascot .rm-blush{ fill:#FFB3A7; opacity:.6; }
-  .ring-mascot .rm-eye{ fill:var(--ink); }
-  .ring-mascot .rm-brow{ fill:none; stroke:var(--ink); stroke-width:2; stroke-linecap:round; opacity:0; }
-  .ring-mascot .rm-mouth{ fill:none; stroke:var(--ink); stroke-width:2.5; stroke-linecap:round; transition:opacity .15s ease; }
-  .ring-mascot .rm-mouth-happy{ fill:var(--ink); opacity:0; transition:opacity .15s ease; }
-  .ring-mascot .rm-mouth-talk{ fill:var(--ink); opacity:0; transform-box:fill-box; transform-origin:center; }
+  .ring-mascot .rm-eye{ fill:#181816; }
+  .ring-mascot .rm-brow{ fill:none; stroke:#181816; stroke-width:2; stroke-linecap:round; opacity:0; }
+  .ring-mascot .rm-mouth{ fill:none; stroke:#181816; stroke-width:2.5; stroke-linecap:round; transition:opacity .15s ease; }
+  .ring-mascot .rm-mouth-happy{ fill:#181816; opacity:0; transition:opacity .15s ease; }
+  .ring-mascot .rm-mouth-talk{ fill:#181816; opacity:0; transform-box:fill-box; transform-origin:center; }
   .ring-mascot.is-mistake .rm-body,
   .ring-mascot.is-mistake .rm-ring,
   .ring-mascot.is-mistake .rm-foot,
@@ -430,16 +435,16 @@
 
   .verdict{ flex:1; min-width:0; }
   .verdict h2{
-    font-family:'Nunito', sans-serif; font-weight:800; font-size:22px; margin:0 0 10px;
-    color:var(--pen-red);
+    font-family:'Nunito', sans-serif; font-weight:800; font-size:17px; margin:0 0 4px;
+    color:#FF6B60;
   }
-  .verdict.is-ok h2{ color:var(--chalk-green); }
+  .verdict.is-ok h2{ color:#5CD37E; }
   .quote{
-    font-size:14px; font-style:italic; color:var(--ink-muted);
-    border-left:3px solid var(--pen-red); padding-left:12px; margin:0 0 12px;
+    font-size:13px; font-style:italic; color:rgba(255,255,255,0.75);
+    border-left:2px solid #FF6B60; padding-left:9px; margin:0 0 5px;
   }
-  .verdict.is-ok .quote{ border-color:var(--chalk-green); }
-  .verdict p{ font-size:15px; line-height:1.6; margin:0 0 10px; }
+  .verdict.is-ok .quote{ border-color:#5CD37E; }
+  .verdict p{ font-size:13.5px; line-height:1.45; margin:0 0 4px; color:rgba(255,255,255,0.96); }
   .verdict .fix-label{ font-weight:600; }
 
   .reset-row{ margin-top:22px; text-align:right; }
@@ -885,33 +890,32 @@
         </defs>
         <g id="annGroup"></g>
       </svg>
-      <div class="ann-flag" id="annFlag"></div>
-    </div>
-    <div class="feedback-row">
-      <svg class="ring-mascot" id="ringMascot" viewBox="0 0 140 160" aria-hidden="true" focusable="false">
-        <ellipse class="rm-foot" cx="55" cy="140" rx="11" ry="6"/>
-        <ellipse class="rm-foot" cx="85" cy="140" rx="11" ry="6"/>
-        <circle class="rm-ring" cx="70" cy="80" r="55" transform="rotate(-50 70 80)"/>
-        <circle class="rm-body" cx="70" cy="80" r="47"/>
-        <line class="rm-arm" x1="28" y1="80" x2="10" y2="94"/>
-        <circle class="rm-hand" cx="10" cy="94" r="4"/>
-        <line class="rm-arm" x1="112" y1="80" x2="130" y2="94"/>
-        <circle class="rm-hand" cx="130" cy="94" r="4"/>
-        <ellipse class="rm-blush" cx="53" cy="86" rx="7" ry="4"/>
-        <ellipse class="rm-blush" cx="87" cy="86" rx="7" ry="4"/>
-        <path class="rm-brow" d="M46,58 L56,63"/>
-        <path class="rm-brow" d="M94,58 L84,63"/>
-        <circle class="rm-eye" cx="57" cy="70" r="4.5"/>
-        <circle class="rm-eye" cx="83" cy="70" r="4.5"/>
-        <path class="rm-mouth" d="M58,90 Q70,94 82,90"/>
-        <path class="rm-mouth-happy" d="M55,88 Q70,108 85,88 Q70,100 55,88 Z"/>
-        <ellipse class="rm-mouth-talk" cx="70" cy="93" rx="9" ry="7"/>
-      </svg>
-      <div class="verdict" id="verdict">
-        <h2 id="verdictHeading"></h2>
-        <p class="quote" id="verdictQuote"></p>
-        <p id="verdictExplanation"></p>
-        <p id="verdictFix"></p>
+      <div class="teacher-bar" id="teacherBar">
+        <svg class="ring-mascot" id="ringMascot" viewBox="0 0 140 160" aria-hidden="true" focusable="false">
+          <ellipse class="rm-foot" cx="55" cy="140" rx="11" ry="6"/>
+          <ellipse class="rm-foot" cx="85" cy="140" rx="11" ry="6"/>
+          <circle class="rm-ring" cx="70" cy="80" r="55" transform="rotate(-50 70 80)"/>
+          <circle class="rm-body" cx="70" cy="80" r="47"/>
+          <line class="rm-arm" x1="28" y1="80" x2="10" y2="94"/>
+          <circle class="rm-hand" cx="10" cy="94" r="4"/>
+          <line class="rm-arm" x1="112" y1="80" x2="130" y2="94"/>
+          <circle class="rm-hand" cx="130" cy="94" r="4"/>
+          <ellipse class="rm-blush" cx="53" cy="86" rx="7" ry="4"/>
+          <ellipse class="rm-blush" cx="87" cy="86" rx="7" ry="4"/>
+          <path class="rm-brow" d="M46,58 L56,63"/>
+          <path class="rm-brow" d="M94,58 L84,63"/>
+          <circle class="rm-eye" cx="57" cy="70" r="4.5"/>
+          <circle class="rm-eye" cx="83" cy="70" r="4.5"/>
+          <path class="rm-mouth" d="M58,90 Q70,94 82,90"/>
+          <path class="rm-mouth-happy" d="M55,88 Q70,108 85,88 Q70,100 55,88 Z"/>
+          <ellipse class="rm-mouth-talk" cx="70" cy="93" rx="9" ry="7"/>
+        </svg>
+        <div class="verdict" id="verdict">
+          <h2 id="verdictHeading"></h2>
+          <p class="quote" id="verdictQuote"></p>
+          <p id="verdictExplanation"></p>
+          <p id="verdictFix"></p>
+        </div>
       </div>
     </div>
 
@@ -1067,7 +1071,6 @@
   const resultImg = document.getElementById('resultImg');
   const overlaySvg = document.getElementById('overlaySvg');
   const annGroup = document.getElementById('annGroup');
-  const annFlag = document.getElementById('annFlag');
   const verdict = document.getElementById('verdict');
   const ringMascot = document.getElementById('ringMascot');
   const verdictHeading = document.getElementById('verdictHeading');
@@ -1531,10 +1534,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       <path d="M ${lx} ${ly} Q ${midX} ${midY} ${x} ${y}" fill="none" stroke="${color}" stroke-width="0.6" stroke-linecap="round" marker-end="url(#arrow)"/>
       ${mark}
     `;
-    annFlag.textContent = isMistake ? 'the mistake' : 'looks right';
-    annFlag.style.left = lx + '%';
-    annFlag.style.top = ly + '%';
-    annFlag.style.color = isMistake ? 'var(--pen-red)' : 'var(--chalk-green)';
   }
 
   function animateMascot(isOk){
