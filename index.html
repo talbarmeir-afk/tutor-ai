@@ -457,6 +457,18 @@
   .verdict.is-ok .quote{ border-color:#2FA04C; }
   .verdict p{ font-size:13px; line-height:1.45; margin:0 0 3px; color:#181816; }
   .verdict .fix-label{ font-weight:600; }
+  .verdict-actions{ display:flex; gap:6px; margin-top:7px; }
+  .verdict-icon-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:28px; height:28px; padding:0;
+    background:rgba(24,24,22,0.05); color:rgba(24,24,22,0.7);
+    border:1px solid rgba(24,24,22,0.18); border-radius:8px; cursor:pointer;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .verdict-icon-btn svg{ width:15px; height:15px; }
+  .verdict-icon-btn:hover{ background:rgba(24,24,22,0.1); color:#181816; border-color:rgba(24,24,22,0.35); }
+  .verdict-icon-btn:focus-visible{ outline:2px solid #E03A2F; outline-offset:2px; }
+  .verdict-icon-btn:disabled{ opacity:.45; cursor:not-allowed; }
 
   .reset-row{ margin-top:22px; text-align:right; }
   button.ghost-btn{
@@ -469,7 +481,6 @@
   button.ghost-btn:disabled:hover{ border-color:rgba(24,24,22,0.22); }
 
   .qa-section{ margin-top:26px; padding-top:20px; border-top:1px dashed var(--paper-line); }
-  .qa-heading{ font-family:'Nunito', sans-serif; font-size:17px; margin:0 0 12px; color:var(--ink); font-weight:800; }
   .qa-thread{ display:flex; flex-direction:column; gap:12px; margin-bottom:14px; max-height:280px; overflow-y:auto; }
   .qa-item .q{ font-size:14px; font-weight:600; color:var(--ink); margin:0 0 3px; }
   .qa-item .a{ font-family:'Karla', sans-serif; font-size:15px; color:var(--ink); margin:0; line-height:1.5; }
@@ -926,6 +937,21 @@
           <p class="quote" id="verdictQuote"></p>
           <p id="verdictExplanation"></p>
           <p id="verdictFix"></p>
+          <div class="verdict-actions">
+            <button type="button" class="verdict-icon-btn" id="detailBtn" title="Explain in more detail" aria-label="Explain in more detail">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7"/>
+                <path d="M11 8v6M8 11h6M21 21l-4.3-4.3"/>
+              </svg>
+            </button>
+            <button type="button" class="verdict-icon-btn" id="askBtn" title="Ask a question" aria-label="Ask a question">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 12a8 8 0 0 1-8 8H4l2.5-2.9A8 8 0 1 1 21 12z"/>
+                <path d="M10.2 9.6a2.4 2.4 0 0 1 4.6.9c0 1.5-2 1.8-2 3"/>
+                <circle cx="12.8" cy="16.4" r="0.4" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -936,7 +962,6 @@
     </div>
 
     <div class="qa-section hidden" id="qaSection">
-      <h3 class="qa-heading">Questions about this?</h3>
       <div class="qa-thread" id="qaThread"></div>
       <form class="qa-form" id="qaForm">
         <input type="text" id="qaInput" class="qa-input" placeholder="Ask about this step…" autocomplete="off">
@@ -1095,6 +1120,8 @@
   const qaForm = document.getElementById('qaForm');
   const qaInput = document.getElementById('qaInput');
   const qaSend = document.getElementById('qaSend');
+  const detailBtn = document.getElementById('detailBtn');
+  const askBtn = document.getElementById('askBtn');
   const errorNote = document.getElementById('errorNote');
   const errorText = document.getElementById('errorText');
   const retryBtn = document.getElementById('retryBtn');
@@ -1602,7 +1629,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       { role: 'assistant', content: summarizeForConversation(parsed) }
     ];
     qaThread.innerHTML = '';
-    qaSection.classList.remove('hidden');
+    // The Q&A area stays hidden until the student opens it from one of
+    // the icons in the bubble — no always-on "Questions about this?"
+    // block competing with the photo.
+    qaSection.classList.add('hidden');
   }
 
   function summarizeForConversation(parsed){
@@ -1676,15 +1706,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return a;
   }
 
-  qaForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const question = qaInput.value.trim();
+  async function submitQuestion(question){
     if (!question || qaSend.disabled) return;
+    qaSection.classList.remove('hidden');
     const answerEl = addQaPair(question);
     conversation.push({ role: 'user', content: question });
-    qaInput.value = '';
     qaSend.disabled = true;
     qaInput.disabled = true;
+    detailBtn.disabled = true;
     try{
       const response = await fetch('/api/ask', {
         method: 'POST',
@@ -1704,8 +1733,26 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     } finally {
       qaSend.disabled = false;
       qaInput.disabled = false;
-      qaInput.focus();
+      detailBtn.disabled = false;
     }
+  }
+
+  qaForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const question = qaInput.value.trim();
+    if (!question) return;
+    qaInput.value = '';
+    submitQuestion(question);
+  });
+
+  detailBtn.addEventListener('click', () => {
+    submitQuestion('Can you explain this in more detail?');
+  });
+
+  askBtn.addEventListener('click', () => {
+    qaSection.classList.remove('hidden');
+    qaSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    qaInput.focus({ preventScroll: true });
   });
 
   // ---- Watch mode (camera) ----
