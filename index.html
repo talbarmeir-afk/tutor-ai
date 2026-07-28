@@ -1498,7 +1498,7 @@ Also produce a short problem_title describing the overall problem being solved: 
 Also classify the problem into exactly one topic from this fixed list, choosing whichever fits best even if imperfectly: "Algebra", "Geometry", "Arithmetic", "Fractions & Decimals", "Word Problems", "Trigonometry", "Calculus", "Statistics & Probability", "Other".
 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "wrong_token": "the exact incorrect number, sign, or term as written (empty string if no mistake)", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
+{"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "wrong_token": "the exact incorrect number, sign, or term as written (empty string if no mistake)", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token, "total_lines": total count of distinct handwritten lines visible in the photo counted top to bottom — INCLUDING crossed-out lines and the original problem line; a fraction (number over a bar over a number) counts as ONE line, "mistake_line_index": which of those lines (1-based from the top, same counting) contains the mistake, or 0 if has_mistake is false}
 
 A light blue coordinate grid with percent labels is drawn over the photo purely to help you report positions: the numbers along the top edge are x percentages and the numbers along the left edge are y percentages. The grid is NOT part of the student's work — ignore it when reading the math. Read x and y directly off the nearest gridlines instead of estimating proportions by eye.
 
@@ -1537,7 +1537,7 @@ Now look at the current photo and report on the CURRENT state of the work:
 - Also classify the problem into exactly one topic from this fixed list, choosing whichever fits best even if imperfectly: "Algebra", "Geometry", "Arithmetic", "Fractions & Decimals", "Word Problems", "Trigonometry", "Calculus", "Statistics & Probability", "Other".
 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "mistake_resolved": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "wrong_token": "the exact incorrect number, sign, or term as written, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
+{"has_mistake": true or false, "mistake_resolved": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "wrong_token": "the exact incorrect number, sign, or term as written, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet", "total_lines": total count of distinct handwritten lines visible in the photo counted top to bottom — INCLUDING crossed-out lines and the original problem line; a fraction (number over a bar over a number) counts as ONE line, "mistake_line_index": which of those lines (1-based from the top, same counting) contains the mistake, or 0 if has_mistake is false}
 
 A light blue coordinate grid with percent labels is drawn over the photo purely to help you report positions: the numbers along the top edge are x percentages and the numbers along the left edge are y percentages. The grid is NOT part of the student's work — ignore it when reading the math. Read x and y directly off the nearest gridlines instead of estimating proportions by eye.
 
@@ -1624,102 +1624,137 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     });
   }
 
-  // Zooms into the checker's first x/y guess (3x, with margin), and draws a
-  // FINE grid on the crop — lines every 2% of the FULL image, labels every
-  // 4%, in full-image coordinates — so the second-pass /api/locate call can
-  // read the wrong token's exact position instead of estimating it on a
-  // whole page.
-  function cropWithGrid(dataUrl, cxPct, cyPct){
-    return new Promise((resolve, reject) => {
+  // Deterministic ink snapping: given a rough y (percent of image height),
+  // find the actual handwritten line nearest it by scanning for dark "ink"
+  // pixels — rows with enough dark pixels form bands, the band closest to
+  // the rough y wins, and its measured pixel extent becomes the box. The
+  // model only has to be roughly right about WHICH line; the circle's
+  // geometry then comes from the pixels themselves, not from model
+  // perception (which kept missing by a token's width).
+  function snapBoxToInk(dataUrl, roughY, lineIndex, totalLines){
+    return new Promise((resolve) => {
       const img = new Image();
-      img.onerror = () => reject(new Error('crop-failed'));
+      img.onerror = () => resolve(null);
       img.onload = () => {
-        const w = img.width, h = img.height;
-        const cw = Math.min(w, w * 0.36), ch = Math.min(h, h * 0.26);
-        let x0 = w * cxPct / 100 - cw / 2, y0 = h * cyPct / 100 - ch / 2;
-        x0 = Math.max(0, Math.min(w - cw, x0));
-        y0 = Math.max(0, Math.min(h - ch, y0));
-        const scale = 3;
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(cw * scale);
-        canvas.height = Math.round(ch * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, x0, y0, cw, ch, 0, 0, canvas.width, canvas.height);
-        const fontPx = Math.max(14, Math.round(canvas.height * 0.032));
-        for (let p = 0; p <= 100; p += 2){
-          const fx = w * p / 100;
-          if (fx >= x0 && fx <= x0 + cw){
-            const px = (fx - x0) * scale;
-            ctx.strokeStyle = 'rgba(30,144,255,0.45)';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, canvas.height); ctx.stroke();
-            if (p % 4 === 0 && px > fontPx * 2.4){
-              ctx.font = fontPx + 'px monospace';
-              ctx.lineWidth = Math.max(2, Math.round(fontPx / 5));
-              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-              ctx.fillStyle = 'rgba(20,110,220,0.95)';
-              ctx.strokeText(String(p), px + 3, fontPx + 3);
-              ctx.fillText(String(p), px + 3, fontPx + 3);
+        try{
+          const scale = Math.min(1, 700 / img.width);
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const px = ctx.getImageData(0, 0, w, h).data;
+          const mx0 = Math.round(w * 0.04), mx1 = Math.round(w * 0.96);
+          const my0 = Math.round(h * 0.03), my1 = Math.round(h * 0.97);
+          const lum = new Float32Array(w * h);
+          let sum = 0, n = 0;
+          for (let yy = my0; yy < my1; yy++){
+            for (let xx = mx0; xx < mx1; xx++){
+              const i = (yy * w + xx) * 4;
+              const L = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+              lum[yy * w + xx] = L;
+              sum += L; n++;
             }
           }
-          const fy = h * p / 100;
-          if (fy >= y0 && fy <= y0 + ch){
-            const py = (fy - y0) * scale;
-            ctx.strokeStyle = 'rgba(30,144,255,0.45)';
-            ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(canvas.width, py); ctx.stroke();
-            if (p % 4 === 0 && py > fontPx * 2.4){
-              ctx.font = fontPx + 'px monospace';
-              ctx.lineWidth = Math.max(2, Math.round(fontPx / 5));
-              ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-              ctx.fillStyle = 'rgba(20,110,220,0.95)';
-              ctx.strokeText(String(p), 3, py - 4);
-              ctx.fillText(String(p), 3, py - 4);
+          const mean = sum / n;
+          let varSum = 0;
+          for (let yy = my0; yy < my1; yy++){
+            for (let xx = mx0; xx < mx1; xx++){
+              const d = lum[yy * w + xx] - mean;
+              varSum += d * d;
             }
           }
-        }
-        resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
+          const std = Math.sqrt(varSum / n);
+          const thr = mean - Math.max(18, std * 1.1);
+          const rowCount = new Int32Array(h);
+          for (let yy = my0; yy < my1; yy++){
+            let c = 0;
+            for (let xx = mx0; xx < mx1; xx++) if (lum[yy * w + xx] < thr) c++;
+            rowCount[yy] = c;
+          }
+          const minRow = Math.max(2, Math.round((mx1 - mx0) * 0.004));
+          const bands = [];
+          let start = -1;
+          for (let yy = my0; yy <= my1; yy++){
+            const inked = yy < my1 && rowCount[yy] >= minRow;
+            if (inked && start < 0) start = yy;
+            if (!inked && start >= 0){
+              if (yy - start >= Math.max(3, h * 0.008)) bands.push({ y0: start, y1: yy });
+              start = -1;
+            }
+          }
+          if (!bands.length){ resolve(null); return; }
+          // Merge bands separated by small gaps so a fraction (numerator,
+          // bar, denominator) reads as ONE line, matching how the model
+          // counts lines.
+          const merged = [bands[0]];
+          for (let i = 1; i < bands.length; i++){
+            const prev = merged[merged.length - 1];
+            if (bands[i].y0 - prev.y1 < h * 0.022) prev.y1 = bands[i].y1;
+            else merged.push(bands[i]);
+          }
+          // Band choice: when the model's line count matches what the ink
+          // shows, trust its ordinal ("the mistake is line 3 of 5") —
+          // counting is something it does far more reliably than pixel
+          // positions. Otherwise fall back to nearest-band-to-y.
+          let best = null;
+          const li = Math.round(Number(lineIndex) || 0);
+          const tl = Math.round(Number(totalLines) || 0);
+          if (li >= 1 && tl === merged.length && li <= merged.length){
+            best = merged[li - 1];
+          } else {
+            const targetY = h * roughY / 100;
+            let bestD = Infinity;
+            for (const b of merged){
+              const d = (targetY >= b.y0 && targetY <= b.y1)
+                ? 0
+                : Math.min(Math.abs(targetY - b.y0), Math.abs(targetY - b.y1));
+              if (d < bestD){ bestD = d; best = b; }
+            }
+            if (bestD > h * 0.12) best = null;
+          }
+          if (!best){ resolve(null); return; }
+          const xs = [];
+          for (let yy = best.y0; yy < best.y1; yy++){
+            for (let xx = mx0; xx < mx1; xx++){
+              if (lum[yy * w + xx] < thr) xs.push(xx);
+            }
+          }
+          if (xs.length < 10){ resolve(null); return; }
+          xs.sort((a, b) => a - b);
+          const xLo = xs[Math.floor(xs.length * 0.02)];
+          const xHi = xs[Math.floor(xs.length * 0.98)];
+          resolve({
+            x0: xLo / w * 100, x1: xHi / w * 100,
+            y0: best.y0 / h * 100, y1: best.y1 / h * 100
+          });
+        } catch(err){ resolve(null); }
       };
       img.src = dataUrl;
     });
   }
 
-  // Second pass for pointer accuracy: zoom into the first guess and have
-  // the model re-read the wrong token's coordinates off the fine grid.
-  // Any failure falls back silently to the first-pass location.
+  // Pointer placement, deterministic: the checker reports WHICH handwritten
+  // line has the mistake ("line 3 of 5") — an ordinal judgment models make
+  // reliably — and the ink detector above measures where the actual lines
+  // are. When the counts agree, the box is exact; otherwise we snap to the
+  // band nearest the model's rough y. No second API call, no model pixel
+  // estimates in the final geometry. Any failure keeps the first-pass
+  // point silently.
   async function refineMistakeLocation(parsed, dataUrl){
     if (!parsed || !parsed.has_mistake) return parsed;
-    const token = (parsed.wrong_token || '').trim();
-    if (!token) return parsed;
     try{
-      const cropBase64 = await cropWithGrid(dataUrl, numOr(parsed.x, 50), numOr(parsed.y, 50));
-      const response = await fetch('/api/locate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: cropBase64, mediaType: 'image/jpeg', token, line: parsed.line_quote || '' })
-      });
-      const data = await response.json();
-      if (!response.ok) return parsed;
-      const loc = parseModelJson(data.text);
-      if (loc && loc.found){
-        const x0 = Number(loc.line_x_min), x1 = Number(loc.line_x_max);
-        const y0 = Number(loc.line_y_min), y1 = Number(loc.line_y_max);
-        const boxOk = [x0, x1, y0, y1].every(Number.isFinite)
-          && (x1 - x0) > 2 && (x1 - x0) < 95
-          && (y1 - y0) > 1 && (y1 - y0) < 40;
-        if (boxOk) parsed.line_box = { x0, x1, y0, y1 };
-        let tx = Number(loc.token_x), ty = Number(loc.token_y);
-        if (Number.isFinite(tx) && Number.isFinite(ty)){
-          if (boxOk){
-            tx = Math.max(x0, Math.min(x1, tx));
-            ty = Math.max(y0, Math.min(y1, ty));
-          }
-          parsed.x = tx;
-          parsed.y = ty;
-        } else if (boxOk){
-          parsed.x = (x0 + x1) / 2;
-          parsed.y = (y0 + y1) / 2;
-        }
+      const ink = await snapBoxToInk(
+        dataUrl,
+        numOr(parsed.y, 50),
+        numOr(parsed.mistake_line_index, 0),
+        numOr(parsed.total_lines, 0)
+      );
+      if (ink){
+        parsed.line_box = ink;
+        parsed.x = Math.max(ink.x0, Math.min(ink.x1, numOr(parsed.x, (ink.x0 + ink.x1) / 2)));
+        parsed.y = Math.max(ink.y0, Math.min(ink.y1, numOr(parsed.y, (ink.y0 + ink.y1) / 2)));
       }
     } catch(err){ /* keep first-pass location */ }
     return parsed;
