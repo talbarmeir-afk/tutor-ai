@@ -18,10 +18,16 @@ The API key never reaches the browser — the frontend calls `/api/analyze`,
 functions call Anthropic server-side using an environment variable.
 
 `/api/teach` powers the "Teach me & train on a subject" option in the
-dropdown next to "Check my scribbled work": the student types a math topic,
-gets back a plain-text mini-lesson plus two practice problems to solve by
-hand, and then checks their handwritten solutions through the normal
-photo/watch flow — the teach mode adds no new checking machinery.
+dropdown next to "Check my scribbled work": the student types a math topic
+and gets back a mini-lesson plus exactly one practice problem to solve by
+hand (one at a time, like a real tutor), then checks their handwritten
+solution through the normal photo/watch flow — teach mode adds no new
+checking machinery. The lesson is rendered in a handwriting font on a
+ruled-paper panel and "written out" progressively, and two icons under it
+let the student ask for the same idea explained a different way or ask a
+clarification question — both continue the same conversation through the
+same endpoint (send `{subject}` for a fresh lesson, `{conversation}` for a
+follow-up).
 
 ### Watch mode
 

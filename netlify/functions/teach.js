@@ -1,4 +1,4 @@
-const { teachSubject } = require('../../lib/anthropic');
+const { teachSubject, teachFollowup } = require('../../lib/anthropic');
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
@@ -6,7 +6,11 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { subject } = JSON.parse(event.body || '{}');
+    const { subject, conversation } = JSON.parse(event.body || '{}');
+    if (Array.isArray(conversation) && conversation.length) {
+      const lesson = await teachFollowup(conversation);
+      return { statusCode: 200, body: JSON.stringify({ lesson }) };
+    }
     if (!subject || typeof subject !== 'string' || !subject.trim()) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing subject' }) };
     }
