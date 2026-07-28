@@ -368,19 +368,30 @@
   .image-wrap img{ display:block; width:100%; height:auto; }
   .image-wrap svg.overlay{ position:absolute; inset:0; width:100%; height:100%; }
 
-  /* The mascot + verdict live right on top of the photo, like a teacher
-     leaning over your shoulder and pointing at the page, instead of in a
-     separate block after it — keeps the student's focus on their work
-     instead of splitting attention between the photo and a disconnected
-     card below it. */
+  /* The mascot + verdict sit in a speech bubble parked right next to the
+     red mark on the photo itself — like a teacher writing a comment in
+     the margin beside the mistake — instead of in a separate block after
+     the image. buildOverlay() positions it above or below the mark. The
+     bubble stays paper-white in both themes: it's a note on the photo,
+     not part of the page chrome. */
   .teacher-bar{
-    position:absolute; left:0; right:0; bottom:0;
-    display:flex; align-items:flex-end; gap:10px;
-    padding:34px 14px 12px;
-    background:linear-gradient(to top, rgba(10,9,7,0.82) 0%, rgba(10,9,7,0.6) 55%, rgba(10,9,7,0) 100%);
+    position:absolute; z-index:3;
+    display:flex; align-items:flex-start; gap:10px;
+    max-width:min(340px, 62%);
+    background:rgba(255,255,255,0.95);
+    border:1px solid rgba(24,24,22,0.16);
+    border-radius:12px;
+    padding:10px 14px 10px 10px;
+    box-shadow:0 10px 26px rgba(0,0,0,0.22);
   }
+  .teacher-bar::after{
+    content:""; position:absolute; left:24px;
+    border:9px solid transparent;
+  }
+  .teacher-bar.is-below::after{ top:-18px; border-bottom-color:rgba(255,255,255,0.95); }
+  .teacher-bar.is-above::after{ bottom:-18px; border-top-color:rgba(255,255,255,0.95); }
   .ring-mascot{ width:76px; height:88px; flex-shrink:0; transform-origin:center bottom; }
-  .teacher-bar .ring-mascot{ width:52px; height:60px; margin-bottom:2px; }
+  .teacher-bar .ring-mascot{ width:46px; height:53px; }
   @media (prefers-reduced-motion: no-preference){
     .ring-mascot{ animation:rmBreathe 3s ease-in-out infinite; }
   }
@@ -435,16 +446,16 @@
 
   .verdict{ flex:1; min-width:0; }
   .verdict h2{
-    font-family:'Nunito', sans-serif; font-weight:800; font-size:17px; margin:0 0 4px;
-    color:#FF6B60;
+    font-family:'Nunito', sans-serif; font-weight:800; font-size:15px; margin:0 0 3px;
+    color:#E03A2F;
   }
-  .verdict.is-ok h2{ color:#5CD37E; }
+  .verdict.is-ok h2{ color:#2FA04C; }
   .quote{
-    font-size:13px; font-style:italic; color:rgba(255,255,255,0.75);
-    border-left:2px solid #FF6B60; padding-left:9px; margin:0 0 5px;
+    font-size:12.5px; font-style:italic; color:rgba(24,24,22,0.65);
+    border-left:2px solid #E03A2F; padding-left:9px; margin:0 0 4px;
   }
-  .verdict.is-ok .quote{ border-color:#5CD37E; }
-  .verdict p{ font-size:13.5px; line-height:1.45; margin:0 0 4px; color:rgba(255,255,255,0.96); }
+  .verdict.is-ok .quote{ border-color:#2FA04C; }
+  .verdict p{ font-size:13px; line-height:1.45; margin:0 0 3px; color:#181816; }
   .verdict .fix-label{ font-weight:600; }
 
   .reset-row{ margin-top:22px; text-align:right; }
@@ -1071,6 +1082,7 @@
   const resultImg = document.getElementById('resultImg');
   const overlaySvg = document.getElementById('overlaySvg');
   const annGroup = document.getElementById('annGroup');
+  const teacherBar = document.getElementById('teacherBar');
   const verdict = document.getElementById('verdict');
   const ringMascot = document.getElementById('ringMascot');
   const verdictHeading = document.getElementById('verdictHeading');
@@ -1534,6 +1546,22 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       <path d="M ${lx} ${ly} Q ${midX} ${midY} ${x} ${y}" fill="none" stroke="${color}" stroke-width="0.6" stroke-linecap="round" marker-end="url(#arrow)"/>
       ${mark}
     `;
+
+    // Park the speech bubble right next to the mark, like a comment
+    // written in the margin beside the mistake: below it when the mark
+    // sits in the upper part of the photo, above it otherwise, nudged
+    // sideways so it stays on the page.
+    const below = y < 55;
+    teacherBar.classList.toggle('is-below', below);
+    teacherBar.classList.toggle('is-above', !below);
+    if (below){
+      teacherBar.style.top = clamp(y + 8, 4, 62) + '%';
+      teacherBar.style.bottom = 'auto';
+    } else {
+      teacherBar.style.top = 'auto';
+      teacherBar.style.bottom = clamp(100 - y + 7, 4, 62) + '%';
+    }
+    teacherBar.style.left = clamp(x - 12, 3, 36) + '%';
   }
 
   function animateMascot(isOk){
