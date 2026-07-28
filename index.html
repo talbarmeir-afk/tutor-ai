@@ -609,6 +609,17 @@
   }
   .history-view-title{ font-family:'Nunito', sans-serif; font-weight:800; font-size:22px; margin:0 0 16px; color:var(--ink); }
   .history-list{ display:flex; flex-direction:column; gap:20px; }
+  #currentLessonSection{ margin-top:36px; }
+  .day-picker{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .day-pill{
+    font-family:'Karla', sans-serif; font-weight:700; font-size:12.5px;
+    background:none; border:1px solid rgba(24,24,22,0.2); color:var(--ink-muted);
+    border-radius:16px; padding:6px 12px; cursor:pointer;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .day-pill:hover:not(.is-on){ border-color:rgba(24,24,22,0.4); color:var(--ink); }
+  .day-pill.is-on{ background:var(--chalk-yellow); border-color:var(--chalk-yellow); color:#fff; }
+  .day-pill:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
   .history-group{ border:1px solid var(--paper-line); border-radius:12px; padding:12px; }
   .history-group-title{
     font-family:'Nunito', sans-serif; font-weight:800; font-size:16.5px;
@@ -791,25 +802,24 @@
        the student out of the page; a subtab keeps it part of Home. -->
   <nav class="subtab-bar hidden" id="homeSubtabs" role="tablist">
     <button class="subtab-btn is-active" type="button" data-subtab="lesson">Start Lesson</button>
-    <button class="subtab-btn" type="button" data-subtab="history">History</button>
+    <button class="subtab-btn" type="button" data-subtab="history">Past Lessons</button>
   </nav>
 
   <div id="homeLessonView">
   <div class="lesson-note hidden" id="lessonStartPrompt">
     <h2>Ready for a lesson?</h2>
-    <p>Start a 45-minute lesson to begin checking your work. Your checks and the time you spend are saved to your history.</p>
+    <p>Start a 45-minute lesson to begin checking your work.</p>
     <div class="lesson-note-actions">
       <button class="primary-btn" id="startLessonBtn" type="button">Start Lesson</button>
-      <button class="ghost-btn" id="viewHistoryBtn" type="button">View history</button>
     </div>
   </div>
 
   <div class="lesson-note hidden" id="lessonEndedNote">
     <h2>Lesson ended</h2>
-    <p id="lessonEndedText">This lesson has ended and can't be resumed. Start a new one to keep going, or look back through your history.</p>
+    <p id="lessonEndedText">This lesson has ended and can't be resumed. Start a new one to keep going, or look back through your past lessons.</p>
     <div class="lesson-note-actions">
       <button class="primary-btn" id="startNewLessonBtn" type="button">Start a new lesson</button>
-      <button class="ghost-btn" id="lessonEndedHistoryBtn" type="button">View history</button>
+      <button class="ghost-btn" id="lessonEndedHistoryBtn" type="button">Past lessons</button>
     </div>
   </div>
 
@@ -1059,11 +1069,20 @@
     <p id="errorText">Something went wrong. Try a clearer, well-lit photo, or check your connection.</p>
     <button class="ghost-btn" id="retryBtn" type="button">Try again</button>
   </div>
+
+  <!-- Running log of the checks made in the CURRENT lesson, visible only
+       while one is running — once the lesson ends this disappears and the
+       same entries live on in the History subtab. -->
+  <div id="currentLessonSection" class="hidden">
+    <div class="history-view-card">
+      <h2 class="history-view-title">This lesson so far</h2>
+      <div class="history-list" id="currentLessonList"></div>
+    </div>
+  </div>
   </div>
 
   <div id="homeHistoryView" class="hidden">
     <div class="history-view-card">
-      <h2 class="history-view-title">Your history</h2>
       <div class="history-list" id="historyList"></div>
     </div>
   </div>
@@ -1110,17 +1129,16 @@
 
       <h2 class="panel-heading">Weekly AI lesson schedule</h2>
       <div class="field-row">
-        <label>Day
-          <select id="profileScheduleDay">
-            <option value="">No fixed day</option>
-            <option value="mon">Monday</option>
-            <option value="tue">Tuesday</option>
-            <option value="wed">Wednesday</option>
-            <option value="thu">Thursday</option>
-            <option value="fri">Friday</option>
-            <option value="sat">Saturday</option>
-            <option value="sun">Sunday</option>
-          </select>
+        <label>Days
+          <div class="day-picker" id="profileScheduleDays" role="group" aria-label="Lesson days">
+            <button type="button" class="day-pill" data-day="mon">Mon</button>
+            <button type="button" class="day-pill" data-day="tue">Tue</button>
+            <button type="button" class="day-pill" data-day="wed">Wed</button>
+            <button type="button" class="day-pill" data-day="thu">Thu</button>
+            <button type="button" class="day-pill" data-day="fri">Fri</button>
+            <button type="button" class="day-pill" data-day="sat">Sat</button>
+            <button type="button" class="day-pill" data-day="sun">Sun</button>
+          </div>
         </label>
         <label>Time<input type="time" id="profileScheduleTime"></label>
         <label>Duration
@@ -1345,7 +1363,7 @@
     hideAllLessonPanels();
     stopCamera();
     stopTakePhotoStream();
-    lessonEndedText.textContent = `You worked for ${formatLessonTime(durationSeconds * 1000)} this lesson — it's ended and can't be resumed. Start a new one to keep going, or look back through your history.`;
+    lessonEndedText.textContent = `You worked for ${formatLessonTime(durationSeconds * 1000)} this lesson — it's ended and can't be resumed. Start a new one to keep going, or look back through your past lessons.`;
     lessonEndedNote.classList.remove('hidden');
     switchTab('home');
   }
@@ -1364,6 +1382,7 @@
     lessonRunning = false;
     clearLessonInterval();
     clearActiveLesson();
+    if (window.mathTutorHistory && window.mathTutorHistory.hideCurrentLesson) window.mathTutorHistory.hideCurrentLesson();
     const recordPromise = window.mathTutorHistory
       ? window.mathTutorHistory.endLessonRecord(endedLessonId, durationSeconds)
       : Promise.resolve();
@@ -1393,6 +1412,7 @@
     renderLessonTimer();
     showCheckUI();
     lessonTimerEl.classList.remove('hidden');
+    if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
   }
 
   startLessonBtn.addEventListener('click', beginLesson);
@@ -1481,6 +1501,7 @@
         renderLessonTimer();
         showCheckUI();
         lessonTimerEl.classList.remove('hidden');
+        if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
       }
     } else {
       currentLessonId = null;
@@ -1510,6 +1531,7 @@
     tabBar.classList.add('hidden');
     homeSubtabs.classList.add('hidden');
     setHomeSubtab('lesson');
+    if (window.mathTutorHistory && window.mathTutorHistory.hideCurrentLesson) window.mathTutorHistory.hideCurrentLesson();
     // Watch mode requires an account — bounce back to upload if it was active.
     if (currentMode === 'watch') currentMode = 'upload';
     switchTab('home');
@@ -1933,6 +1955,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       ];
       writeOut(teachPanelBody, data.lesson);
       teachActions.classList.remove('hidden');
+      // Mark the running lesson as a "New topic" lesson so Past Lessons can
+      // show what was taught in it.
+      if (lessonRunning && currentLessonId && window.mathTutorHistory && window.mathTutorHistory.recordTaughtSubject){
+        window.mathTutorHistory.recordTaughtSubject(currentLessonId, subject);
+      }
     } catch(err){
       teachPanelBody.textContent = "Couldn't prepare that lesson — check your connection and try again.";
     } finally {
@@ -2695,9 +2722,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const authError = document.getElementById('authError');
   const authEmailLabel = document.getElementById('authEmailLabel');
   const signOutBtn = document.getElementById('signOutBtn');
-  const viewHistoryBtn = document.getElementById('viewHistoryBtn');
   const homeHistoryView = document.getElementById('homeHistoryView');
   const historyList = document.getElementById('historyList');
+  const currentLessonSection = document.getElementById('currentLessonSection');
+  const currentLessonList = document.getElementById('currentLessonList');
   const lightbox = document.getElementById('lightbox');
   const lightboxImg = document.getElementById('lightboxImg');
 
@@ -2714,7 +2742,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const profileClass = document.getElementById('profileClass');
   const profileCountry = document.getElementById('profileCountry');
   const profileLanguage = document.getElementById('profileLanguage');
-  const profileScheduleDay = document.getElementById('profileScheduleDay');
+  const profileScheduleDays = document.getElementById('profileScheduleDays');
+  profileScheduleDays.addEventListener('click', (e) => {
+    const pill = e.target.closest('.day-pill');
+    if (pill) pill.classList.toggle('is-on');
+  });
   const profileScheduleTime = document.getElementById('profileScheduleTime');
   const profileScheduleDuration = document.getElementById('profileScheduleDuration');
   const profileWeeklyTarget = document.getElementById('profileWeeklyTarget');
@@ -2832,16 +2864,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     await supabaseClient.auth.signOut();
   });
 
-  // History lives in a Home subtab now, not a modal — "opening" it just
-  // means loading entries into the inline list; the main script owns the
-  // subtab switching and calls this through the mathTutorHistory bridge.
+  // Past Lessons lives in a Home subtab now, not a modal — "opening" it
+  // just means loading entries into the inline list; the main script owns
+  // the subtab switching and calls this through the mathTutorHistory bridge.
   function openHistoryPanel(){
     loadHistory();
   }
-
-  viewHistoryBtn.addEventListener('click', () => {
-    if (window.mathTutorUI) window.mathTutorUI.showHomeHistory();
-  });
 
   lightbox.addEventListener('click', () => lightbox.classList.add('hidden'));
 
@@ -2935,7 +2963,79 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     return `${minutes} min`;
   }
 
-  function renderHistoryList(entries, lessonDurations){
+  // One problem's checks as a card — shared between the Past Lessons list
+  // and the current-lesson log shown while a lesson is running.
+  function buildProblemGroup(steps){
+    const group = document.createElement('div');
+    group.className = 'history-group';
+
+    const title = steps.find((s) => s.problem_title)?.problem_title;
+    if (title){
+      const titleEl = document.createElement('div');
+      titleEl.className = 'history-group-title';
+      titleEl.textContent = title;
+      group.appendChild(titleEl);
+    }
+
+    const countLabel = steps.length === 1 ? '1 check' : `${steps.length} checks`;
+
+    const stepsEl = document.createElement('div');
+    stepsEl.className = 'history-steps';
+    steps.forEach((entry, i) => stepsEl.appendChild(buildHistoryStep(entry, i === 0 ? countLabel : null)));
+    group.appendChild(stepsEl);
+    return group;
+  }
+
+  // ---- Current-lesson log ----
+  // While a lesson runs, its checks so far are shown inline in the lesson
+  // subtab (progression order); the main script tells us when a lesson
+  // starts/ends via the mathTutorHistory bridge. After the lesson ends the
+  // same entries are only in Past Lessons.
+  let activeLessonId = null;
+
+  function renderCurrentLessonEntries(entries){
+    currentLessonList.innerHTML = '';
+    if (!entries || !entries.length){
+      const empty = document.createElement('p');
+      empty.className = 'history-empty';
+      empty.textContent = 'Nothing checked yet in this lesson — your checks will show up here as you go.';
+      currentLessonList.appendChild(empty);
+      return;
+    }
+    groupByProblem(entries).forEach((steps) => {
+      currentLessonList.appendChild(buildProblemGroup(steps));
+    });
+  }
+
+  async function loadCurrentLesson(){
+    if (!supabaseClient || !currentSession || !activeLessonId) return;
+    const { data, error } = await supabaseClient
+      .from('history_entries')
+      .select('*')
+      .eq('lesson_id', activeLessonId)
+      .order('created_at', { ascending: true })
+      .limit(100);
+    if (error){
+      console.warn('Could not load current lesson entries', error);
+      return;
+    }
+    renderCurrentLessonEntries(data || []);
+  }
+
+  function showCurrentLesson(lessonId){
+    activeLessonId = lessonId;
+    renderCurrentLessonEntries([]);
+    currentLessonSection.classList.remove('hidden');
+    loadCurrentLesson();
+  }
+
+  function hideCurrentLesson(){
+    activeLessonId = null;
+    currentLessonSection.classList.add('hidden');
+    currentLessonList.innerHTML = '';
+  }
+
+  function renderHistoryList(entries, lessonMeta){
     historyList.innerHTML = '';
     if (!entries || !entries.length){
       const empty = document.createElement('p');
@@ -2956,9 +3056,25 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const lessonWhen = new Date(lessonEntries[0].created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
       const problemLabel = problemGroups.length === 1 ? '1 problem' : `${problemGroups.length} problems`;
       const lessonKey = lessonEntries[0].lesson_id;
-      const durationLabel = lessonDurations && lessonKey ? formatDurationLabel(lessonDurations.get(lessonKey)) : null;
+      // Real duration when the lesson ended cleanly; "in progress" for the
+      // active one; otherwise (tab closed mid-lesson, no end record ever
+      // written) an estimate from lesson start to the last check.
+      const meta = lessonMeta && lessonKey ? lessonMeta.get(lessonKey) : null;
+      let durationLabel = null;
+      if (meta && meta.duration_seconds != null){
+        durationLabel = formatDurationLabel(meta.duration_seconds);
+      } else if (lessonKey && lessonKey === activeLessonId){
+        durationLabel = 'in progress';
+      } else if (meta && meta.started_at){
+        const lastTs = Math.max(...lessonEntries.map((e) => new Date(e.created_at).getTime()));
+        const secs = Math.round((lastTs - new Date(meta.started_at).getTime()) / 1000);
+        if (secs > 0) durationLabel = '~' + formatDurationLabel(secs);
+      }
       const headerParts = ['Lesson', lessonWhen];
       if (durationLabel) headerParts.push(`Lesson duration: ${durationLabel}`);
+      // Lesson type: "New topic" when the student used Teach me during the
+      // lesson (with the subjects that were taught), plain homework otherwise.
+      headerParts.push(meta && meta.taught_subjects ? `New topic: ${meta.taught_subjects}` : 'Homework');
       headerParts.push(problemLabel);
       lessonHeader.textContent = headerParts.join(' · ');
       lessonEl.appendChild(lessonHeader);
@@ -2967,25 +3083,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       groupsEl.className = 'history-lesson-groups';
 
       problemGroups.forEach((steps) => {
-        const group = document.createElement('div');
-        group.className = 'history-group';
-
-        const title = steps.find((s) => s.problem_title)?.problem_title;
-        if (title){
-          const titleEl = document.createElement('div');
-          titleEl.className = 'history-group-title';
-          titleEl.textContent = title;
-          group.appendChild(titleEl);
-        }
-
-        const countLabel = steps.length === 1 ? '1 check' : `${steps.length} checks`;
-
-        const stepsEl = document.createElement('div');
-        stepsEl.className = 'history-steps';
-        steps.forEach((entry, i) => stepsEl.appendChild(buildHistoryStep(entry, i === 0 ? countLabel : null)));
-        group.appendChild(stepsEl);
-
-        groupsEl.appendChild(group);
+        groupsEl.appendChild(buildProblemGroup(steps));
       });
 
       lessonEl.appendChild(groupsEl);
@@ -3005,21 +3103,21 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       return;
     }
 
-    const lessonDurations = new Map();
+    const lessonMeta = new Map();
     const lessonIds = Array.from(new Set(data.map((e) => e.lesson_id).filter(Boolean)));
     if (lessonIds.length){
       const { data: lessons, error: lessonsError } = await supabaseClient
         .from('lessons')
-        .select('id, duration_seconds')
+        .select('id, duration_seconds, started_at, taught_subjects')
         .in('id', lessonIds);
       if (lessonsError){
         console.warn('Could not load lesson durations', lessonsError);
       } else {
-        lessons.forEach((l) => { if (l.duration_seconds != null) lessonDurations.set(l.id, l.duration_seconds); });
+        lessons.forEach((l) => lessonMeta.set(l.id, l));
       }
     }
 
-    renderHistoryList(data, lessonDurations);
+    renderHistoryList(data, lessonMeta);
   }
 
   function makeThumbnail(dataUrl, maxDim){
@@ -3063,6 +3161,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       });
       if (error) throw error;
       if (!homeHistoryView.classList.contains('hidden')) loadHistory();
+      if (lessonId && lessonId === activeLessonId) loadCurrentLesson();
     } catch(err){
       console.warn('Could not save history entry', err);
     }
@@ -3082,6 +3181,31 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
+  // Marks a lesson as a "New topic" lesson: called when the student uses
+  // Teach me & train on a subject while a lesson is running. Subjects
+  // accumulate (joined with " · ") in lessons.taught_subjects; a lesson
+  // with none is a plain homework lesson.
+  async function recordTaughtSubject(lessonId, subject){
+    if (!supabaseClient || !currentSession || !lessonId || !subject) return;
+    try{
+      const { data, error } = await supabaseClient
+        .from('lessons')
+        .select('taught_subjects')
+        .eq('id', lessonId)
+        .single();
+      if (error) throw error;
+      const existing = (data && data.taught_subjects) ? data.taught_subjects.split(' · ') : [];
+      if (!existing.includes(subject)) existing.push(subject);
+      const { error: upErr } = await supabaseClient
+        .from('lessons')
+        .update({ taught_subjects: existing.join(' · ') })
+        .eq('id', lessonId);
+      if (upErr) throw upErr;
+    } catch(err){
+      console.warn('Could not record taught subject', err);
+    }
+  }
+
   async function endLessonRecord(lessonId, durationSeconds){
     if (!supabaseClient || !currentSession) return;
     try{
@@ -3096,7 +3220,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord };
+  window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord, showCurrentLesson, hideCurrentLesson, recordTaughtSubject };
 
   // ---- Profile, exams, dashboard, settings ----
   // Loaded lazily (on tab switch, via window.mathTutorProfile) rather than
@@ -3126,7 +3250,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     profileClass.value = (data && data.class_name) || '';
     profileCountry.value = (data && data.country) || '';
     profileLanguage.value = (data && data.language) || '';
-    profileScheduleDay.value = (data && data.schedule_day) || '';
+    // schedule_day holds a comma-joined list ("mon,wed") — older rows with a
+    // single day parse the same way.
+    const scheduleDays = ((data && data.schedule_day) || '').split(',').filter(Boolean);
+    profileScheduleDays.querySelectorAll('.day-pill').forEach((pill) => {
+      pill.classList.toggle('is-on', scheduleDays.includes(pill.dataset.day));
+    });
     profileScheduleTime.value = (data && data.schedule_time) || '';
     profileScheduleDuration.value = data && data.schedule_duration_minutes ? String(data.schedule_duration_minutes) : '45';
     profileWeeklyTarget.value = (data && data.weekly_target_lessons) || 3;
@@ -3147,7 +3276,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         class_name: profileClass.value.trim(),
         country: profileCountry.value.trim(),
         language: profileLanguage.value.trim(),
-        schedule_day: profileScheduleDay.value,
+        schedule_day: Array.from(profileScheduleDays.querySelectorAll('.day-pill.is-on')).map((p) => p.dataset.day).join(','),
         schedule_time: profileScheduleTime.value || null,
         schedule_duration_minutes: Number(profileScheduleDuration.value),
         weekly_target_lessons: Math.max(1, Number(profileWeeklyTarget.value) || 3),

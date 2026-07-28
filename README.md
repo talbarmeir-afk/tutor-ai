@@ -147,7 +147,18 @@ same as before tabs existed. Each tab's data loads lazily the first time
 it's opened (`window.mathTutorProfile.loadDashboard/loadProfile/loadSettings`),
 not eagerly on sign-in.
 
-- **Home** is unchanged — the Start Lesson flow and the History button.
+- **Home** splits into two subtabs once signed in: **Start Lesson** (the
+  lesson flow, plus a live "This lesson so far" log of the current
+  lesson's checks) and **Past Lessons** (the full history, inline — the
+  old modal is gone). A lesson's header row shows its date, duration
+  (real when it ended cleanly, "in progress" for the active one, an
+  estimate when the tab was closed mid-lesson), and its type: "Homework",
+  or "New topic: …" listing the subjects taught via Teach me during that
+  lesson. Migration for the type column:
+
+  ```sql
+  alter table lessons add column if not exists taught_subjects text;
+  ```
 - **Dashboard** shows lessons-this-week vs. a weekly target, a streak (
   consecutive weeks meeting that target — a week still in progress doesn't
   break the streak, only a completed week that fell short does), an 8-week
@@ -158,10 +169,12 @@ not eagerly on sign-in.
   `masteryFor()`. This is a heuristic, not a real assessment model; there's
   no other signal available from check history to base it on.
 - **Profile** holds student info (name, school, class, country, language),
-  a weekly AI-lesson schedule (day/time/duration — **stored only**, nothing
-  sends reminders or auto-starts a lesson from it, since there's no
-  notification infrastructure), and a simple add/delete list of tests
-  (subject, date, optional score).
+  a weekly AI-lesson schedule (days/time/duration — multiple days can be
+  picked; they're stored comma-joined in the existing `schedule_day` text
+  column, so no migration needed. **Stored only**: nothing sends reminders
+  or auto-starts a lesson from it, since there's no notification
+  infrastructure), and a simple add/delete list of tests (subject, date,
+  optional score).
 - **Settings** has account (email, password change via
   `supabaseClient.auth.updateUser`), and placeholder Billing/Integrations
   sections — no real payment processing or third-party connections exist
