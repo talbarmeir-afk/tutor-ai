@@ -1550,7 +1550,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   function computeLocation(parsed){
     const x = clamp(numOr(parsed.x, 50), 4, 96);
     const y = clamp(numOr(parsed.y, 50), 4, 96);
-    return { x, y };
+    const b = parsed.line_box;
+    const box = (b && [b.x0, b.x1, b.y0, b.y1].every((v) => Number.isFinite(v))) ? b : null;
+    return { x, y, box };
   }
 
   function resizeImage(file, maxDim){
@@ -1699,9 +1701,25 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const data = await response.json();
       if (!response.ok) return parsed;
       const loc = parseModelJson(data.text);
-      if (loc && loc.found && Number.isFinite(Number(loc.x)) && Number.isFinite(Number(loc.y))){
-        parsed.x = Number(loc.x);
-        parsed.y = Number(loc.y);
+      if (loc && loc.found){
+        const x0 = Number(loc.line_x_min), x1 = Number(loc.line_x_max);
+        const y0 = Number(loc.line_y_min), y1 = Number(loc.line_y_max);
+        const boxOk = [x0, x1, y0, y1].every(Number.isFinite)
+          && (x1 - x0) > 2 && (x1 - x0) < 95
+          && (y1 - y0) > 1 && (y1 - y0) < 40;
+        if (boxOk) parsed.line_box = { x0, x1, y0, y1 };
+        let tx = Number(loc.token_x), ty = Number(loc.token_y);
+        if (Number.isFinite(tx) && Number.isFinite(ty)){
+          if (boxOk){
+            tx = Math.max(x0, Math.min(x1, tx));
+            ty = Math.max(y0, Math.min(y1, ty));
+          }
+          parsed.x = tx;
+          parsed.y = ty;
+        } else if (boxOk){
+          parsed.x = (x0 + x1) / 2;
+          parsed.y = (y0 + y1) / 2;
+        }
       }
     } catch(err){ /* keep first-pass location */ }
     return parsed;
@@ -1920,9 +1938,22 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const midY = (ly + y) / 2;
     const color = isMistake ? 'var(--pen-red)' : 'var(--chalk-green)';
 
-    const mark = isMistake
-      ? `<ellipse cx="${x}" cy="${y}" rx="3.6" ry="2.6" fill="none" stroke="${color}" stroke-width="0.6" stroke-dasharray="2 1.6"/>`
-      : `<path d="M ${x-2.4} ${y} L ${x-0.6} ${y+1.9} L ${x+2.8} ${y-2.3}" fill="none" stroke="${color}" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+    // When the locate pass returned the mistake line's bounding box, circle
+    // the WHOLE line (like a teacher circling the bad step) — a big target
+    // that soaks up token-level placement error. The point-sized ellipse is
+    // only the fallback when no box is available.
+    let mark;
+    if (isMistake && loc.box){
+      const bcx = clamp((loc.box.x0 + loc.box.x1) / 2, 4, 96);
+      const bcy = clamp((loc.box.y0 + loc.box.y1) / 2, 4, 96);
+      const brx = Math.min(46, Math.max(4, (loc.box.x1 - loc.box.x0) / 2 + 2.5));
+      const bry = Math.min(20, Math.max(2.5, (loc.box.y1 - loc.box.y0) / 2 + 1.8));
+      mark = `<ellipse cx="${bcx}" cy="${bcy}" rx="${brx}" ry="${bry}" fill="none" stroke="${color}" stroke-width="0.6" stroke-dasharray="2 1.6"/>`;
+    } else if (isMistake){
+      mark = `<ellipse cx="${x}" cy="${y}" rx="3.6" ry="2.6" fill="none" stroke="${color}" stroke-width="0.6" stroke-dasharray="2 1.6"/>`;
+    } else {
+      mark = `<path d="M ${x-2.4} ${y} L ${x-0.6} ${y+1.9} L ${x+2.8} ${y-2.3}" fill="none" stroke="${color}" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
 
     annGroup.innerHTML = `
       <path d="M ${lx} ${ly} Q ${midX} ${midY} ${x} ${y}" fill="none" stroke="${color}" stroke-width="0.6" stroke-linecap="round" marker-end="url(#arrow)"/>
