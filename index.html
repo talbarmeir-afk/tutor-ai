@@ -951,6 +951,7 @@
     </div>
 
     <div id="actionsRow" class="actions hidden">
+      <button class="ghost-btn" id="hintBtn" type="button">Give me a hint</button>
       <button class="primary-btn" id="checkBtn" type="button">Check my work</button>
     </div>
 
@@ -1176,6 +1177,7 @@
   const changeBtn = document.getElementById('changeBtn');
   const actionsRow = document.getElementById('actionsRow');
   const checkBtn = document.getElementById('checkBtn');
+  const hintBtn = document.getElementById('hintBtn');
   const statusRow = document.getElementById('statusRow');
   const statusText = document.getElementById('statusText');
   const resultPaper = document.getElementById('resultPaper');
@@ -2032,6 +2034,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
     verdict.classList.toggle('is-ok', !parsed.has_mistake);
     animateMascot(!parsed.has_mistake);
+    verdictHeading.style.color = '';
     verdictHeading.textContent = parsed.has_mistake ? "Here's where it breaks" : "Looks solid";
     verdictQuote.textContent = parsed.line_quote ? `"${parsed.line_quote}"` : '';
     verdictQuote.style.display = parsed.line_quote ? '' : 'none';
@@ -2105,6 +2108,67 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       statusRow.classList.add('hidden');
     }
   }
+
+  // "Give me a hint": reads the work in progress and nudges toward the
+  // next step without revealing it — shown in the same teacher bubble on
+  // the photo, but with no red mark since nothing is being flagged.
+  function renderHint(hint){
+    resultImg.onload = null;
+    resultImg.src = imageData.dataUrl;
+    annGroup.innerHTML = '';
+    ringMascot.classList.remove('is-ok', 'is-mistake', 'is-celebrating', 'is-talking');
+    requestAnimationFrame(() => ringMascot.classList.add('is-talking'));
+    setTimeout(() => ringMascot.classList.remove('is-talking'), 2200);
+    verdict.classList.remove('is-ok');
+    verdictHeading.textContent = 'Here’s a hint';
+    verdictHeading.style.color = '#181816';
+    verdictQuote.style.display = 'none';
+    verdictExplanation.textContent = hint;
+    verdictFix.style.display = 'none';
+    teacherBar.classList.remove('is-below');
+    teacherBar.classList.add('is-above');
+    teacherBar.style.top = 'auto';
+    teacherBar.style.bottom = '5%';
+    teacherBar.style.left = '6%';
+    watchResumeRow.classList.add('hidden');
+    resultPaper.classList.remove('hidden');
+    conversation = [
+      { role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageData.base64 } },
+        { type: 'text', text: 'Give me a hint for the next step of this handwritten work, without revealing the answer.' }
+      ]},
+      { role: 'assistant', content: hint }
+    ];
+    qaThread.innerHTML = '';
+    qaSection.classList.add('hidden');
+  }
+
+  async function runHint(){
+    if (!imageData) return;
+    hideError(); hideResults();
+    hintBtn.disabled = true;
+    checkBtn.disabled = true;
+    statusRow.classList.remove('hidden');
+    statusText.textContent = 'Reading your work so far and thinking of a good hint…';
+    try{
+      const response = await fetch('/api/hint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64: imageData.base64, mediaType: 'image/jpeg' })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      renderHint((data.hint || '').trim());
+    } catch(err){
+      const detail = err && err.message ? ` (${err.message})` : '';
+      showError("Couldn't come up with a hint just now — try again in a moment." + detail);
+    } finally {
+      hintBtn.disabled = false;
+      checkBtn.disabled = false;
+      statusRow.classList.add('hidden');
+    }
+  }
+  hintBtn.addEventListener('click', runHint);
 
   checkBtn.addEventListener('click', runCheck);
   retryBtn.addEventListener('click', runCheck);

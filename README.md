@@ -14,8 +14,15 @@ explains what went wrong, and answers follow-up questions.
   frontend code works on either platform unchanged
 
 The API key never reaches the browser — the frontend calls `/api/analyze`,
-`/api/ask`, `/api/watch`, and `/api/teach` on your own domain, and those
-functions call Anthropic server-side using an environment variable.
+`/api/ask`, `/api/watch`, `/api/teach`, and `/api/hint` on your own domain,
+and those functions call Anthropic server-side using an environment
+variable.
+
+`/api/hint` powers the "Give me a hint" button next to "Check my work":
+it reads the uploaded work-in-progress and nudges the student toward the
+next step — naming the operation or idea, or pointing them back at a step
+worth re-checking — without ever revealing the corrected line or the final
+answer.
 
 `/api/teach` powers the "Teach me & train on a subject" option in the
 dropdown next to "Check my scribbled work": the student types a math topic
