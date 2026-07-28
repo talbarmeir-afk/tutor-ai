@@ -142,6 +142,7 @@
   .dropzone-sample .work-line{ fill:currentColor; }
   .dropzone-sample .mark{ fill:none; stroke:var(--pen-red); stroke-width:3; }
   .dropzone-sample .tri-outline{ fill:none; stroke:currentColor; stroke-width:3; }
+  .dropzone-sample .tri-right-angle{ fill:none; stroke:currentColor; stroke-width:2; }
   /* Reduced-motion baseline: scene A (the equation) shown fully drawn and
      static; scene B (the triangle) stays hidden entirely — the animation
      below is what alternates between the two when motion is allowed. */
@@ -151,12 +152,13 @@
   .dropzone-sample .reveal-rect.r4{ width:220px; }
   .dropzone-sample .reveal-rect.r5{ width:120px; }
   .dropzone-sample .mark:not(.tri-mark){ stroke-dasharray:260; stroke-dashoffset:0; }
-  .dropzone-sample .tri-outline{ stroke-dasharray:500; stroke-dashoffset:500; }
+  .dropzone-sample .tri-outline{ stroke-dasharray:380; stroke-dashoffset:380; }
   .dropzone-sample .tri-fade{ opacity:0; }
-  .dropzone-sample .mark.tri-mark{ stroke-dasharray:150; stroke-dashoffset:150; }
+  .dropzone-sample .mark.tri-mark{ stroke-dasharray:260; stroke-dashoffset:260; }
   @media (prefers-reduced-motion: no-preference){
-    /* One 24s cycle, two scenes back to back: equation 0–41%, a pause,
-       then the triangle 50–93%, then a pause before it loops. */
+    /* One 24s cycle, two scenes back to back: equation 0–41%, a pause, then
+       the triangle + Pythagorean calculation 50–92%, then a pause before it
+       loops. */
     .dropzone-sample .reveal-rect.r1{ animation:sampleReveal1 24s linear infinite; }
     .dropzone-sample .reveal-rect.r2{ animation:sampleReveal2 24s linear infinite; }
     .dropzone-sample .reveal-rect.r3{ animation:sampleReveal3 24s linear infinite; }
@@ -164,10 +166,14 @@
     .dropzone-sample .reveal-rect.r5{ animation:sampleReveal5 24s linear infinite; }
     .dropzone-sample .mark:not(.tri-mark){ animation:sampleDrawMark 24s linear infinite; }
     .dropzone-sample .tri-outline{ animation:triDraw 24s linear infinite; }
-    .dropzone-sample .tri-4{ animation:triLabel4 24s linear infinite; }
-    .dropzone-sample .tri-3{ animation:triLabel3 24s linear infinite; }
-    .dropzone-sample .tri-q{ animation:triLabelQ 24s linear infinite; }
-    .dropzone-sample .tri-5{ animation:triLabelAnswer 24s linear infinite; }
+    .dropzone-sample .tri-right-angle,
+    .dropzone-sample .tri-4,
+    .dropzone-sample .tri-3,
+    .dropzone-sample .tri-x{ animation:triLabelFade 24s linear infinite; }
+    .dropzone-sample .reveal-rect.r6{ animation:sampleReveal6 24s linear infinite; }
+    .dropzone-sample .reveal-rect.r7{ animation:sampleReveal7 24s linear infinite; }
+    .dropzone-sample .reveal-rect.r8{ animation:sampleReveal8 24s linear infinite; }
+    .dropzone-sample .reveal-rect.r9{ animation:sampleReveal9 24s linear infinite; }
     .dropzone-sample .mark.tri-mark{ animation:triMarkDraw 24s linear infinite; }
   }
   @keyframes sampleReveal1{
@@ -201,34 +207,39 @@
     41%, 100%{ stroke-dashoffset:260; }
   }
   @keyframes triDraw{
-    0%, 50%{ stroke-dashoffset:500; }
-    58%, 92%{ stroke-dashoffset:0; }
-    93%, 100%{ stroke-dashoffset:500; }
+    0%, 58%{ stroke-dashoffset:380; }
+    66%, 90%{ stroke-dashoffset:0; }
+    92%, 100%{ stroke-dashoffset:380; }
   }
-  @keyframes triLabel4{
-    0%, 58%{ opacity:0; }
-    62%, 92%{ opacity:1; }
-    93%, 100%{ opacity:0; }
-  }
-  @keyframes triLabel3{
-    0%, 62%{ opacity:0; }
-    66%, 92%{ opacity:1; }
-    93%, 100%{ opacity:0; }
-  }
-  @keyframes triLabelQ{
+  @keyframes triLabelFade{
     0%, 66%{ opacity:0; }
-    70%, 79%{ opacity:1; }
-    80%, 100%{ opacity:0; }
+    69%, 90%{ opacity:1; }
+    92%, 100%{ opacity:0; }
   }
-  @keyframes triLabelAnswer{
-    0%, 80%{ opacity:0; }
-    84%, 92%{ opacity:1; }
-    93%, 100%{ opacity:0; }
+  @keyframes sampleReveal6{
+    0%, 68%{ width:0; }
+    72%, 90%{ width:220px; }
+    92%, 100%{ width:0; }
+  }
+  @keyframes sampleReveal7{
+    0%, 72%{ width:0; }
+    76%, 90%{ width:200px; }
+    92%, 100%{ width:0; }
+  }
+  @keyframes sampleReveal8{
+    0%, 76%{ width:0; }
+    80%, 90%{ width:130px; }
+    92%, 100%{ width:0; }
+  }
+  @keyframes sampleReveal9{
+    0%, 80%{ width:0; }
+    84%, 90%{ width:95px; }
+    92%, 100%{ width:0; }
   }
   @keyframes triMarkDraw{
-    0%, 84%{ stroke-dashoffset:150; }
+    0%, 84%{ stroke-dashoffset:260; }
     90%, 92%{ stroke-dashoffset:0; }
-    93%, 100%{ stroke-dashoffset:150; }
+    92%, 100%{ stroke-dashoffset:260; }
   }
   input[type=file]{ display:none; }
 
@@ -628,6 +639,10 @@
             <clipPath id="sampleClip3"><rect class="reveal-rect r3" x="34" y="74" height="42"/></clipPath>
             <clipPath id="sampleClip4"><rect class="reveal-rect r4" x="42" y="112" height="42"/></clipPath>
             <clipPath id="sampleClip5"><rect class="reveal-rect r5" x="36" y="150" height="42"/></clipPath>
+            <clipPath id="sampleClip6"><rect class="reveal-rect r6" x="227" y="-2" height="42"/></clipPath>
+            <clipPath id="sampleClip7"><rect class="reveal-rect r7" x="233" y="36" height="42"/></clipPath>
+            <clipPath id="sampleClip8"><rect class="reveal-rect r8" x="229" y="74" height="42"/></clipPath>
+            <clipPath id="sampleClip9"><rect class="reveal-rect r9" x="231" y="112" height="42"/></clipPath>
           </defs>
           <text class="work-line" clip-path="url(#sampleClip1)" x="40" y="28" font-size="27" transform="rotate(-2 40 28)">2x + 5 = 15</text>
           <text class="work-line" clip-path="url(#sampleClip2)" x="48" y="66" font-size="27" transform="rotate(1.5 48 66)">2x = 15 - 5</text>
@@ -636,14 +651,20 @@
           <text class="work-line" clip-path="url(#sampleClip5)" x="44" y="180" font-size="27" transform="rotate(-2 44 180)">x = 5</text>
           <ellipse class="mark" cx="82" cy="171" rx="50" ry="22" transform="rotate(-6 82 171)"/>
 
-          <!-- Scene B: a 3-4-5 right triangle, shown after the equation above
-               finishes — proves geometry sketches work too, not just algebra. -->
-          <path class="tri-outline" d="M80,175 L240,175 L80,55 Z"/>
-          <text class="work-line tri-fade tri-4" x="150" y="195" font-size="26">4</text>
-          <text class="work-line tri-fade tri-3" x="42" y="120" font-size="26">3</text>
-          <text class="work-line tri-fade tri-q" x="168" y="100" font-size="28">?</text>
-          <text class="work-line tri-fade tri-5" x="168" y="100" font-size="28">5</text>
-          <ellipse class="mark tri-mark" cx="178" cy="92" rx="24" ry="18" transform="rotate(-6 178 92)"/>
+          <!-- Scene B: a 3-4-5 right triangle with side lengths and a
+               right-angle mark, plus the written Pythagorean calculation
+               solving for the hypotenuse — shown after the equation above
+               finishes, proving geometry sketches work too, not just algebra. -->
+          <path class="tri-outline" d="M60,175 L180,175 L60,85 Z"/>
+          <path class="tri-fade tri-right-angle" d="M60,161 L74,161 L74,175"/>
+          <text class="work-line tri-fade tri-4" x="95" y="195" font-size="22">4 cm</text>
+          <text class="work-line tri-fade tri-3" x="10" y="134" font-size="22">3 cm</text>
+          <text class="work-line tri-fade tri-x" x="122" y="118" font-size="22" transform="rotate(-3 122 118)">x</text>
+          <text class="work-line" clip-path="url(#sampleClip6)" x="235" y="28" font-size="24" transform="rotate(-2 235 28)">3&#178; + 4&#178; = x&#178;</text>
+          <text class="work-line" clip-path="url(#sampleClip7)" x="241" y="66" font-size="24" transform="rotate(1.5 241 66)">9 + 16 = x&#178;</text>
+          <text class="work-line" clip-path="url(#sampleClip8)" x="237" y="104" font-size="24" transform="rotate(-2 237 104)">25 = x&#178;</text>
+          <text class="work-line" clip-path="url(#sampleClip9)" x="239" y="142" font-size="24" transform="rotate(1.5 239 142)">x = 5</text>
+          <ellipse class="mark tri-mark" cx="264" cy="133" rx="52" ry="20" transform="rotate(-6 264 133)"/>
         </svg>
       </div>
       <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--chalk-muted)">
