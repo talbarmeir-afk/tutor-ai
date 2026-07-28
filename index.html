@@ -1879,7 +1879,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     hideError(); hideResults();
     checkBtn.disabled = true;
     statusRow.classList.remove('hidden');
-    statusText.textContent = 'Reading your steps…';
+    statusText.textContent = 'Reading your steps and double-checking every line — this can take up to half a minute…';
 
     try{
       const response = await fetch('/api/analyze', {
@@ -1893,7 +1893,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       renderResult(parsed);
       if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId);
     } catch(err){
-      showError("Something went wrong reading that photo. Try a clearer, well-lit photo, or check your connection, then try again.");
+      // Keep the friendly copy but surface the underlying error too —
+      // "couldn't read that photo" once hid a plain server timeout.
+      const detail = err && err.message ? ` (${err.message})` : '';
+      showError("Something went wrong reading that photo. Try a clearer, well-lit photo, or check your connection, then try again." + detail);
     } finally {
       checkBtn.disabled = false;
       statusRow.classList.add('hidden');
