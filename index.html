@@ -140,7 +140,7 @@
   }
   .dropzone-sample text{ font-family:'Kalam', cursive; }
   .dropzone-sample .work-line{ fill:currentColor; }
-  .dropzone-sample .mark{ fill:none; stroke:var(--chalk-green); stroke-width:3; }
+  .dropzone-sample .mark{ fill:none; stroke:var(--chalk-green); stroke-width:4; stroke-linecap:round; stroke-linejoin:round; }
   .dropzone-sample .mistake-mark{ fill:none; stroke:var(--pen-red); stroke-width:3; }
   .dropzone-sample .wrong-token{ fill:var(--pen-red); }
   .dropzone-sample .mistake-note{ fill:var(--pen-red); font-family:'Kalam', cursive; }
@@ -157,12 +157,12 @@
   .dropzone-sample .reveal-rect.r4{ width:220px; }
   .dropzone-sample .reveal-rect.r5{ width:120px; }
   .dropzone-sample .reveal-rect.r9w{ width:0; }
-  .dropzone-sample .mark:not(.tri-mark){ stroke-dasharray:260; stroke-dashoffset:0; }
+  .dropzone-sample .mark:not(.tri-mark){ stroke-dasharray:40; stroke-dashoffset:0; }
   .dropzone-sample .mistake-mark{ stroke-dasharray:180; stroke-dashoffset:180; }
   .dropzone-sample .mistake-note{ opacity:0; }
   .dropzone-sample .tri-outline{ stroke-dasharray:380; stroke-dashoffset:380; }
   .dropzone-sample .tri-fade{ opacity:0; }
-  .dropzone-sample .mark.tri-mark{ stroke-dasharray:260; stroke-dashoffset:260; }
+  .dropzone-sample .mark.tri-mark{ stroke-dasharray:40; stroke-dashoffset:40; }
   @media (prefers-reduced-motion: no-preference){
     /* One ~30.5s cycle: scene A writes a first (wrong) step, marks it in
        red with an explanation, fixes it, and finishes solving 0–47%; a
@@ -234,9 +234,9 @@
     46.9%, 100%{ width:0; }
   }
   @keyframes sampleDrawMark{
-    0%, 38.0%{ stroke-dashoffset:260; }
+    0%, 38.0%{ stroke-dashoffset:40; }
     40.3%, 45.2%{ stroke-dashoffset:0; }
-    46.9%, 100%{ stroke-dashoffset:260; }
+    46.9%, 100%{ stroke-dashoffset:40; }
   }
   @keyframes triDraw{
     0%, 53.8%{ stroke-dashoffset:380; }
@@ -265,7 +265,7 @@
   }
   @keyframes reveal9w{
     0%, 67.9%{ width:0; }
-    70.5%, 81.6%{ width:85px; }
+    70.5%, 81.6%{ width:100px; }
     82.6%, 100%{ width:0; }
   }
   @keyframes mistakeMarkDraw2{
@@ -284,9 +284,9 @@
     94.1%, 100%{ width:0; }
   }
   @keyframes triMarkDraw{
-    0%, 85.2%{ stroke-dashoffset:260; }
+    0%, 85.2%{ stroke-dashoffset:40; }
     87.5%, 92.5%{ stroke-dashoffset:0; }
-    94.1%, 100%{ stroke-dashoffset:260; }
+    94.1%, 100%{ stroke-dashoffset:40; }
   }
   input[type=file]{ display:none; }
 
@@ -707,7 +707,7 @@
           <text class="work-line" clip-path="url(#sampleClip3)" x="42" y="104" font-size="27" transform="rotate(-2 42 104)">2x = 10</text>
           <text class="work-line" clip-path="url(#sampleClip4)" x="50" y="142" font-size="27" transform="rotate(1.5 50 142)">x = 10 / 2</text>
           <text class="work-line" clip-path="url(#sampleClip5)" x="44" y="180" font-size="27" transform="rotate(-2 44 180)">x = 5</text>
-          <ellipse class="mark" cx="82" cy="171" rx="50" ry="22" transform="rotate(-6 82 171)"/>
+          <path class="mark" d="M0,10 L8,18 L26,0" transform="translate(118,164)"/>
 
           <!-- Scene B: a 3-4-5 right triangle with side lengths and a
                right-angle mark, plus the written Pythagorean calculation
@@ -731,7 +731,7 @@
           <text class="mistake-note tri-mistake-note" x="235" y="204" font-size="19">square root: &#8730;25 = 5, not &#247;2</text>
 
           <text class="work-line" clip-path="url(#sampleClip9)" x="239" y="142" font-size="24" transform="rotate(1.5 239 142)">x = 5</text>
-          <ellipse class="mark tri-mark" cx="264" cy="133" rx="52" ry="20" transform="rotate(-6 264 133)"/>
+          <path class="mark tri-mark" d="M0,10 L8,18 L26,0" transform="translate(306,127)"/>
         </svg>
       </div>
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="color:var(--chalk-muted)">
