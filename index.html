@@ -140,106 +140,132 @@
   }
   .dropzone-sample text{ font-family:'Kalam', cursive; }
   .dropzone-sample .work-line{ fill:currentColor; }
-  .dropzone-sample .mark{ fill:none; stroke:var(--pen-red); stroke-width:3; }
+  .dropzone-sample .mark{ fill:none; stroke:var(--chalk-green); stroke-width:3; }
+  .dropzone-sample .mistake-mark{ fill:none; stroke:var(--pen-red); stroke-width:3; }
+  .dropzone-sample .wrong-token{ fill:var(--pen-red); }
+  .dropzone-sample .mistake-note{ fill:var(--pen-red); font-family:'Kalam', cursive; }
   .dropzone-sample .tri-outline{ fill:none; stroke:currentColor; stroke-width:3; }
   .dropzone-sample .tri-right-angle{ fill:none; stroke:currentColor; stroke-width:2; }
   /* Reduced-motion baseline: scene A (the equation) shown fully drawn and
-     static; scene B (the triangle) stays hidden entirely — the animation
-     below is what alternates between the two when motion is allowed. */
+     static, already correct — the mistake-and-fix beat and scene B (the
+     triangle) both stay hidden entirely; the animation below is what plays
+     the mistake, the fix, and the triangle scene when motion is allowed. */
   .dropzone-sample .reveal-rect.r1{ width:250px; }
   .dropzone-sample .reveal-rect.r2{ width:250px; }
+  .dropzone-sample .reveal-rect.r2w{ width:0; }
   .dropzone-sample .reveal-rect.r3{ width:170px; }
   .dropzone-sample .reveal-rect.r4{ width:220px; }
   .dropzone-sample .reveal-rect.r5{ width:120px; }
   .dropzone-sample .mark:not(.tri-mark){ stroke-dasharray:260; stroke-dashoffset:0; }
+  .dropzone-sample .mistake-mark{ stroke-dasharray:180; stroke-dashoffset:180; }
+  .dropzone-sample .mistake-note{ opacity:0; }
   .dropzone-sample .tri-outline{ stroke-dasharray:380; stroke-dashoffset:380; }
   .dropzone-sample .tri-fade{ opacity:0; }
   .dropzone-sample .mark.tri-mark{ stroke-dasharray:260; stroke-dashoffset:260; }
   @media (prefers-reduced-motion: no-preference){
-    /* One 24s cycle, two scenes back to back: equation 0–41%, a pause, then
-       the triangle + Pythagorean calculation 50–92%, then a pause before it
-       loops. */
-    .dropzone-sample .reveal-rect.r1{ animation:sampleReveal1 24s linear infinite; }
-    .dropzone-sample .reveal-rect.r2{ animation:sampleReveal2 24s linear infinite; }
-    .dropzone-sample .reveal-rect.r3{ animation:sampleReveal3 24s linear infinite; }
-    .dropzone-sample .reveal-rect.r4{ animation:sampleReveal4 24s linear infinite; }
-    .dropzone-sample .reveal-rect.r5{ animation:sampleReveal5 24s linear infinite; }
-    .dropzone-sample .mark:not(.tri-mark){ animation:sampleDrawMark 24s linear infinite; }
-    .dropzone-sample .tri-outline{ animation:triDraw 24s linear infinite; }
+    /* One ~26.4s cycle: scene A writes a first (wrong) step, marks it in
+       red with a short explanation, fixes it, and finishes solving 0–54%;
+       a pause; then the triangle + Pythagorean calculation 62–93%; then a
+       pause before it loops. */
+    .dropzone-sample .reveal-rect.r1{ animation:sampleReveal1 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r2w{ animation:reveal2w 26.4s linear infinite; }
+    .dropzone-sample .mistake-mark{ animation:mistakeMarkDraw 26.4s linear infinite; }
+    .dropzone-sample .mistake-note{ animation:mistakeNoteFade 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r2{ animation:sampleReveal2 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r3{ animation:sampleReveal3 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r4{ animation:sampleReveal4 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r5{ animation:sampleReveal5 26.4s linear infinite; }
+    .dropzone-sample .mark:not(.tri-mark){ animation:sampleDrawMark 26.4s linear infinite; }
+    .dropzone-sample .tri-outline{ animation:triDraw 26.4s linear infinite; }
     .dropzone-sample .tri-right-angle,
     .dropzone-sample .tri-4,
     .dropzone-sample .tri-3,
-    .dropzone-sample .tri-x{ animation:triLabelFade 24s linear infinite; }
-    .dropzone-sample .reveal-rect.r6{ animation:sampleReveal6 24s linear infinite; }
-    .dropzone-sample .reveal-rect.r7{ animation:sampleReveal7 24s linear infinite; }
-    .dropzone-sample .reveal-rect.r8{ animation:sampleReveal8 24s linear infinite; }
-    .dropzone-sample .reveal-rect.r9{ animation:sampleReveal9 24s linear infinite; }
-    .dropzone-sample .mark.tri-mark{ animation:triMarkDraw 24s linear infinite; }
+    .dropzone-sample .tri-x{ animation:triLabelFade 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r6{ animation:sampleReveal6 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r7{ animation:sampleReveal7 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r8{ animation:sampleReveal8 26.4s linear infinite; }
+    .dropzone-sample .reveal-rect.r9{ animation:sampleReveal9 26.4s linear infinite; }
+    .dropzone-sample .mark.tri-mark{ animation:triMarkDraw 26.4s linear infinite; }
   }
   @keyframes sampleReveal1{
-    0%, 1%{ width:0; }
-    7%, 40%{ width:250px; }
-    41%, 100%{ width:0; }
+    0%, 2%{ width:0; }
+    6%, 52%{ width:250px; }
+    54%, 100%{ width:0; }
+  }
+  @keyframes reveal2w{
+    0%, 6%{ width:0; }
+    10%, 25%{ width:250px; }
+    27%, 100%{ width:0; }
+  }
+  @keyframes mistakeMarkDraw{
+    0%, 10%{ stroke-dashoffset:180; }
+    12%, 25%{ stroke-dashoffset:0; }
+    27%, 100%{ stroke-dashoffset:180; }
+  }
+  @keyframes mistakeNoteFade{
+    0%, 13%{ opacity:0; }
+    15%, 25%{ opacity:1; }
+    27%, 100%{ opacity:0; }
   }
   @keyframes sampleReveal2{
-    0%, 7%{ width:0; }
-    13%, 40%{ width:250px; }
-    41%, 100%{ width:0; }
+    0%, 27%{ width:0; }
+    31%, 52%{ width:250px; }
+    54%, 100%{ width:0; }
   }
   @keyframes sampleReveal3{
-    0%, 13%{ width:0; }
-    19%, 40%{ width:170px; }
-    41%, 100%{ width:0; }
+    0%, 31%{ width:0; }
+    35%, 52%{ width:170px; }
+    54%, 100%{ width:0; }
   }
   @keyframes sampleReveal4{
-    0%, 19%{ width:0; }
-    25%, 40%{ width:220px; }
-    41%, 100%{ width:0; }
+    0%, 35%{ width:0; }
+    39%, 52%{ width:220px; }
+    54%, 100%{ width:0; }
   }
   @keyframes sampleReveal5{
-    0%, 25%{ width:0; }
-    31%, 40%{ width:120px; }
-    41%, 100%{ width:0; }
+    0%, 39%{ width:0; }
+    43%, 52%{ width:120px; }
+    54%, 100%{ width:0; }
   }
   @keyframes sampleDrawMark{
-    0%, 31%{ stroke-dashoffset:260; }
-    38%, 40%{ stroke-dashoffset:0; }
-    41%, 100%{ stroke-dashoffset:260; }
+    0%, 43%{ stroke-dashoffset:260; }
+    46%, 52%{ stroke-dashoffset:0; }
+    54%, 100%{ stroke-dashoffset:260; }
   }
   @keyframes triDraw{
-    0%, 58%{ stroke-dashoffset:380; }
-    66%, 90%{ stroke-dashoffset:0; }
-    92%, 100%{ stroke-dashoffset:380; }
+    0%, 62%{ stroke-dashoffset:380; }
+    68%, 90%{ stroke-dashoffset:0; }
+    93%, 100%{ stroke-dashoffset:380; }
   }
   @keyframes triLabelFade{
-    0%, 66%{ opacity:0; }
-    69%, 90%{ opacity:1; }
-    92%, 100%{ opacity:0; }
+    0%, 68%{ opacity:0; }
+    70%, 90%{ opacity:1; }
+    93%, 100%{ opacity:0; }
   }
   @keyframes sampleReveal6{
-    0%, 68%{ width:0; }
-    72%, 90%{ width:220px; }
-    92%, 100%{ width:0; }
+    0%, 70%{ width:0; }
+    74%, 90%{ width:220px; }
+    93%, 100%{ width:0; }
   }
   @keyframes sampleReveal7{
-    0%, 72%{ width:0; }
-    76%, 90%{ width:200px; }
-    92%, 100%{ width:0; }
+    0%, 74%{ width:0; }
+    78%, 90%{ width:200px; }
+    93%, 100%{ width:0; }
   }
   @keyframes sampleReveal8{
-    0%, 76%{ width:0; }
-    80%, 90%{ width:130px; }
-    92%, 100%{ width:0; }
+    0%, 78%{ width:0; }
+    82%, 90%{ width:130px; }
+    93%, 100%{ width:0; }
   }
   @keyframes sampleReveal9{
-    0%, 80%{ width:0; }
-    84%, 90%{ width:95px; }
-    92%, 100%{ width:0; }
+    0%, 82%{ width:0; }
+    86%, 90%{ width:95px; }
+    93%, 100%{ width:0; }
   }
   @keyframes triMarkDraw{
-    0%, 84%{ stroke-dashoffset:260; }
-    90%, 92%{ stroke-dashoffset:0; }
-    92%, 100%{ stroke-dashoffset:260; }
+    0%, 86%{ stroke-dashoffset:260; }
+    90%, 93%{ stroke-dashoffset:0; }
+    93%, 100%{ stroke-dashoffset:260; }
   }
   input[type=file]{ display:none; }
 
@@ -635,6 +661,7 @@
         <svg class="dropzone-sample" viewBox="0 0 480 300" preserveAspectRatio="xMidYMid meet" aria-hidden="true" focusable="false">
           <defs>
             <clipPath id="sampleClip1"><rect class="reveal-rect r1" x="32" y="-2" height="42"/></clipPath>
+            <clipPath id="sampleClip2w"><rect class="reveal-rect r2w" x="40" y="36" height="42"/></clipPath>
             <clipPath id="sampleClip2"><rect class="reveal-rect r2" x="40" y="36" height="42"/></clipPath>
             <clipPath id="sampleClip3"><rect class="reveal-rect r3" x="34" y="74" height="42"/></clipPath>
             <clipPath id="sampleClip4"><rect class="reveal-rect r4" x="42" y="112" height="42"/></clipPath>
@@ -645,6 +672,14 @@
             <clipPath id="sampleClip9"><rect class="reveal-rect r9" x="231" y="112" height="42"/></clipPath>
           </defs>
           <text class="work-line" clip-path="url(#sampleClip1)" x="40" y="28" font-size="27" transform="rotate(-2 40 28)">2x + 5 = 15</text>
+
+          <!-- Mistake beat: the student first writes the sign wrong, gets
+               marked in red with a short explanation, then fixes it — a
+               small demo of the actual mistake-finding feature. -->
+          <text class="work-line" clip-path="url(#sampleClip2w)" x="48" y="66" font-size="27" transform="rotate(1.5 48 66)">2x = 15 <tspan class="wrong-token">+ 5</tspan></text>
+          <ellipse class="mistake-mark" cx="262" cy="57" rx="36" ry="15" transform="rotate(-4 262 57)"/>
+          <text class="mistake-note" x="42" y="104" font-size="19">Subtract, not add</text>
+
           <text class="work-line" clip-path="url(#sampleClip2)" x="48" y="66" font-size="27" transform="rotate(1.5 48 66)">2x = 15 - 5</text>
           <text class="work-line" clip-path="url(#sampleClip3)" x="42" y="104" font-size="27" transform="rotate(-2 42 104)">2x = 10</text>
           <text class="work-line" clip-path="url(#sampleClip4)" x="50" y="142" font-size="27" transform="rotate(1.5 50 142)">x = 10 / 2</text>
