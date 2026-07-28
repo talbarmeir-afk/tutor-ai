@@ -14,8 +14,14 @@ explains what went wrong, and answers follow-up questions.
   frontend code works on either platform unchanged
 
 The API key never reaches the browser — the frontend calls `/api/analyze`,
-`/api/ask`, and `/api/watch` on your own domain, and those functions call
-Anthropic server-side using an environment variable.
+`/api/ask`, `/api/watch`, and `/api/teach` on your own domain, and those
+functions call Anthropic server-side using an environment variable.
+
+`/api/teach` powers the "Teach me & train on a subject" option in the
+dropdown next to "Check my scribbled work": the student types a math topic,
+gets back a plain-text mini-lesson plus two practice problems to solve by
+hand, and then checks their handwritten solutions through the normal
+photo/watch flow — the teach mode adds no new checking machinery.
 
 ### Watch mode
 

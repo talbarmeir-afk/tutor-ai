@@ -96,10 +96,35 @@
     background:var(--paper); border:1px solid var(--paper-line); border-radius:16px;
     padding:18px; box-shadow:0 1px 3px rgba(0,0,0,0.05); margin-bottom:24px;
   }
+  .check-card-head{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:10px 16px; flex-wrap:wrap; margin:0 0 10px;
+  }
   .check-card-title{
     font-family:'Nunito', sans-serif; font-weight:800; font-size:17px;
-    color:var(--ink); margin:0 0 10px;
+    color:var(--ink); margin:0;
   }
+  .work-source-select{
+    font-family:'Karla', sans-serif; font-weight:600; font-size:13.5px;
+    color:var(--chalk); background:rgba(24,24,22,0.035);
+    border:1px solid rgba(24,24,22,0.18); border-radius:9px;
+    padding:8px 10px; cursor:pointer;
+  }
+  .work-source-select:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+  .teach-row{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+  .teach-input{
+    flex:1; min-width:220px; font-family:'Karla', sans-serif; font-size:14px;
+    padding:10px 12px; border-radius:9px; border:1px solid rgba(24,24,22,0.18);
+    background:#fff; color:var(--ink);
+  }
+  .teach-input:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
+  .teach-row .primary-btn{ padding:10px 18px; font-size:13.5px; }
+  .teach-panel{
+    background:rgba(24,24,22,0.03); border:1px solid var(--paper-line);
+    border-radius:12px; padding:16px 18px; margin:0 0 14px;
+  }
+  .teach-panel h3{ font-family:'Nunito', sans-serif; font-weight:800; font-size:15px; margin:0 0 8px; color:var(--ink); }
+  .teach-panel p{ font-size:14px; line-height:1.6; color:var(--ink); margin:0; white-space:pre-wrap; }
   .check-card .mode-toggle{ margin-bottom:12px; }
 
   .dropzone{
@@ -770,7 +795,21 @@
   <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
 
   <div class="check-card" id="checkCard">
-  <h2 class="check-card-title">Check my scribbled work</h2>
+  <div class="check-card-head">
+    <h2 class="check-card-title">Check my scribbled work</h2>
+    <select id="workSourceSelect" class="work-source-select" aria-label="What do you want to work on?">
+      <option value="homework" selected>My homework</option>
+      <option value="teach">Teach me &amp; train on a subject</option>
+    </select>
+  </div>
+  <div class="teach-row hidden" id="teachRow">
+    <input type="text" id="teachSubjectInput" class="teach-input" placeholder="Which math topic? e.g. fractions, quadratic equations" autocomplete="off">
+    <button type="button" class="primary-btn" id="teachBtn">Teach me</button>
+  </div>
+  <div class="teach-panel hidden" id="teachPanel">
+    <h3 id="teachPanelTitle"></h3>
+    <p id="teachPanelBody"></p>
+  </div>
 
   <div id="uploadMode">
     <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
@@ -1544,6 +1583,58 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     conversation = [];
     qaThread.innerHTML = '';
     qaSection.classList.add('hidden');
+  });
+
+  // ---- "Teach me & train on a subject" mode ----
+  // The dropdown swaps between checking the student's own homework
+  // (default, nothing changes) and asking Claruno for a mini-lesson plus
+  // practice problems on a typed topic. The student solves those by hand
+  // and checks them through the exact same photo/watch flow.
+  const workSourceSelect = document.getElementById('workSourceSelect');
+  const teachRow = document.getElementById('teachRow');
+  const teachSubjectInput = document.getElementById('teachSubjectInput');
+  const teachBtn = document.getElementById('teachBtn');
+  const teachPanel = document.getElementById('teachPanel');
+  const teachPanelTitle = document.getElementById('teachPanelTitle');
+  const teachPanelBody = document.getElementById('teachPanelBody');
+
+  workSourceSelect.addEventListener('change', () => {
+    const teaching = workSourceSelect.value === 'teach';
+    teachRow.classList.toggle('hidden', !teaching);
+    if (teaching){
+      teachSubjectInput.focus();
+    } else {
+      teachPanel.classList.add('hidden');
+    }
+  });
+
+  async function requestLesson(){
+    const subject = teachSubjectInput.value.trim();
+    if (!subject || teachBtn.disabled) return;
+    teachBtn.disabled = true;
+    teachBtn.textContent = 'Preparing…';
+    teachPanel.classList.remove('hidden');
+    teachPanelTitle.textContent = 'Claruno teaches: ' + subject;
+    teachPanelBody.textContent = 'Putting together a mini-lesson and practice problems…';
+    try{
+      const response = await fetch('/api/teach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      teachPanelBody.textContent = data.lesson;
+    } catch(err){
+      teachPanelBody.textContent = "Couldn't prepare that lesson — check your connection and try again.";
+    } finally {
+      teachBtn.disabled = false;
+      teachBtn.textContent = 'Teach me';
+    }
+  }
+  teachBtn.addEventListener('click', requestLesson);
+  teachSubjectInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter'){ e.preventDefault(); requestLesson(); }
   });
 
   function hideResults(){ resultPaper.classList.add('hidden'); }
