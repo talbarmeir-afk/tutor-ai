@@ -592,18 +592,23 @@
     border-radius:8px; padding:8px 14px; cursor:pointer;
   }
 
-  .history-panel{
-    position:fixed; inset:0; background:rgba(12,11,9,0.72);
-    display:flex; align-items:flex-start; justify-content:center;
-    padding:56px 20px; z-index:50; overflow-y:auto;
+  .subtab-bar{ display:flex; gap:8px; margin:0 0 22px; }
+  .subtab-btn{
+    font-family:'Karla', sans-serif; font-weight:700; font-size:13.5px;
+    background:none; border:1px solid rgba(24,24,22,0.18); color:var(--chalk-muted);
+    border-radius:20px; padding:8px 18px; cursor:pointer;
+    transition:color .15s ease, border-color .15s ease, background .15s ease;
   }
-  .history-panel-inner{
+  .subtab-btn:hover:not(.is-active){ color:var(--chalk); border-color:rgba(24,24,22,0.35); }
+  .subtab-btn.is-active{ background:var(--ink); color:var(--paper); border-color:var(--ink); }
+  .subtab-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+  .history-view-card{
     background:var(--paper); color:var(--ink); border-radius:12px;
-    max-width:560px; width:100%; padding:24px; box-shadow:0 20px 50px rgba(0,0,0,0.25);
+    border:1px solid var(--paper-line); padding:24px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.05);
   }
-  .history-header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
-  .history-header h2{ font-family:'Nunito', sans-serif; font-weight:800; font-size:22px; margin:0; color:var(--ink); }
-  .history-list{ display:flex; flex-direction:column; gap:20px; max-height:70vh; overflow-y:auto; }
+  .history-view-title{ font-family:'Nunito', sans-serif; font-weight:800; font-size:22px; margin:0 0 16px; color:var(--ink); }
+  .history-list{ display:flex; flex-direction:column; gap:20px; }
   .history-group{ border:1px solid var(--paper-line); border-radius:12px; padding:12px; }
   .history-group-title{
     font-family:'Nunito', sans-serif; font-weight:800; font-size:16.5px;
@@ -767,16 +772,6 @@
     </div>
   </div>
 
-  <div class="history-panel hidden" id="historyPanel">
-    <div class="history-panel-inner">
-      <div class="history-header">
-        <h2>Your history</h2>
-        <button class="ghost-btn" id="closeHistoryBtn" type="button">Close</button>
-      </div>
-      <div class="history-list" id="historyList"></div>
-    </div>
-  </div>
-
   <div class="lightbox hidden" id="lightbox">
     <img id="lightboxImg" src="" alt="">
   </div>
@@ -791,6 +786,15 @@
   </nav>
 
   <div id="tabHome">
+  <!-- Signed-in Home splits into two subtabs: the lesson flow and the
+       history, inline — history used to open as a modal, but a modal pulls
+       the student out of the page; a subtab keeps it part of Home. -->
+  <nav class="subtab-bar hidden" id="homeSubtabs" role="tablist">
+    <button class="subtab-btn is-active" type="button" data-subtab="lesson">Start Lesson</button>
+    <button class="subtab-btn" type="button" data-subtab="history">History</button>
+  </nav>
+
+  <div id="homeLessonView">
   <div class="lesson-note hidden" id="lessonStartPrompt">
     <h2>Ready for a lesson?</h2>
     <p>Start a 45-minute lesson to begin checking your work. Your checks and the time you spend are saved to your history.</p>
@@ -1054,6 +1058,14 @@
     <h2>Couldn't read that photo</h2>
     <p id="errorText">Something went wrong. Try a clearer, well-lit photo, or check your connection.</p>
     <button class="ghost-btn" id="retryBtn" type="button">Try again</button>
+  </div>
+  </div>
+
+  <div id="homeHistoryView" class="hidden">
+    <div class="history-view-card">
+      <h2 class="history-view-title">Your history</h2>
+      <div class="history-list" id="historyList"></div>
+    </div>
   </div>
   </div>
 
@@ -1386,7 +1398,7 @@
   startLessonBtn.addEventListener('click', beginLesson);
   startNewLessonBtn.addEventListener('click', beginLesson);
   lessonEndedHistoryBtn.addEventListener('click', () => {
-    if (window.mathTutorHistory) window.mathTutorHistory.openHistory();
+    setHomeSubtab('history');
   });
 
   // Tabs — the bar itself is only shown while signed in (Dashboard/Profile/
@@ -1421,9 +1433,36 @@
     switchTab(btn.dataset.tab);
   });
 
+  // Home subtabs (signed-in only): "Start Lesson" is the whole lesson flow,
+  // "History" shows the history inline — it used to be a modal, but a
+  // subtab keeps the student inside the page.
+  const homeSubtabs = document.getElementById('homeSubtabs');
+  const homeLessonView = document.getElementById('homeLessonView');
+  const homeHistoryView = document.getElementById('homeHistoryView');
+
+  function setHomeSubtab(name){
+    homeSubtabs.querySelectorAll('.subtab-btn').forEach((btn) => {
+      btn.classList.toggle('is-active', btn.dataset.subtab === name);
+    });
+    homeLessonView.classList.toggle('hidden', name !== 'lesson');
+    homeHistoryView.classList.toggle('hidden', name !== 'history');
+    if (name === 'history' && window.mathTutorHistory) window.mathTutorHistory.openHistory();
+  }
+
+  homeSubtabs.addEventListener('click', (e) => {
+    const btn = e.target.closest('.subtab-btn');
+    if (!btn) return;
+    setHomeSubtab(btn.dataset.subtab);
+  });
+
+  // Lets the auth module's "View history" button switch the subtab from
+  // the other script block.
+  window.mathTutorUI = { showHomeHistory: () => setHomeSubtab('history') };
+
   function lessonOnSignIn(userId){
     lessonUserId = userId;
     tabBar.classList.remove('hidden');
+    homeSubtabs.classList.remove('hidden');
     featureGatePopover.classList.add('hidden');
     const stored = loadActiveLesson(userId);
     if (stored) {
@@ -1469,6 +1508,8 @@
     clearLessonInterval();
     renderLessonTimer();
     tabBar.classList.add('hidden');
+    homeSubtabs.classList.add('hidden');
+    setHomeSubtab('lesson');
     // Watch mode requires an account — bounce back to upload if it was active.
     if (currentMode === 'watch') currentMode = 'upload';
     switchTab('home');
@@ -2655,8 +2696,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const authEmailLabel = document.getElementById('authEmailLabel');
   const signOutBtn = document.getElementById('signOutBtn');
   const viewHistoryBtn = document.getElementById('viewHistoryBtn');
-  const historyPanel = document.getElementById('historyPanel');
-  const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+  const homeHistoryView = document.getElementById('homeHistoryView');
   const historyList = document.getElementById('historyList');
   const lightbox = document.getElementById('lightbox');
   const lightboxImg = document.getElementById('lightboxImg');
@@ -2792,17 +2832,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     await supabaseClient.auth.signOut();
   });
 
+  // History lives in a Home subtab now, not a modal — "opening" it just
+  // means loading entries into the inline list; the main script owns the
+  // subtab switching and calls this through the mathTutorHistory bridge.
   function openHistoryPanel(){
-    historyPanel.classList.remove('hidden');
     loadHistory();
   }
 
-  viewHistoryBtn.addEventListener('click', openHistoryPanel);
-  closeHistoryBtn.addEventListener('click', () => {
-    historyPanel.classList.add('hidden');
-  });
-  historyPanel.addEventListener('click', (e) => {
-    if (e.target === historyPanel) historyPanel.classList.add('hidden');
+  viewHistoryBtn.addEventListener('click', () => {
+    if (window.mathTutorUI) window.mathTutorUI.showHomeHistory();
   });
 
   lightbox.addEventListener('click', () => lightbox.classList.add('hidden'));
@@ -3024,7 +3062,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         thumbnail,
       });
       if (error) throw error;
-      if (!historyPanel.classList.contains('hidden')) loadHistory();
+      if (!homeHistoryView.classList.contains('hidden')) loadHistory();
     } catch(err){
       console.warn('Could not save history entry', err);
     }
@@ -3052,7 +3090,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         duration_seconds: durationSeconds,
       }).eq('id', lessonId);
       if (error) throw error;
-      if (!historyPanel.classList.contains('hidden')) loadHistory();
+      if (!homeHistoryView.classList.contains('hidden')) loadHistory();
     } catch(err){
       console.warn('Could not save lesson end', err);
     }
