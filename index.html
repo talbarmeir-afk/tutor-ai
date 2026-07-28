@@ -1500,6 +1500,8 @@ Also classify the problem into exactly one topic from this fixed list, choosing 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
 {"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token}
 
+A light blue coordinate grid with percent labels is drawn over the photo purely to help you report positions: the numbers along the top edge are x percentages and the numbers along the left edge are y percentages. The grid is NOT part of the student's work — ignore it when reading the math. Read x and y directly off the nearest gridlines instead of estimating proportions by eye.
+
 For x and y: point at the exact wrong token itself (e.g. the specific incorrect number or sign), not the start of the line and not the line's overall center — if the error is a number partway through or at the end of the line, x/y should land on that number, not on the beginning of the equation. Use this procedure: (1) find the mistake line in the photo and note where its writing starts and ends horizontally; (2) place the wrong token within the line by reading order — for example, if the line is "12x = 17" and the wrong token is the "17", that token sits AFTER the "=" sign near the right end of the written line, so x must be clearly to the right of the "=" — never over the "12x" at the start; (3) verify before answering: an imaginary circle centered at your (x, y) about a tenth of the image wide must contain the wrong token and must NOT contain the first characters of the line — if it fails, move x/y and re-verify. Look directly at the token's pixel position in the photo; do not estimate it from the line's position in a numbered sequence or assume lines are evenly spaced. The photo may be tilted, rotated, or taken at an angle — base x/y on the token's actual pixel position in the photo exactly as captured, not on where it would sit if the page were flattened and upright.`;
 
   // Kept in sync with buildWatchPrompt in lib/anthropic.js. It's a pure
@@ -1536,6 +1538,8 @@ Now look at the current photo and report on the CURRENT state of the work:
 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
 {"has_mistake": true or false, "mistake_resolved": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each crossed-out line you found (empty array if none), "line_quote": "short exact snippet of text/expression from the current mistake line, or empty string if has_mistake is false", "explanation": "1-2 plain sentences on what's wrong, or empty string if has_mistake is false", "fix": "one sentence on the correct step, or empty string if has_mistake is false", "y": percent from the top edge of the photo to the vertical center of the specific wrong token (or 50 if has_mistake is false), "x": percent from the left edge of the photo to the horizontal position of the specific wrong token (or 50 if has_mistake is false), "reviewed_through": "short exact snippet of the last confirmed-correct written line, or empty string if nothing is confirmed correct yet"}
+
+A light blue coordinate grid with percent labels is drawn over the photo purely to help you report positions: the numbers along the top edge are x percentages and the numbers along the left edge are y percentages. The grid is NOT part of the student's work — ignore it when reading the math. Read x and y directly off the nearest gridlines instead of estimating proportions by eye.
 
 For x and y (only when has_mistake is true): point at the exact wrong token itself — the specific incorrect number, sign, or term — not the start of the line. Place it by reading order within the line: if the wrong token comes after the "=" sign (e.g. the "17" in "12x = 17"), x must be clearly to the right of the "=", never over the start of the line. Verify before answering: an imaginary circle centered at your (x, y) about a tenth of the image wide must contain the wrong token and must NOT contain the first characters of the line. The photo may be tilted, rotated, or taken at an angle — base x/y on the token's actual pixel position in the photo exactly as captured, not on where it would sit if the page were flattened and upright.`;
   }
@@ -1574,6 +1578,47 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         img.src = e.target.result;
       };
       reader.readAsDataURL(file);
+    });
+  }
+
+  // The copy of the photo sent to the API gets a labeled coordinate grid
+  // drawn over it (percent ticks every 10% on both axes), so the model can
+  // READ the wrong token's x/y off the grid instead of estimating
+  // proportions by eye — pointer placement was consistently sloppy without
+  // it. The student always sees the clean photo; only the API copy is
+  // gridded.
+  function addCoordinateGrid(dataUrl){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('grid-failed'));
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width; canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const w = canvas.width, h = canvas.height;
+        ctx.strokeStyle = 'rgba(30,144,255,0.4)';
+        ctx.lineWidth = Math.max(1, Math.round(w / 900));
+        for (let p = 10; p < 100; p += 10){
+          const x = w * p / 100, y = h * p / 100;
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+        }
+        const fontPx = Math.max(12, Math.round(h * 0.022));
+        ctx.font = fontPx + 'px monospace';
+        ctx.lineWidth = Math.max(2, Math.round(fontPx / 5));
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillStyle = 'rgba(20,110,220,0.95)';
+        for (let p = 10; p < 100; p += 10){
+          const x = w * p / 100, y = h * p / 100;
+          ctx.strokeText(String(p), x + 4, fontPx + 4);
+          ctx.fillText(String(p), x + 4, fontPx + 4);
+          ctx.strokeText(String(p), 4, y - 5);
+          ctx.fillText(String(p), 4, y - 5);
+        }
+        resolve(canvas.toDataURL('image/jpeg', 0.9).split(',')[1]);
+      };
+      img.src = dataUrl;
     });
   }
 
@@ -1882,10 +1927,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     statusText.textContent = 'Reading your steps and double-checking every line — this can take up to half a minute…';
 
     try{
+      const griddedBase64 = await addCoordinateGrid(imageData.dataUrl);
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: imageData.base64, mediaType: 'image/jpeg' })
+        body: JSON.stringify({ base64: griddedBase64, mediaType: 'image/jpeg' })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
@@ -2275,10 +2321,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const priorStateSnapshot = { reviewedThrough: watchState.reviewedThrough, pendingMistake: watchState.pendingMistake };
 
     try{
+      const griddedBase64 = await addCoordinateGrid(frame.dataUrl);
       const response = await fetch('/api/watch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: frame.base64, mediaType: 'image/jpeg', priorState: priorStateSnapshot })
+        body: JSON.stringify({ base64: griddedBase64, mediaType: 'image/jpeg', priorState: priorStateSnapshot })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
