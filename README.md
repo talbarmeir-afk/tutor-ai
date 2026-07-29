@@ -29,7 +29,10 @@ dropdown next to "Check my scribbled work": the student types a math topic
 and gets back a mini-lesson plus exactly one practice problem to solve by
 hand (one at a time, like a real tutor), then checks their handwritten
 solution through the normal photo/watch flow — teach mode adds no new
-checking machinery. The lesson is rendered in a handwriting font on a
+checking machinery. During a running lesson, a solution that checks out
+as correct automatically requests the next practice problem through the
+same conversation (a touch harder, still one at a time) until the lesson
+clock runs out; a flagged mistake hands out nothing new until it's fixed. The lesson is rendered in a handwriting font on a
 ruled-paper panel and "written out" progressively, and two icons under it
 let the student ask for the same idea explained a different way or ask a
 clarification question — both continue the same conversation through the

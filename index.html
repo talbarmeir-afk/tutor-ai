@@ -2220,14 +2220,20 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     statusRow.classList.remove('hidden');
     statusText.textContent = 'Reading your steps and double-checking every line — this can take up to half a minute…';
 
+    // A hard client-side timeout so a stalled request can never look like
+    // a frozen app, and a JSON guard so a gateway error page (e.g. a 504)
+    // produces a readable message instead of a parse exception.
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 90000);
     try{
       const griddedBase64 = await addCoordinateGrid(imageData.dataUrl);
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: griddedBase64, mediaType: 'image/jpeg' })
+        body: JSON.stringify({ base64: griddedBase64, mediaType: 'image/jpeg' }),
+        signal: controller.signal
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => { throw new Error('the server returned an invalid response (status ' + response.status + ')'); });
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const parsed = parseModelJson(data.text);
       if (parsed.has_mistake){
@@ -2236,12 +2242,16 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       }
       renderResult(parsed);
       if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId);
+      maybeTeachNextProblem(parsed);
     } catch(err){
       // Keep the friendly copy but surface the underlying error too —
       // "couldn't read that photo" once hid a plain server timeout.
-      const detail = err && err.message ? ` (${err.message})` : '';
+      const detail = err && err.name === 'AbortError'
+        ? ' (the check took too long and was stopped — try again)'
+        : (err && err.message ? ` (${err.message})` : '');
       showError("Something went wrong reading that photo. Try a clearer, well-lit photo, or check your connection, then try again." + detail);
     } finally {
+      clearTimeout(abortTimer);
       checkBtn.disabled = false;
       statusRow.classList.add('hidden');
     }
@@ -2289,19 +2299,25 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     checkBtn.disabled = true;
     statusRow.classList.remove('hidden');
     statusText.textContent = 'Reading your work so far and thinking of a good hint…';
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 90000);
     try{
       const response = await fetch('/api/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: imageData.base64, mediaType: 'image/jpeg' })
+        body: JSON.stringify({ base64: imageData.base64, mediaType: 'image/jpeg' }),
+        signal: controller.signal
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => { throw new Error('the server returned an invalid response (status ' + response.status + ')'); });
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       renderHint((data.hint || '').trim());
     } catch(err){
-      const detail = err && err.message ? ` (${err.message})` : '';
+      const detail = err && err.name === 'AbortError'
+        ? ' (the request took too long and was stopped — try again)'
+        : (err && err.message ? ` (${err.message})` : '');
       showError("Couldn't come up with a hint just now — try again in a moment." + detail);
     } finally {
+      clearTimeout(abortTimer);
       hintBtn.disabled = false;
       checkBtn.disabled = false;
       statusRow.classList.add('hidden');
@@ -2431,17 +2447,46 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonUploadedPending = false;
     lessonCheckBtn.disabled = true;
     lessonHintBtn.disabled = true;
-    lessonStatus.textContent = kind === 'check'
+    // A counting ticker so a long check visibly makes progress — a static
+    // "checking…" line for 30s reads as a frozen app.
+    const baseMsg = kind === 'check'
       ? 'Checking every line — this can take up to half a minute…'
       : 'Reading your work and thinking of a good hint…';
+    const startedAt = Date.now();
+    lessonStatus.textContent = baseMsg;
+    const ticker = setInterval(() => {
+      lessonStatus.textContent = `${baseMsg} ${Math.round((Date.now() - startedAt) / 1000)}s`;
+    }, 1000);
     try{
       if (kind === 'check') await runCheck();
       else await runHint();
     } finally {
+      clearInterval(ticker);
       lessonCheckBtn.disabled = false;
       lessonHintBtn.disabled = false;
-      lessonStatus.textContent = '';
+      // If the run failed, its message lands in the error note below the
+      // fold — mirror it right here where the student is looking.
+      lessonStatus.textContent = errorNote.classList.contains('hidden')
+        ? ''
+        : errorText.textContent;
     }
+  }
+
+  // In teach mode the lesson keeps going: once the student's solution
+  // checks out as correct, the next practice problem is requested
+  // automatically through the same teach conversation — one at a time,
+  // until the lesson clock ends it. A flagged mistake hands out nothing
+  // new: the student fixes it and checks again first.
+  function maybeTeachNextProblem(parsed){
+    if (!lessonModeOn) return;
+    if (workSourceSelect.value !== 'teach') return;
+    if (!teachConversation.length) return;
+    if (parsed.has_mistake) return;
+    teachFollowupAsk(
+      'I solved that problem on paper and Claruno checked it — it was correct. Briefly note anything worth remembering, then give me the NEXT practice problem on the same topic, a touch harder. ONE problem only, labelled "Problem:". Do not include the answer.',
+      'Next problem'
+    );
+    setTimeout(() => teachPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 2000);
   }
 
   lessonCheckBtn.addEventListener('click', () => lessonCapture('check'));
