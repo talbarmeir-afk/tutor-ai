@@ -74,6 +74,34 @@
   .feature-gate-actions{ display:flex; gap:8px; }
   .feature-gate-actions button{ font-size:13px; padding:8px 14px; }
 
+  /* Signed-in lesson mode: live camera in the check box, Check/Hint
+     capture into the same box. The result (image + marks + bubble) is the
+     existing .image-wrap, re-parented in here while a lesson runs. */
+  .lesson-cam-box{
+    position:relative; border:2px dashed rgba(24,24,22,0.22); border-radius:14px;
+    background:#141310; overflow:hidden; min-height:300px;
+  }
+  .lesson-cam-box video{ display:block; width:100%; max-height:540px; object-fit:contain; background:#141310; }
+  .lesson-cam-box .image-wrap{ border-radius:0; }
+  .lesson-cam-note{
+    position:absolute; left:12px; right:12px; bottom:12px;
+    font-size:13px; color:#F4F3EF; background:rgba(16,15,12,0.75);
+    padding:8px 12px; border-radius:8px; text-align:center;
+  }
+  .lesson-cam-actions{ display:flex; justify-content:center; gap:10px; margin-top:14px; }
+  .lesson-status{ text-align:center; font-size:13.5px; color:var(--chalk-muted); margin:10px 0 0; min-height:18px; }
+  .lesson-upload-row{ text-align:center; margin-top:6px; }
+  .link-btn{
+    background:none; border:none; color:var(--chalk-muted);
+    font-family:'Karla', sans-serif; font-size:13px; text-decoration:underline;
+    cursor:pointer; padding:4px;
+  }
+  .link-btn:hover{ color:var(--chalk); }
+  #lessonFileInput{ display:none; }
+  /* While the lesson camera owns the image-wrap, the old result card below
+     would be an empty shell — keep it out of the flow entirely. */
+  body.lesson-cam-on #resultPaper{ display:none !important; }
+
   .camera-wrap{
     position:relative; border-radius:14px; overflow:hidden;
     background:#0e1c14; border:1px solid rgba(242,239,227,0.16);
@@ -871,6 +899,28 @@
     </form>
   </div>
 
+  <!-- Signed-in lesson mode: the camera turns on automatically when a
+       lesson starts, and Check / Hint capture a frame that freezes in
+       this same box with the feedback drawn on it. Uploading stays
+       available but as a secondary, low-key path. Guests never see this
+       — they keep the classic dropzone below. -->
+  <div id="lessonMode" class="hidden">
+    <div class="lesson-cam-box" id="lessonCamBox">
+      <video id="lessonCamVideo" autoplay playsinline muted></video>
+      <div class="lesson-cam-note hidden" id="lessonCamNote"></div>
+    </div>
+    <div class="lesson-cam-actions">
+      <button class="ghost-btn" id="lessonHintBtn" type="button">Give me a hint</button>
+      <button class="primary-btn" id="lessonCheckBtn" type="button">Check</button>
+      <button class="ghost-btn hidden" id="lessonBackBtn" type="button">Back to camera</button>
+    </div>
+    <p class="lesson-status" id="lessonStatus"></p>
+    <div class="lesson-upload-row">
+      <button class="link-btn" id="lessonUploadBtn" type="button">or upload a photo instead</button>
+      <input type="file" id="lessonFileInput" accept="image/*">
+    </div>
+  </div>
+
   <div id="uploadMode">
     <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
       <div class="dropzone-sample-clip">
@@ -1361,6 +1411,7 @@
   }
 
   function showStartPrompt(){
+    exitLessonMode();
     hideAllLessonPanels();
     stopCamera();
     stopTakePhotoStream();
@@ -1369,6 +1420,7 @@
   }
 
   function showEndedNote(durationSeconds){
+    exitLessonMode();
     hideAllLessonPanels();
     stopCamera();
     stopTakePhotoStream();
@@ -1421,6 +1473,7 @@
     renderLessonTimer();
     showCheckUI();
     lessonTimerEl.classList.remove('hidden');
+    enterLessonMode();
     if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
   }
 
@@ -1510,6 +1563,7 @@
         renderLessonTimer();
         showCheckUI();
         lessonTimerEl.classList.remove('hidden');
+        enterLessonMode();
         if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
       }
     } else {
@@ -1541,6 +1595,7 @@
     homeSubtabs.classList.add('hidden');
     setHomeSubtab('lesson');
     if (window.mathTutorHistory && window.mathTutorHistory.hideCurrentLesson) window.mathTutorHistory.hideCurrentLesson();
+    exitLessonMode();
     // Watch mode requires an account — bounce back to upload if it was active.
     if (currentMode === 'watch') currentMode = 'upload';
     switchTab('home');
@@ -1936,6 +1991,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     } else {
       teachPanel.classList.add('hidden');
     }
+    updateLessonCamVisibility();
   });
 
   async function requestLesson(){
@@ -1945,6 +2001,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachBtn.textContent = 'Preparing…';
     teachPanel.classList.remove('hidden');
     teachActions.classList.add('hidden');
+    updateLessonCamVisibility();
     teachAskForm.classList.add('hidden');
     teachThread.innerHTML = '';
     teachConversation = [];
@@ -1964,6 +2021,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       ];
       writeOut(teachPanelBody, data.lesson);
       teachActions.classList.remove('hidden');
+      // The practice problem has now been handed over — in a running lesson
+      // this is the moment the camera box appears.
+      updateLessonCamVisibility();
       // Mark the running lesson as a "New topic" lesson so Past Lessons can
       // show what was taught in it.
       if (lessonRunning && currentLessonId && window.mathTutorHistory && window.mathTutorHistory.recordTaughtSubject){
@@ -2111,6 +2171,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
     verdict.classList.toggle('is-ok', !parsed.has_mistake);
     animateMascot(!parsed.has_mistake);
+    teacherBar.classList.remove('hidden');
     verdictHeading.style.color = '';
     verdictHeading.textContent = parsed.has_mistake ? "Here's where it breaks" : "Looks solid";
     verdictQuote.textContent = parsed.line_quote ? `"${parsed.line_quote}"` : '';
@@ -2197,6 +2258,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     requestAnimationFrame(() => ringMascot.classList.add('is-talking'));
     setTimeout(() => ringMascot.classList.remove('is-talking'), 2200);
     verdict.classList.remove('is-ok');
+    teacherBar.classList.remove('hidden');
     verdictHeading.textContent = 'Here’s a hint';
     verdictHeading.style.color = '#181816';
     verdictQuote.style.display = 'none';
@@ -2246,6 +2308,162 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
   }
   hintBtn.addEventListener('click', runHint);
+
+  // ---- Signed-in lesson camera mode ----
+  // While a lesson runs, the camera is on automatically and Check / Hint
+  // capture a frame that freezes in the same box; the existing check and
+  // hint flows then draw their feedback on it (the .image-wrap is
+  // re-parented into the box for the duration of the lesson). Uploading a
+  // photo stays available as a secondary path. Guests keep the classic
+  // dropzone flow untouched.
+  const lessonModeEl = document.getElementById('lessonMode');
+  const lessonCamBox = document.getElementById('lessonCamBox');
+  const lessonCamVideo = document.getElementById('lessonCamVideo');
+  const lessonCamNote = document.getElementById('lessonCamNote');
+  const lessonCheckBtn = document.getElementById('lessonCheckBtn');
+  const lessonHintBtn = document.getElementById('lessonHintBtn');
+  const lessonBackBtn = document.getElementById('lessonBackBtn');
+  const lessonUploadBtn = document.getElementById('lessonUploadBtn');
+  const lessonFileInput = document.getElementById('lessonFileInput');
+  const lessonStatus = document.getElementById('lessonStatus');
+  const imageWrap = document.querySelector('#resultPaper .image-wrap');
+  let lessonCamStream = null;
+  let lessonModeOn = false;
+  let lessonUploadedPending = false;
+
+  async function startLessonCam(){
+    lessonCamNote.classList.add('hidden');
+    try{
+      lessonCamStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1920 } },
+        audio: false,
+      });
+      lessonCamVideo.srcObject = lessonCamStream;
+    } catch(err){
+      lessonCamNote.textContent = 'Couldn\'t access the camera — use "upload a photo instead" below.';
+      lessonCamNote.classList.remove('hidden');
+    }
+  }
+
+  function stopLessonCam(){
+    if (lessonCamStream){
+      lessonCamStream.getTracks().forEach((t) => t.stop());
+      lessonCamStream = null;
+    }
+    lessonCamVideo.srcObject = null;
+  }
+
+  function lessonShowLive(){
+    imageWrap.classList.add('hidden');
+    teacherBar.classList.add('hidden');
+    annGroup.innerHTML = '';
+    lessonCamVideo.classList.remove('hidden');
+    lessonBackBtn.classList.add('hidden');
+    imageData = null;
+    lessonUploadedPending = false;
+  }
+
+  function lessonFreezeFrame(frame){
+    imageData = frame;
+    currentProblemId = crypto.randomUUID();
+    resultImg.onload = null;
+    resultImg.src = frame.dataUrl;
+    annGroup.innerHTML = '';
+    teacherBar.classList.add('hidden');
+    imageWrap.classList.remove('hidden');
+    lessonCamVideo.classList.add('hidden');
+    lessonBackBtn.classList.remove('hidden');
+  }
+
+  // In "Teach me & train" mode the camera box only appears once a practice
+  // problem has actually been handed to the student (teachActions unhides
+  // exactly then) — before that there's nothing to photograph yet.
+  function updateLessonCamVisibility(){
+    if (!lessonModeOn) return;
+    const teaching = workSourceSelect.value === 'teach';
+    const problemDelivered = !teachActions.classList.contains('hidden');
+    lessonModeEl.classList.toggle('hidden', teaching && !problemDelivered);
+  }
+
+  function enterLessonMode(){
+    if (lessonModeOn) return;
+    lessonModeOn = true;
+    document.body.classList.add('lesson-cam-on');
+    updateLessonCamVisibility();
+    uploadModeEl.classList.add('hidden');
+    watchModeEl.classList.add('hidden');
+    modeToggle.classList.add('hidden');
+    lessonCamBox.appendChild(imageWrap);
+    lessonShowLive();
+    hideResults(); hideError();
+    startLessonCam();
+  }
+
+  function exitLessonMode(){
+    if (!lessonModeOn) return;
+    lessonModeOn = false;
+    document.body.classList.remove('lesson-cam-on');
+    stopLessonCam();
+    lessonModeEl.classList.add('hidden');
+    modeToggle.classList.remove('hidden');
+    imageWrap.classList.remove('hidden');
+    resultPaper.insertBefore(imageWrap, resultPaper.firstChild);
+    imageData = null;
+    hideResults();
+  }
+
+  async function lessonCapture(kind){
+    if (lessonCheckBtn.disabled) return;
+    if (!lessonUploadedPending){
+      // Each press works from a fresh frame while the camera runs — it
+      // checks what's on the paper right now, not an old capture.
+      if (!lessonCamStream){
+        lessonCamNote.textContent = 'Camera is off — use "upload a photo instead" below.';
+        lessonCamNote.classList.remove('hidden');
+        return;
+      }
+      if (!lessonCamVideo.videoWidth){
+        lessonStatus.textContent = 'Camera is still starting — try again in a second…';
+        return;
+      }
+      lessonFreezeFrame(captureFrameFromVideo(lessonCamVideo, 1600, false));
+    }
+    lessonUploadedPending = false;
+    lessonCheckBtn.disabled = true;
+    lessonHintBtn.disabled = true;
+    lessonStatus.textContent = kind === 'check'
+      ? 'Checking every line — this can take up to half a minute…'
+      : 'Reading your work and thinking of a good hint…';
+    try{
+      if (kind === 'check') await runCheck();
+      else await runHint();
+    } finally {
+      lessonCheckBtn.disabled = false;
+      lessonHintBtn.disabled = false;
+      lessonStatus.textContent = '';
+    }
+  }
+
+  lessonCheckBtn.addEventListener('click', () => lessonCapture('check'));
+  lessonHintBtn.addEventListener('click', () => lessonCapture('hint'));
+  lessonBackBtn.addEventListener('click', () => {
+    lessonShowLive();
+    hideResults(); hideError();
+  });
+  lessonUploadBtn.addEventListener('click', () => lessonFileInput.click());
+  lessonFileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    lessonFileInput.value = '';
+    if (!file || !file.type.startsWith('image/')) return;
+    try{
+      const frame = await resizeImage(file, 1600);
+      lessonFreezeFrame(frame);
+      lessonUploadedPending = true;
+      lessonStatus.textContent = 'Photo loaded — press Check or Give me a hint.';
+    } catch(err){
+      lessonStatus.textContent = "That photo didn't load — try a different file.";
+    }
+  });
 
   checkBtn.addEventListener('click', runCheck);
   retryBtn.addEventListener('click', runCheck);
