@@ -169,12 +169,14 @@ not eagerly on sign-in.
   `masteryFor()`. This is a heuristic, not a real assessment model; there's
   no other signal available from check history to base it on.
 - **Profile** holds student info (name, school, class, country, language),
-  a weekly AI-lesson schedule (days/time/duration — multiple days can be
-  picked; they're stored comma-joined in the existing `schedule_day` text
-  column, so no migration needed. **Stored only**: nothing sends reminders
-  or auto-starts a lesson from it, since there's no notification
-  infrastructure), and a simple add/delete list of tests (subject, date,
-  optional score).
+  a weekly AI-lesson schedule (pick any set of days, each with its own
+  time, plus a shared duration — days are stored comma-joined in the
+  existing `schedule_day` text column and the per-day times as a JSON map
+  in the existing `schedule_time` text column, so no migration needed;
+  older single-time rows load as that time on every selected day.
+  **Stored only**: nothing sends reminders or auto-starts a lesson from
+  it, since there's no notification infrastructure), and a simple
+  add/delete list of tests (subject, date, optional score).
 - **Settings** has account (email, password change via
   `supabaseClient.auth.updateUser`), and placeholder Billing/Integrations
   sections — no real payment processing or third-party connections exist

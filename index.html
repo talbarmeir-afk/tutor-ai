@@ -620,6 +620,15 @@
   .day-pill:hover:not(.is-on){ border-color:rgba(24,24,22,0.4); color:var(--ink); }
   .day-pill.is-on{ background:var(--chalk-yellow); border-color:var(--chalk-yellow); color:#fff; }
   .day-pill:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+  .schedule-times{ display:flex; flex-direction:column; gap:8px; }
+  .schedule-times:empty{ display:none; }
+  .schedule-time-row{ display:flex; align-items:center; gap:10px; }
+  .schedule-time-row .day-name{ width:92px; font-size:12.5px; font-weight:700; color:var(--ink-muted); }
+  .schedule-time-row input{
+    font-family:'Karla', sans-serif; font-size:14px; color:var(--ink);
+    padding:8px 10px; border-radius:8px; border:1px solid rgba(24,24,22,0.18); background:#fff;
+  }
+  .schedule-time-row input:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
   .history-group{ border:1px solid var(--paper-line); border-radius:12px; padding:12px; }
   .history-group-title{
     font-family:'Nunito', sans-serif; font-weight:800; font-size:16.5px;
@@ -1140,7 +1149,6 @@
             <button type="button" class="day-pill" data-day="sun">Sun</button>
           </div>
         </label>
-        <label>Time<input type="time" id="profileScheduleTime"></label>
         <label>Duration
           <select id="profileScheduleDuration">
             <option value="30">30 min</option>
@@ -1149,6 +1157,7 @@
           </select>
         </label>
       </div>
+      <div class="schedule-times" id="scheduleTimesList"></div>
       <div class="field-row">
         <label>Weekly lesson target<input type="number" id="profileWeeklyTarget" min="1" max="14" value="3"></label>
       </div>
@@ -2745,9 +2754,42 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const profileScheduleDays = document.getElementById('profileScheduleDays');
   profileScheduleDays.addEventListener('click', (e) => {
     const pill = e.target.closest('.day-pill');
-    if (pill) pill.classList.toggle('is-on');
+    if (!pill) return;
+    pill.classList.toggle('is-on');
+    renderScheduleTimes();
   });
-  const profileScheduleTime = document.getElementById('profileScheduleTime');
+
+  // Each selected day gets its own time input — a weekly schedule doesn't
+  // have to be the same hour every day. Times live in scheduleTimes
+  // (day -> "HH:MM") and persist as a JSON map in the schedule_time column;
+  // older rows holding a single "HH:MM" string load as that time on every
+  // selected day.
+  const scheduleTimesList = document.getElementById('scheduleTimesList');
+  const DAY_LABELS = { mon: 'Monday', tue: 'Tuesday', wed: 'Wednesday', thu: 'Thursday', fri: 'Friday', sat: 'Saturday', sun: 'Sunday' };
+  const scheduleTimes = {};
+
+  function selectedScheduleDays(){
+    return Array.from(profileScheduleDays.querySelectorAll('.day-pill.is-on')).map((p) => p.dataset.day);
+  }
+
+  function renderScheduleTimes(){
+    scheduleTimesList.innerHTML = '';
+    selectedScheduleDays().forEach((day) => {
+      const row = document.createElement('div');
+      row.className = 'schedule-time-row';
+      const name = document.createElement('span');
+      name.className = 'day-name';
+      name.textContent = DAY_LABELS[day] || day;
+      const input = document.createElement('input');
+      input.type = 'time';
+      input.value = scheduleTimes[day] || '';
+      input.setAttribute('aria-label', `Lesson time on ${DAY_LABELS[day] || day}`);
+      input.addEventListener('change', () => { scheduleTimes[day] = input.value; });
+      row.appendChild(name);
+      row.appendChild(input);
+      scheduleTimesList.appendChild(row);
+    });
+  }
   const profileScheduleDuration = document.getElementById('profileScheduleDuration');
   const profileWeeklyTarget = document.getElementById('profileWeeklyTarget');
   const profileSaveStatus = document.getElementById('profileSaveStatus');
@@ -3256,7 +3298,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     profileScheduleDays.querySelectorAll('.day-pill').forEach((pill) => {
       pill.classList.toggle('is-on', scheduleDays.includes(pill.dataset.day));
     });
-    profileScheduleTime.value = (data && data.schedule_time) || '';
+    Object.keys(scheduleTimes).forEach((k) => delete scheduleTimes[k]);
+    const rawTime = (data && data.schedule_time) || '';
+    if (rawTime.startsWith('{')){
+      try{ Object.assign(scheduleTimes, JSON.parse(rawTime)); } catch(err){ /* malformed — start fresh */ }
+    } else if (rawTime){
+      scheduleDays.forEach((d) => { scheduleTimes[d] = rawTime; });
+    }
+    renderScheduleTimes();
     profileScheduleDuration.value = data && data.schedule_duration_minutes ? String(data.schedule_duration_minutes) : '45';
     profileWeeklyTarget.value = (data && data.weekly_target_lessons) || 3;
     loadExams();
@@ -3276,8 +3325,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         class_name: profileClass.value.trim(),
         country: profileCountry.value.trim(),
         language: profileLanguage.value.trim(),
-        schedule_day: Array.from(profileScheduleDays.querySelectorAll('.day-pill.is-on')).map((p) => p.dataset.day).join(','),
-        schedule_time: profileScheduleTime.value || null,
+        schedule_day: selectedScheduleDays().join(','),
+        schedule_time: (() => {
+          const map = {};
+          selectedScheduleDays().forEach((d) => { if (scheduleTimes[d]) map[d] = scheduleTimes[d]; });
+          return Object.keys(map).length ? JSON.stringify(map) : null;
+        })(),
         schedule_duration_minutes: Number(profileScheduleDuration.value),
         weekly_target_lessons: Math.max(1, Number(profileWeeklyTarget.value) || 3),
       }, { onConflict: 'user_id' });
