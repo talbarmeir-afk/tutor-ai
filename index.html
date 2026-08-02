@@ -2751,8 +2751,22 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     });
     el.addEventListener('pointermove', (e) => {
       if (!lessonPanDrag || lessonPanDrag.el !== el || lessonPanDrag.pointerId !== e.pointerId) return;
-      lessonPanX = lessonPanDrag.baseX + (e.clientX - lessonPanDrag.startX);
-      lessonPanY = lessonPanDrag.baseY + (e.clientY - lessonPanDrag.startY);
+      let dx = e.clientX - lessonPanDrag.startX;
+      let dy = e.clientY - lessonPanDrag.startY;
+      if (el === lessonCamVideo){
+        // The live video sits inside .lesson-cam-frame, which carries the
+        // rotate() transform — the video's own translate() is applied
+        // BEFORE that rotation, so a raw on-screen drag has to be rotated
+        // back into the video's own local axes first. Otherwise, at 90°/
+        // 270°, dragging right would visibly move the content up/down
+        // instead of the direction the student actually dragged.
+        const q = ((lessonCamQuarter % 4) + 4) % 4;
+        if (q === 1){ const rdx = dx; dx = dy; dy = -rdx; }
+        else if (q === 2){ dx = -dx; dy = -dy; }
+        else if (q === 3){ const rdx = dx; dx = -dy; dy = rdx; }
+      }
+      lessonPanX = lessonPanDrag.baseX + dx;
+      lessonPanY = lessonPanDrag.baseY + dy;
       clampLessonPan(el);
       applyLessonCamZoom();
       el.style.cursor = 'grabbing';
