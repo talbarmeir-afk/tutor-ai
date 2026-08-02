@@ -103,7 +103,7 @@
      what's sent: trims out anything outside the guide for both privacy
      and a tighter, more legible photo of the actual work. */
   .lesson-cam-guide{
-    position:absolute; top:8%; bottom:8%; left:13%; right:13%;
+    position:absolute; top:10%; bottom:26%; left:15%; right:15%;
     border:2px dashed rgba(255,255,255,0.75); border-radius:8px; pointer-events:none;
   }
   .lesson-cam-guide-label{
@@ -1000,7 +1000,7 @@
       <div class="lesson-cam-frame" id="lessonCamFrame">
         <video id="lessonCamVideo" autoplay playsinline muted></video>
         <div class="lesson-cam-guide" id="lessonCamGuide">
-          <span class="lesson-cam-guide-label" id="lessonCamGuideLabel">Fit your paper in here — keep hands out</span>
+          <span class="lesson-cam-guide-label" id="lessonCamGuideLabel">Fit your work in here, hand below the line</span>
         </div>
       </div>
       <button class="cam-rotate-btn" id="lessonRotateBtn" type="button" title="Rotate camera 90°" aria-label="Rotate camera by 90 degrees">&#10227; 90&deg;</button>
@@ -2517,7 +2517,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const addProblemPhotoBtn = document.getElementById('addProblemPhotoBtn');
   const problemPhotoChip = document.getElementById('problemPhotoChip');
   const problemPhotoRemoveBtn = document.getElementById('problemPhotoRemoveBtn');
-  const LESSON_CAM_GUIDE_TEXT = 'Fit your paper in here — keep hands out';
+  const LESSON_CAM_GUIDE_TEXT = 'Fit your work in here, hand below the line';
   const PROBLEM_CAM_GUIDE_TEXT = 'Fit the printed problem here';
   // The photo of the printed problem (when the student attaches one) —
   // homework-only, optional per problem, and sticky: once attached it's
@@ -2680,7 +2680,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // — capture crops to exactly this region so what's captured always
   // matches what the guide showed the student. Keeps hands/background out
   // of the photo (privacy) and gives the actual math more of the frame.
-  const LESSON_GUIDE_INSET = { top: 0.08, bottom: 0.08, left: 0.13, right: 0.13 };
+  const LESSON_GUIDE_INSET = { top: 0.10, bottom: 0.26, left: 0.15, right: 0.15 };
 
   function applyLessonCamRotation(){
     const q = ((lessonCamQuarter % 4) + 4) % 4;
