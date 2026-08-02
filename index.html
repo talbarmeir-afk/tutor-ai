@@ -86,11 +86,16 @@
      (width:auto + max-height, no letterboxing inside the element), which
      keeps the annotation overlay's percentage coordinates aligned with
      the visible picture. */
-  .lesson-cam-box video{ display:block; width:auto; max-width:100%; max-height:min(38vh, 400px); margin:0 auto; background:#141310; transition:transform .2s ease; }
+  /* Left-aligned rather than centered: concentrates all the dark
+     letterbox space into one predictable block on the right instead of
+     splitting it uselessly on both sides, so the feedback bubble
+     consistently has real room to live in without ever covering the
+     photo. */
+  .lesson-cam-box video{ display:block; width:auto; max-width:100%; max-height:min(38vh, 400px); margin:0; background:#141310; transition:transform .2s ease; }
   /* overflow:visible + a real minimum bubble width: on a narrow shrunken
      photo the teacher bubble may extend over the dark letterbox areas
      beside the picture instead of being squeezed/clipped inside it. */
-  .lesson-cam-box .image-wrap{ border-radius:0; width:fit-content; margin:0 auto; overflow:visible; }
+  .lesson-cam-box .image-wrap{ border-radius:0; width:fit-content; margin:0; overflow:visible; }
   .lesson-cam-box .image-wrap img{ width:auto; max-width:100%; max-height:min(38vh, 400px); }
   /* Compact chrome while the lesson camera is on: the goal is the whole
      working set — header, tabs, timer, camera box, Check/Hint, upload
