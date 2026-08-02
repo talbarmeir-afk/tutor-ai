@@ -82,7 +82,17 @@
     background:#141310; overflow:hidden; min-height:300px;
   }
   .lesson-cam-box video{ display:block; width:100%; max-height:540px; object-fit:contain; background:#141310; }
+  .lesson-cam-box video.is-rotated{ transform:rotate(180deg); }
   .lesson-cam-box .image-wrap{ border-radius:0; }
+  .cam-rotate-btn{
+    position:absolute; top:10px; right:10px; z-index:2;
+    font-family:'Karla', sans-serif; font-weight:700; font-size:12px;
+    background:rgba(16,15,12,0.72); color:#F4F3EF;
+    border:1px solid rgba(255,255,255,0.25); border-radius:16px;
+    padding:6px 12px; cursor:pointer;
+  }
+  .cam-rotate-btn:hover{ background:rgba(16,15,12,0.9); }
+  .cam-rotate-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
   .lesson-cam-note{
     position:absolute; left:12px; right:12px; bottom:12px;
     font-size:13px; color:#F4F3EF; background:rgba(16,15,12,0.75);
@@ -139,6 +149,7 @@
     padding:8px 10px; cursor:pointer;
   }
   .work-source-select:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+  .work-source-select:disabled{ opacity:.55; cursor:not-allowed; }
   .teach-row{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
   .teach-input{
     flex:1; min-width:220px; font-family:'Karla', sans-serif; font-size:14px;
@@ -907,6 +918,7 @@
   <div id="lessonMode" class="hidden">
     <div class="lesson-cam-box" id="lessonCamBox">
       <video id="lessonCamVideo" autoplay playsinline muted></video>
+      <button class="cam-rotate-btn" id="lessonRotateBtn" type="button" title="Rotate camera 180°" aria-label="Rotate camera 180 degrees">&#10227; 180&deg;</button>
       <div class="lesson-cam-note hidden" id="lessonCamNote"></div>
     </div>
     <div class="lesson-cam-actions">
@@ -1988,6 +2000,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachRow.classList.toggle('hidden', !teaching);
     if (teaching){
       teachSubjectInput.focus();
+      // Switching back mid-lesson restores the already-delivered lesson
+      // and problem instead of losing them.
+      if (teachConversation.length) teachPanel.classList.remove('hidden');
     } else {
       teachPanel.classList.add('hidden');
     }
@@ -2343,9 +2358,18 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const lessonFileInput = document.getElementById('lessonFileInput');
   const lessonStatus = document.getElementById('lessonStatus');
   const imageWrap = document.querySelector('#resultPaper .image-wrap');
+  const lessonRotateBtn = document.getElementById('lessonRotateBtn');
   let lessonCamStream = null;
   let lessonModeOn = false;
   let lessonUploadedPending = false;
+  // For cameras mounted upside-down: flips the live view and every
+  // captured frame by 180° (same trick as watch mode's rotation toggle).
+  let lessonCamRotated = false;
+
+  lessonRotateBtn.addEventListener('click', () => {
+    lessonCamRotated = !lessonCamRotated;
+    lessonCamVideo.classList.toggle('is-rotated', lessonCamRotated);
+  });
 
   async function startLessonCam(){
     lessonCamNote.classList.add('hidden');
@@ -2369,6 +2393,17 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonCamVideo.srcObject = null;
   }
 
+  // The Homework / Teach-me mode can be switched at any point in the
+  // lesson EXCEPT while a problem is actively being worked: a frame frozen
+  // for checking, an uploaded photo waiting, or a check/hint in flight.
+  // Back at the live camera view, switching is free again.
+  function updateWorkSourceLock(){
+    const midProblem = lessonModeOn
+      && (lessonCheckBtn.disabled || !imageWrap.classList.contains('hidden') || lessonUploadedPending);
+    workSourceSelect.disabled = midProblem;
+    workSourceSelect.title = midProblem ? 'Finish checking this problem first' : '';
+  }
+
   function lessonShowLive(){
     imageWrap.classList.add('hidden');
     teacherBar.classList.add('hidden');
@@ -2377,6 +2412,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonBackBtn.classList.add('hidden');
     imageData = null;
     lessonUploadedPending = false;
+    updateWorkSourceLock();
   }
 
   function lessonFreezeFrame(frame){
@@ -2389,6 +2425,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     imageWrap.classList.remove('hidden');
     lessonCamVideo.classList.add('hidden');
     lessonBackBtn.classList.remove('hidden');
+    updateWorkSourceLock();
   }
 
   // In "Teach me & train" mode the camera box only appears once a practice
@@ -2426,6 +2463,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resultPaper.insertBefore(imageWrap, resultPaper.firstChild);
     imageData = null;
     hideResults();
+    updateWorkSourceLock();
   }
 
   async function lessonCapture(kind){
@@ -2442,11 +2480,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         lessonStatus.textContent = 'Camera is still starting — try again in a second…';
         return;
       }
-      lessonFreezeFrame(captureFrameFromVideo(lessonCamVideo, 1600, false));
+      lessonFreezeFrame(captureFrameFromVideo(lessonCamVideo, 1600, lessonCamRotated));
     }
     lessonUploadedPending = false;
     lessonCheckBtn.disabled = true;
     lessonHintBtn.disabled = true;
+    updateWorkSourceLock();
     // A counting ticker so a long check visibly makes progress — a static
     // "checking…" line for 30s reads as a frozen app.
     const baseMsg = kind === 'check'
@@ -2464,6 +2503,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       clearInterval(ticker);
       lessonCheckBtn.disabled = false;
       lessonHintBtn.disabled = false;
+      updateWorkSourceLock();
       // If the run failed, its message lands in the error note below the
       // fold — mirror it right here where the student is looking.
       lessonStatus.textContent = errorNote.classList.contains('hidden')
