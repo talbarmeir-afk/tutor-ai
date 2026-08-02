@@ -752,6 +752,14 @@
   .history-explanation{ font-size:13px; color:var(--ink); margin-top:4px; line-height:1.5; }
   .history-fix{ font-size:13px; color:var(--ink); margin-top:2px; line-height:1.5; }
   .history-fix .fix-label{ font-weight:600; }
+  .history-qa-toggle{
+    background:none; border:none; color:var(--chalk-muted); font-size:12.5px;
+    text-decoration:underline; cursor:pointer; padding:6px 0 0; font-family:'Karla', sans-serif;
+  }
+  .history-qa-toggle:hover{ color:var(--ink); }
+  .history-qa-thread{ margin-top:6px; display:flex; flex-direction:column; gap:6px; }
+  .history-qa-q{ font-size:13px; font-weight:600; color:var(--ink); }
+  .history-qa-a{ font-size:13px; color:var(--ink-muted); line-height:1.5; margin-bottom:4px; }
   .history-empty{ color:var(--ink-muted); font-size:14px; }
 
   .lightbox{
@@ -3211,6 +3219,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       conversation.push({ role: 'assistant', content: answer });
       answerEl.textContent = answer;
       answerEl.classList.remove('is-pending');
+      if (window.mathTutorHistory) window.mathTutorHistory.recordQA(question, answer);
     } catch(err){
       answerEl.textContent = "Sorry, that question didn't go through. Try asking again.";
       answerEl.classList.remove('is-pending');
@@ -3952,6 +3961,37 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       info.appendChild(fixEl);
     }
 
+    // The "explain in more detail" follow-up and any free-form questions
+    // asked about this check — everything communicated about it, not
+    // just the original verdict.
+    if (Array.isArray(entry.qa) && entry.qa.length){
+      const qaToggle = document.createElement('button');
+      qaToggle.type = 'button';
+      qaToggle.className = 'history-qa-toggle';
+      const showLabel = `Show conversation (${entry.qa.length})`;
+      qaToggle.textContent = showLabel;
+
+      const qaThread = document.createElement('div');
+      qaThread.className = 'history-qa-thread hidden';
+      entry.qa.forEach((pair) => {
+        const qEl = document.createElement('div');
+        qEl.className = 'history-qa-q';
+        qEl.textContent = pair.question;
+        const aEl = document.createElement('div');
+        aEl.className = 'history-qa-a';
+        aEl.textContent = pair.answer;
+        qaThread.appendChild(qEl);
+        qaThread.appendChild(aEl);
+      });
+
+      qaToggle.addEventListener('click', () => {
+        const nowHidden = qaThread.classList.toggle('hidden');
+        qaToggle.textContent = nowHidden ? showLabel : 'Hide conversation';
+      });
+      info.appendChild(qaToggle);
+      info.appendChild(qaThread);
+    }
+
     item.appendChild(info);
     return item;
   }
@@ -4149,15 +4189,89 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
   }
 
+  // Like makeThumbnail, but bakes the current check's mark (checkmark or
+  // circled mistake) into the image itself, by compositing the live
+  // #overlaySvg — already drawn by buildOverlay() for this exact check,
+  // in the other script — on top at the same percent-based coordinates.
+  // Reuses that rendering as-is rather than re-implementing the mark
+  // geometry here. Falls back to a plain thumbnail if there's no overlay
+  // (e.g. nothing found) or the composite fails for any reason.
+  function bakeAnnotatedThumbnail(dataUrl, maxDim){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('thumbnail-decode-failed'));
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim){
+          if (width > height){ height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const svgEl = document.getElementById('overlaySvg');
+        const annGroup = document.getElementById('annGroup');
+        if (!svgEl || !annGroup || !annGroup.children.length){
+          resolve(canvas.toDataURL('image/jpeg', 0.75));
+          return;
+        }
+        try{
+          const clone = svgEl.cloneNode(true);
+          clone.setAttribute('width', width);
+          clone.setAttribute('height', height);
+          clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+          const svgString = new XMLSerializer().serializeToString(clone);
+          const svgUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgString)));
+          const overlayImg = new Image();
+          overlayImg.onload = () => {
+            ctx.drawImage(overlayImg, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', 0.82));
+          };
+          overlayImg.onerror = () => resolve(canvas.toDataURL('image/jpeg', 0.75));
+          overlayImg.src = svgUrl;
+        } catch(e){
+          resolve(canvas.toDataURL('image/jpeg', 0.75));
+        }
+      };
+      img.src = dataUrl;
+    });
+  }
+
+  // Tracks the most recently saved check so follow-up Q&A (the "explain
+  // in more detail" button and free-form questions, both in the other
+  // script) can be attached to the right history row without threading
+  // an id through every call site — always the check the student is
+  // currently looking at.
+  let lastHistoryEntryId = null;
+  let currentQAList = [];
+
+  async function recordQA(question, answer){
+    if (!supabaseClient || !lastHistoryEntryId) return;
+    currentQAList.push({ question, answer });
+    try{
+      const { error } = await supabaseClient
+        .from('history_entries')
+        .update({ qa: currentQAList })
+        .eq('id', lastHistoryEntryId);
+      if (error) throw error;
+    } catch(err){
+      console.warn('Could not save Q&A to history entry', err);
+    }
+  }
+
   async function saveEntry(parsed, frame, mode, problemId, lessonId, problemFrame){
     if (!supabaseClient || !currentSession || !frame) return;
     try{
-      // 480px/0.72 balances being genuinely viewable when expanded against
+      // 480px balances being genuinely viewable when expanded against
       // Postgres row size — this is the only image kept per check, there's
-      // no separate low-res "thumbnail" vs full-res "photo".
-      const thumbnail = await makeThumbnail(frame.dataUrl, 480);
+      // no separate low-res "thumbnail" vs full-res "photo". The mark
+      // (checkmark or circled mistake) is baked in so the saved photo
+      // shows exactly what the student saw, not a blank re-upload.
+      const thumbnail = await bakeAnnotatedThumbnail(frame.dataUrl, 480);
       const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480) : null;
-      const { error } = await supabaseClient.from('history_entries').insert({
+      const { data, error } = await supabaseClient.from('history_entries').insert({
         user_id: currentSession.user.id,
         problem_id: problemId,
         lesson_id: lessonId,
@@ -4170,8 +4284,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         fix: parsed.fix || '',
         thumbnail,
         problem_thumbnail: problemThumbnail,
-      });
+      }).select('id').single();
       if (error) throw error;
+      // Any follow-up Q&A (detail explanation, free-form questions) on
+      // this check attaches here until the next one is saved.
+      lastHistoryEntryId = data ? data.id : null;
+      currentQAList = [];
       if (!homeHistoryView.classList.contains('hidden')) loadHistory();
       if (lessonId && lessonId === activeLessonId) loadCurrentLesson();
     } catch(err){
@@ -4232,7 +4350,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord, showCurrentLesson, hideCurrentLesson, recordTaughtSubject };
+  window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord, showCurrentLesson, hideCurrentLesson, recordTaughtSubject, recordQA };
 
   // ---- Profile, exams, dashboard, settings ----
   // Loaded lazily (on tab switch, via window.mathTutorProfile) rather than

@@ -176,7 +176,15 @@ not eagerly on sign-in.
   ```sql
   alter table lessons add column if not exists taught_subjects text;
   ```
-- **Dashboard** shows lessons-this-week vs. a weekly target, a streak (
+  Each check's saved photo has its mark (checkmark or circled mistake)
+  baked in — composited from the same overlay drawn live, at save time —
+  so history shows exactly what the student saw, not a blank re-upload.
+  Any follow-up on that check ("explain in more detail", or a typed
+  question) is saved too and shown behind a "Show conversation" toggle,
+  so nothing discussed about a problem is lost once the student moves on.
+- **Dashboard**'s per-topic mastery tags are clickable — they open Past
+  Lessons filtered to just that topic (clear the filter to see everything
+  again). Shows lessons-this-week vs. a weekly target, a streak (
   consecutive weeks meeting that target — a week still in progress doesn't
   break the streak, only a completed week that fell short does), an 8-week
   bar chart, and a per-topic mastery list. Mastery is a simple
@@ -208,6 +216,7 @@ everything tabs need — topic column, `profiles`, `exams`):
 ```sql
 alter table history_entries add column if not exists topic text;
 alter table history_entries add column if not exists problem_thumbnail text;
+alter table history_entries add column if not exists qa jsonb;
 
 create table if not exists profiles (
   user_id uuid primary key references auth.users,
