@@ -1259,6 +1259,10 @@
 
   <div id="homeHistoryView" class="hidden">
     <div class="history-view-card">
+      <div class="history-filter-bar hidden" id="historyFilterBar">
+        <span>Showing: <strong id="historyFilterLabel"></strong></span>
+        <button type="button" id="historyFilterClearBtn" aria-label="Clear filter">&times;</button>
+      </div>
       <div class="history-list" id="historyList"></div>
     </div>
   </div>
@@ -2542,7 +2546,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // Only genuine stillness with nothing submitted trips it — a student
   // who's steadily writing, just slowly, is never interrupted.
   const STUCK_SAMPLE_MS = 1000;
-  const STUCK_IDLE_MS = 4 * 60 * 1000;       // no motion + nothing submitted for this long -> nudge
+  const STUCK_IDLE_MS = 1 * 60 * 1000;       // no motion + nothing submitted for this long -> nudge
   const STUCK_RENOTIFY_MS = 3 * 60 * 1000;   // minimum gap between nudges while still idle
   const STUCK_AUTO_HIDE_MS = 12000;
   const STUCK_SMALL_W = 48, STUCK_SMALL_H = 36;
