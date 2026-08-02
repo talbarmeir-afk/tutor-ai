@@ -2516,6 +2516,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // so what the student sees is what gets sent.
   const LESSON_ZOOM_LEVELS = [1, 1.5, 2];
   let lessonCamZoom = 1;
+  // Drag-to-pan while zoomed in — in screen pixels, applied after the
+  // scale (translate() before scale() in the transform string) so a
+  // mouse/touch move of N px always shifts the content by N px on
+  // screen, regardless of zoom level.
+  let lessonPanX = 0;
+  let lessonPanY = 0;
+  let lessonPanDrag = null;
   const LESSON_CAM_ROTATION_PREFIX = 'mathTutorCamRotation:';
 
   function loadLessonCamQuarter(lessonId){
@@ -2675,34 +2682,81 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   });
   lessonCamVideo.addEventListener('loadedmetadata', applyLessonCamRotation);
 
-  // Zooms whichever is currently on screen. Live view: CSS-scaling the
-  // video — lessonCaptureFrame's crop math mirrors the same factor, so
-  // what's captured always matches what's shown. Frozen view: the photo
-  // and its annotation
-  // overlay are scaled together (same factor, same default center
-  // origin) so a circled mistake stays lined up with the work at any
-  // zoom level — the teacher bubble is a separate sibling and is left
-  // alone, so it never grows or shifts.
+  // Zooms (and pans) whichever is currently on screen. Live view:
+  // CSS-scaling the video — lessonCaptureFrame's crop math mirrors the
+  // same factor and pan, so what's captured always matches what's shown.
+  // Frozen view: the photo and its annotation overlay are transformed
+  // together (same factor, same offset, same default center origin) so
+  // a circled mistake stays lined up with the work at any zoom/pan — the
+  // teacher bubble is a separate sibling and is left alone, so it never
+  // grows or shifts.
   function applyLessonCamZoom(){
-    const t = lessonCamZoom !== 1 ? `scale(${lessonCamZoom})` : '';
+    const t = lessonCamZoom !== 1 ? `translate(${lessonPanX}px, ${lessonPanY}px) scale(${lessonCamZoom})` : '';
     lessonCamVideo.style.transform = t;
     resultImg.style.transform = t;
     overlaySvg.style.transform = t;
+    const draggable = lessonCamZoom !== 1;
+    lessonCamVideo.style.cursor = draggable ? 'grab' : '';
+    resultImg.style.cursor = draggable ? 'grab' : '';
+    lessonCamVideo.style.touchAction = draggable ? 'none' : '';
+    resultImg.style.touchAction = draggable ? 'none' : '';
     lessonZoomBtn.textContent = `\u{1F50D} ${lessonCamZoom}×`;
   }
+
+  // Keeps the zoomed content covering its element's own box (a rough,
+  // good-enough bound — it doesn't account for any letterboxing between
+  // the element and its container) rather than dragging blank space in.
+  function clampLessonPan(el){
+    if (lessonCamZoom === 1){ lessonPanX = 0; lessonPanY = 0; return; }
+    const maxX = el.clientWidth * (lessonCamZoom - 1) / 2;
+    const maxY = el.clientHeight * (lessonCamZoom - 1) / 2;
+    lessonPanX = Math.max(-maxX, Math.min(maxX, lessonPanX));
+    lessonPanY = Math.max(-maxY, Math.min(maxY, lessonPanY));
+  }
+
+  // Drag-to-pan with the Pointer Events API (unifies mouse/touch/pen):
+  // wired to both the live video and the frozen photo, since either may
+  // be the visible element — a no-op until the student actually zooms in.
+  function setupLessonPanDrag(el){
+    el.addEventListener('pointerdown', (e) => {
+      if (lessonCamZoom === 1) return;
+      e.preventDefault();
+      el.setPointerCapture(e.pointerId);
+      lessonPanDrag = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, baseX: lessonPanX, baseY: lessonPanY, el };
+      el.style.cursor = 'grabbing';
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!lessonPanDrag || lessonPanDrag.el !== el || lessonPanDrag.pointerId !== e.pointerId) return;
+      lessonPanX = lessonPanDrag.baseX + (e.clientX - lessonPanDrag.startX);
+      lessonPanY = lessonPanDrag.baseY + (e.clientY - lessonPanDrag.startY);
+      clampLessonPan(el);
+      applyLessonCamZoom();
+      el.style.cursor = 'grabbing';
+    });
+    const endLessonPanDrag = (e) => {
+      if (!lessonPanDrag || lessonPanDrag.el !== el || lessonPanDrag.pointerId !== e.pointerId) return;
+      lessonPanDrag = null;
+      el.style.cursor = lessonCamZoom !== 1 ? 'grab' : '';
+    };
+    el.addEventListener('pointerup', endLessonPanDrag);
+    el.addEventListener('pointercancel', endLessonPanDrag);
+  }
+  setupLessonPanDrag(lessonCamVideo);
+  setupLessonPanDrag(resultImg);
 
   lessonZoomBtn.addEventListener('click', () => {
     const idx = LESSON_ZOOM_LEVELS.indexOf(lessonCamZoom);
     lessonCamZoom = LESSON_ZOOM_LEVELS[(idx + 1) % LESSON_ZOOM_LEVELS.length];
+    if (lessonCamZoom === 1){ lessonPanX = 0; lessonPanY = 0; }
     applyLessonCamZoom();
   });
 
   // Like captureFrameFromVideo, but supports quarter turns (90/270 swap
   // the output dimensions so the captured photo is upright). Captures
-  // exactly what's visible on screen — no geometric crop — with zoom (if
-  // any) narrowing the captured span around the frame's center, matching
-  // the live CSS-scaled preview exactly.
-  function lessonCaptureFrame(video, maxDim, quarterTurns, zoom){
+  // exactly what's visible on screen — no geometric crop — with zoom/pan
+  // (if any) narrowing and shifting the captured span, matching the live
+  // CSS-scaled/panned preview exactly.
+  function lessonCaptureFrame(video, maxDim, quarterTurns, zoom, panX, panY){
     const q = ((quarterTurns % 4) + 4) % 4;
     const vw = video.videoWidth, vh = video.videoHeight;
     const uprightW = (q % 2) ? vh : vw;
@@ -2713,7 +2767,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const fctx = full.getContext('2d');
     fctx.translate(uprightW / 2, uprightH / 2);
     fctx.rotate(q * Math.PI / 2);
-    fctx.drawImage(video, -vw / 2, -vh / 2, vw, vh);
+    // The pan happens in the video's own unrotated on-screen box (CSS
+    // translate() runs before the parent frame's rotate()), so it's
+    // applied here in the same pre-rotation local frame, converted from
+    // rendered CSS pixels to native video pixels — the drawImage call
+    // itself then gets carried through the same rotate+recenter as the
+    // rest of the frame, exactly mirroring what the student saw live.
+    const px = ((panX || 0) * vw) / (video.clientWidth || vw);
+    const py = ((panY || 0) * vh) / (video.clientHeight || vh);
+    fctx.drawImage(video, -vw / 2 + px, -vh / 2 + py, vw, vh);
 
     const z = zoom || 1;
     const span = 1 / z;
@@ -2815,7 +2877,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   addProblemPhotoBtn.addEventListener('click', startProblemPhotoCapture);
   problemCaptureCancelBtn.addEventListener('click', endProblemPhotoCapture);
   problemCaptureSnapBtn.addEventListener('click', () => {
-    problemImageData = lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom);
+    problemImageData = lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom, lessonPanX, lessonPanY);
     endProblemPhotoCapture();
   });
   problemPhotoRemoveBtn.addEventListener('click', () => {
@@ -2989,7 +3051,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         lessonStatus.textContent = 'Camera is still starting — try again in a second…';
         return;
       }
-      lessonFreezeFrame(lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom));
+      lessonFreezeFrame(lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom, lessonPanX, lessonPanY));
     }
     lessonUploadedPending = false;
     lessonCheckBtn.disabled = true;
