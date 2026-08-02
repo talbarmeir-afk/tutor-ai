@@ -79,11 +79,21 @@
      existing .image-wrap, re-parented in here while a lesson runs. */
   .lesson-cam-box{
     position:relative; border:2px dashed rgba(24,24,22,0.22); border-radius:14px;
-    background:#141310; overflow:hidden; min-height:300px;
+    background:#141310; overflow:hidden; min-height:220px;
   }
-  .lesson-cam-box video{ display:block; width:100%; max-height:540px; object-fit:contain; background:#141310; }
+  /* Height-capped so the box plus the Check/Hint buttons stay above the
+     fold. Both the live feed and the frozen photo scale down as a whole
+     (width:auto + max-height, no letterboxing inside the element), which
+     keeps the annotation overlay's percentage coordinates aligned with
+     the visible picture. */
+  .lesson-cam-box video{ display:block; width:auto; max-width:100%; max-height:min(46vh, 440px); margin:0 auto; background:#141310; }
   .lesson-cam-box video.is-rotated{ transform:rotate(180deg); }
-  .lesson-cam-box .image-wrap{ border-radius:0; }
+  /* overflow:visible + a real minimum bubble width: on a narrow shrunken
+     photo the teacher bubble may extend over the dark letterbox areas
+     beside the picture instead of being squeezed/clipped inside it. */
+  .lesson-cam-box .image-wrap{ border-radius:0; width:fit-content; margin:0 auto; overflow:visible; }
+  .lesson-cam-box .image-wrap img{ width:auto; max-width:100%; max-height:min(46vh, 440px); }
+  .lesson-cam-box .teacher-bar{ min-width:min(330px, 82vw); max-width:380px; }
   .cam-rotate-btn{
     position:absolute; top:10px; right:10px; z-index:2;
     font-family:'Karla', sans-serif; font-weight:700; font-size:12px;
@@ -2166,6 +2176,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       teacherBar.style.bottom = clamp(100 - y + 7, 4, 62) + '%';
     }
     teacherBar.style.left = clamp(x - 12, 3, 36) + '%';
+    adjustLessonBubble();
   }
 
   function animateMascot(isOk){
@@ -2294,6 +2305,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teacherBar.style.top = 'auto';
     teacherBar.style.bottom = '5%';
     teacherBar.style.left = '6%';
+    adjustLessonBubble();
     watchResumeRow.classList.add('hidden');
     resultPaper.classList.remove('hidden');
     conversation = [
@@ -2402,6 +2414,36 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       && (lessonCheckBtn.disabled || !imageWrap.classList.contains('hidden') || lessonUploadedPending);
     workSourceSelect.disabled = midProblem;
     workSourceSelect.title = midProblem ? 'Finish checking this problem first' : '';
+  }
+
+  // The bubble is positioned in percent of the (possibly narrow, centered)
+  // image — on a shrunken lesson capture that can push it past the camera
+  // box's clipped edges. After each render, nudge it back fully inside the
+  // box; over the dark letterbox areas is fine, cut off is not.
+  function adjustLessonBubble(){
+    if (!lessonModeOn) return;
+    requestAnimationFrame(() => {
+      if (teacherBar.classList.contains('hidden')) return;
+      const pad = 8;
+      const boxR = lessonCamBox.getBoundingClientRect();
+      const wrapR = imageWrap.getBoundingClientRect();
+      let barR = teacherBar.getBoundingClientRect();
+      let shift = 0;
+      if (barR.right > boxR.right - pad) shift = (boxR.right - pad) - barR.right;
+      if (barR.left + shift < boxR.left + pad) shift = (boxR.left + pad) - barR.left;
+      if (shift !== 0){
+        teacherBar.style.left = (barR.left + shift - wrapR.left) + 'px';
+      }
+      barR = teacherBar.getBoundingClientRect();
+      if (barR.bottom > boxR.bottom - pad){
+        teacherBar.style.top = (barR.top - wrapR.top - (barR.bottom - (boxR.bottom - pad))) + 'px';
+        teacherBar.style.bottom = 'auto';
+      }
+      if (barR.top < boxR.top + pad){
+        teacherBar.style.top = (boxR.top + pad - wrapR.top) + 'px';
+        teacherBar.style.bottom = 'auto';
+      }
+    });
   }
 
   function lessonShowLive(){
@@ -2688,6 +2730,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (mode !== 'watch') stopCamera();
     if (!takePhotoSection.classList.contains('hidden')) cancelTakePhoto();
     cameraOptionRow.classList.add('hidden');
+    // While the lesson camera owns the card, no setMode call (whatever
+    // triggered it) may resurface the guest upload/watch UI.
+    if (lessonModeOn){
+      uploadModeEl.classList.add('hidden');
+      watchModeEl.classList.add('hidden');
+      modeToggle.classList.add('hidden');
+    }
   }
 
   modeToggle.addEventListener('click', (e) => {
