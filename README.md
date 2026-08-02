@@ -124,6 +124,19 @@ check/analyze features.
   to `auth.uid() = user_id`), then swap `SUPABASE_URL` and
   `SUPABASE_ANON_KEY` in `index.html` for your project's values (Project
   Settings → API).
+- **"Continue with Google"** calls `supabaseClient.auth.signInWithOAuth({
+  provider: 'google' })` — one button handles both sign-in and sign-up,
+  since OAuth doesn't distinguish them (Supabase creates the account on
+  first use). This needs a one-time setup outside the code, in two places:
+  1. **Google Cloud Console** → APIs & Services → Credentials → create an
+     OAuth 2.0 Client ID (type: Web application). Add
+     `https://<your-project-ref>.supabase.co/auth/v1/callback` as an
+     authorized redirect URI.
+  2. **Supabase dashboard** → Authentication → Providers → Google → enable
+     it and paste that Client ID and Client Secret in.
+
+  Until both are done, the button surfaces whatever error Supabase returns
+  (e.g. "provider is not enabled") instead of silently failing.
 - History is saved after every upload-mode check, and after every watch-mode
   check that finds a mistake (not on every silent "still watching" tick).
 - Entries are grouped by `problem_id` in the history panel — a fresh id is
