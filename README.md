@@ -39,6 +39,20 @@ clarification question — both continue the same conversation through the
 same endpoint (send `{subject}` for a fresh lesson, `{conversation}` for a
 follow-up).
 
+In Homework mode, once a work photo is frozen a low-key "+ add a photo of
+the problem" link appears next to Check/Hint, for problems copied from a
+book or worksheet — entirely optional, per problem. It briefly swaps the
+box back to the live feed (same crop guide, rotation, and zoom) to snap
+the problem itself, then restores the work photo; once attached it's sent
+alongside every check/hint on that problem (so re-checking after a fix
+doesn't mean re-photographing the book) until removed via the chip's "×"
+or the problem changes. `/api/analyze` and `/api/hint` accept it as an
+optional `problemBase64`/`problemMediaType` pair, shown to the model
+before the work photo so it checks against the actual printed problem
+instead of inferring it from the handwriting; omitted entirely, the
+request is unchanged from before this existed. If attached, its thumbnail
+is saved alongside the solution's in that history entry.
+
 ### Watch mode
 
 "Watch with camera" isn't literal live video analysis — Claude's vision API
@@ -193,6 +207,7 @@ everything tabs need — topic column, `profiles`, `exams`):
 
 ```sql
 alter table history_entries add column if not exists topic text;
+alter table history_entries add column if not exists problem_thumbnail text;
 
 create table if not exists profiles (
   user_id uuid primary key references auth.users,

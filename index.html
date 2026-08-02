@@ -150,6 +150,16 @@
     padding:8px 12px; border-radius:8px; text-align:center;
   }
   .lesson-cam-actions{ display:flex; justify-content:center; gap:10px; margin-top:14px; }
+  .problem-photo-row{ text-align:center; margin-top:8px; }
+  .problem-photo-chip{
+    display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--chalk-muted);
+    background:rgba(24,24,22,0.06); border-radius:14px; padding:4px 6px 4px 10px;
+  }
+  .problem-photo-chip button{
+    background:none; border:none; font-size:16px; line-height:1; color:var(--chalk-muted);
+    cursor:pointer; padding:0 4px;
+  }
+  .problem-photo-chip button:hover{ color:var(--chalk); }
   /* Gentle "still there?" nudge — a normal-flow card, never overlaid on
      the camera/photo, so it can never cover the student's work the way
      the result bubble once did. Dismissible and non-blocking. */
@@ -749,6 +759,8 @@
     width:64px; height:64px; object-fit:cover; border-radius:8px;
     flex-shrink:0; background:#00000010; cursor:pointer;
   }
+  .history-thumbs{ display:flex; flex-direction:column; gap:4px; flex-shrink:0; }
+  .history-thumbs .problem-thumb{ width:64px; height:30px; }
   .history-info{ flex:1; min-width:0; }
   .history-date{ font-size:12px; color:var(--ink-muted); margin-bottom:4px; }
   .history-verdict{ font-weight:700; font-size:14px; }
@@ -988,17 +1000,31 @@
       <div class="lesson-cam-frame" id="lessonCamFrame">
         <video id="lessonCamVideo" autoplay playsinline muted></video>
         <div class="lesson-cam-guide" id="lessonCamGuide">
-          <span class="lesson-cam-guide-label">Fit your paper in here — keep hands out</span>
+          <span class="lesson-cam-guide-label" id="lessonCamGuideLabel">Fit your paper in here — keep hands out</span>
         </div>
       </div>
       <button class="cam-rotate-btn" id="lessonRotateBtn" type="button" title="Rotate camera 90°" aria-label="Rotate camera by 90 degrees">&#10227; 90&deg;</button>
       <button class="cam-rotate-btn cam-zoom-btn" id="lessonZoomBtn" type="button" title="Zoom in" aria-label="Zoom the camera view">&#128269; 1&times;</button>
       <div class="lesson-cam-note hidden" id="lessonCamNote"></div>
     </div>
-    <div class="lesson-cam-actions">
+    <div class="lesson-cam-actions" id="lessonCamActions">
       <button class="ghost-btn" id="lessonHintBtn" type="button">Give me a hint</button>
       <button class="primary-btn" id="lessonCheckBtn" type="button">Check</button>
       <button class="ghost-btn hidden" id="lessonBackBtn" type="button">Back to camera</button>
+    </div>
+    <!-- Only relevant when the problem came from a book/worksheet — the
+         student attaches it whenever it's actually needed, not every
+         problem, and it stays attached across re-checks until removed. -->
+    <div class="lesson-cam-actions hidden" id="problemCaptureActions">
+      <button class="ghost-btn" id="problemCaptureCancelBtn" type="button">Cancel</button>
+      <button class="primary-btn" id="problemCaptureSnapBtn" type="button">Take photo of the problem</button>
+    </div>
+    <div class="problem-photo-row hidden" id="problemPhotoRow">
+      <button class="link-btn" id="addProblemPhotoBtn" type="button">+ add a photo of the problem</button>
+      <div class="problem-photo-chip hidden" id="problemPhotoChip">
+        <span>&#128196; Problem attached</span>
+        <button type="button" id="problemPhotoRemoveBtn" aria-label="Remove problem photo">&times;</button>
+      </div>
     </div>
     <!-- Shown when the student has gone quiet (no writing, nothing checked)
          for a while — a gentle nudge, not a blocker; dismissible and also
@@ -2108,6 +2134,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       teachPanel.classList.add('hidden');
     }
     updateLessonCamVisibility();
+    updateProblemPhotoUI();
   });
 
   async function requestLesson(){
@@ -2348,7 +2375,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: griddedBase64, mediaType: 'image/jpeg' }),
+        body: JSON.stringify({
+          base64: griddedBase64,
+          mediaType: 'image/jpeg',
+          ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
+        }),
         signal: controller.signal
       });
       const data = await response.json().catch(() => { throw new Error('the server returned an invalid response (status ' + response.status + ')'); });
@@ -2359,7 +2390,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         await refineMistakeLocation(parsed, imageData.dataUrl);
       }
       renderResult(parsed);
-      if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId);
+      if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId, problemImageData);
       maybeTeachNextProblem(parsed);
     } catch(err){
       // Keep the friendly copy but surface the underlying error too —
@@ -2425,7 +2456,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const response = await fetch('/api/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64: imageData.base64, mediaType: 'image/jpeg' }),
+        body: JSON.stringify({
+          base64: imageData.base64,
+          mediaType: 'image/jpeg',
+          ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
+        }),
         signal: controller.signal
       });
       const data = await response.json().catch(() => { throw new Error('the server returned an invalid response (status ' + response.status + ')'); });
@@ -2470,6 +2505,25 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const stuckNudgeText = document.getElementById('stuckNudgeText');
   const stuckNudgeClose = document.getElementById('stuckNudgeClose');
   const stuckMascot = document.getElementById('stuckMascot');
+  const lessonCamGuideLabel = document.getElementById('lessonCamGuideLabel');
+  const lessonCamActions = document.getElementById('lessonCamActions');
+  const problemCaptureActions = document.getElementById('problemCaptureActions');
+  const problemCaptureCancelBtn = document.getElementById('problemCaptureCancelBtn');
+  const problemCaptureSnapBtn = document.getElementById('problemCaptureSnapBtn');
+  const problemPhotoRow = document.getElementById('problemPhotoRow');
+  const addProblemPhotoBtn = document.getElementById('addProblemPhotoBtn');
+  const problemPhotoChip = document.getElementById('problemPhotoChip');
+  const problemPhotoRemoveBtn = document.getElementById('problemPhotoRemoveBtn');
+  const LESSON_CAM_GUIDE_TEXT = 'Fit your paper in here — keep hands out';
+  const PROBLEM_CAM_GUIDE_TEXT = 'Fit the printed problem here';
+  // The photo of the printed problem (when the student attaches one) —
+  // homework-only, optional per problem, and sticky: once attached it's
+  // sent with every check/hint until the student removes it, since
+  // lesson-mode re-checks re-photograph the work but shouldn't force
+  // re-photographing the book every time too.
+  let problemImageData = null;
+  let capturingProblemPhoto = false;
+  let wasFrozenBeforeProblemCapture = false;
   let lessonCamStream = null;
   let lessonModeOn = false;
   let lessonUploadedPending = false;
@@ -2743,10 +2797,68 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // Back at the live camera view, switching is free again.
   function updateWorkSourceLock(){
     const midProblem = lessonModeOn
-      && (lessonCheckBtn.disabled || !imageWrap.classList.contains('hidden') || lessonUploadedPending);
+      && (lessonCheckBtn.disabled || !imageWrap.classList.contains('hidden') || lessonUploadedPending || capturingProblemPhoto);
     workSourceSelect.disabled = midProblem;
     workSourceSelect.title = midProblem ? 'Finish checking this problem first' : '';
   }
+
+  // Homework-only: the "add a photo of the problem" link/chip only makes
+  // sense once there's a work photo to check it against (matches the
+  // student's own book-problem-then-written-solution order), and never
+  // while a problem photo is actively being snapped.
+  function updateProblemPhotoUI(){
+    const frozen = !imageWrap.classList.contains('hidden');
+    const show = lessonModeOn && workSourceSelect.value === 'homework' && !capturingProblemPhoto && frozen;
+    problemPhotoRow.classList.toggle('hidden', !show);
+    if (!show) return;
+    const attached = !!problemImageData;
+    addProblemPhotoBtn.classList.toggle('hidden', attached);
+    problemPhotoChip.classList.toggle('hidden', !attached);
+  }
+
+  // Temporarily swaps the box back to the live feed to snap a photo of
+  // the printed problem, without disturbing the frozen work photo (or
+  // its check result) already showing — cancel or snap both restore it.
+  function startProblemPhotoCapture(){
+    if (!lessonCamStream || !lessonCamVideo.videoWidth){
+      lessonCamNote.textContent = 'Camera is off — start the camera to add a problem photo.';
+      lessonCamNote.classList.remove('hidden');
+      return;
+    }
+    capturingProblemPhoto = true;
+    wasFrozenBeforeProblemCapture = !imageWrap.classList.contains('hidden');
+    imageWrap.classList.add('hidden');
+    lessonCamFrame.classList.remove('hidden');
+    lessonCamGuideLabel.textContent = PROBLEM_CAM_GUIDE_TEXT;
+    lessonCamActions.classList.add('hidden');
+    problemCaptureActions.classList.remove('hidden');
+    updateProblemPhotoUI();
+    updateWorkSourceLock();
+  }
+
+  function endProblemPhotoCapture(){
+    capturingProblemPhoto = false;
+    lessonCamGuideLabel.textContent = LESSON_CAM_GUIDE_TEXT;
+    problemCaptureActions.classList.add('hidden');
+    lessonCamActions.classList.remove('hidden');
+    if (wasFrozenBeforeProblemCapture){
+      imageWrap.classList.remove('hidden');
+      lessonCamFrame.classList.add('hidden');
+    }
+    updateProblemPhotoUI();
+    updateWorkSourceLock();
+  }
+
+  addProblemPhotoBtn.addEventListener('click', startProblemPhotoCapture);
+  problemCaptureCancelBtn.addEventListener('click', endProblemPhotoCapture);
+  problemCaptureSnapBtn.addEventListener('click', () => {
+    problemImageData = lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom);
+    endProblemPhotoCapture();
+  });
+  problemPhotoRemoveBtn.addEventListener('click', () => {
+    problemImageData = null;
+    updateProblemPhotoUI();
+  });
 
   // In the lesson box the bubble must never cover the student's work: when
   // the (height-capped, centered) photo leaves dark letterbox room beside
@@ -2832,6 +2944,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     imageData = null;
     lessonUploadedPending = false;
     updateWorkSourceLock();
+    updateProblemPhotoUI();
   }
 
   function lessonFreezeFrame(frame){
@@ -2848,6 +2961,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonCamFrame.classList.add('hidden');
     lessonBackBtn.classList.remove('hidden');
     updateWorkSourceLock();
+    updateProblemPhotoUI();
   }
 
   // In "Teach me & train" mode the camera box only appears once a practice
@@ -2892,6 +3006,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resetLessonBubbleStyles();
     resultPaper.insertBefore(imageWrap, resultPaper.firstChild);
     imageData = null;
+    problemImageData = null;
+    capturingProblemPhoto = false;
     hideResults();
     updateWorkSourceLock();
   }
@@ -3696,11 +3812,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const item = document.createElement('div');
     item.className = 'history-item';
 
+    const thumbs = document.createElement('div');
+    thumbs.className = 'history-thumbs';
+
     const img = document.createElement('img');
     img.src = entry.thumbnail || '';
     img.alt = 'Click to view full size';
     img.addEventListener('click', () => openLightbox(entry.thumbnail));
-    item.appendChild(img);
+    thumbs.appendChild(img);
+
+    if (entry.problem_thumbnail){
+      const problemImg = document.createElement('img');
+      problemImg.className = 'problem-thumb';
+      problemImg.src = entry.problem_thumbnail;
+      problemImg.alt = 'The printed problem — click to view full size';
+      problemImg.title = 'The printed problem';
+      problemImg.addEventListener('click', () => openLightbox(entry.problem_thumbnail));
+      thumbs.appendChild(problemImg);
+    }
+
+    item.appendChild(thumbs);
 
     const info = document.createElement('div');
     info.className = 'history-info';
@@ -3928,13 +4059,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
   }
 
-  async function saveEntry(parsed, frame, mode, problemId, lessonId){
+  async function saveEntry(parsed, frame, mode, problemId, lessonId, problemFrame){
     if (!supabaseClient || !currentSession || !frame) return;
     try{
       // 480px/0.72 balances being genuinely viewable when expanded against
       // Postgres row size — this is the only image kept per check, there's
       // no separate low-res "thumbnail" vs full-res "photo".
       const thumbnail = await makeThumbnail(frame.dataUrl, 480);
+      const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480) : null;
       const { error } = await supabaseClient.from('history_entries').insert({
         user_id: currentSession.user.id,
         problem_id: problemId,
@@ -3947,6 +4079,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         explanation: parsed.explanation || '',
         fix: parsed.fix || '',
         thumbnail,
+        problem_thumbnail: problemThumbnail,
       });
       if (error) throw error;
       if (!homeHistoryView.classList.contains('hidden')) loadHistory();
