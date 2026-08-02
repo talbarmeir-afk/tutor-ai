@@ -141,6 +141,9 @@
   }
   .cam-rotate-btn:hover{ background:rgba(16,15,12,0.9); }
   .cam-rotate-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+  /* Sits at the opposite corner from rotate so neither control's tap
+     target overlaps the other. */
+  .cam-zoom-btn{ left:10px; right:auto; }
   .lesson-cam-note{
     position:absolute; left:12px; right:12px; bottom:12px;
     font-size:13px; color:#F4F3EF; background:rgba(16,15,12,0.75);
@@ -974,6 +977,7 @@
         </div>
       </div>
       <button class="cam-rotate-btn" id="lessonRotateBtn" type="button" title="Rotate camera 90°" aria-label="Rotate camera by 90 degrees">&#10227; 90&deg;</button>
+      <button class="cam-rotate-btn cam-zoom-btn" id="lessonZoomBtn" type="button" title="Zoom in" aria-label="Zoom the camera view">&#128269; 1&times;</button>
       <div class="lesson-cam-note hidden" id="lessonCamNote"></div>
     </div>
     <div class="lesson-cam-actions">
@@ -2419,12 +2423,18 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const lessonStatus = document.getElementById('lessonStatus');
   const imageWrap = document.querySelector('#resultPaper .image-wrap');
   const lessonRotateBtn = document.getElementById('lessonRotateBtn');
+  const lessonZoomBtn = document.getElementById('lessonZoomBtn');
   let lessonCamStream = null;
   let lessonModeOn = false;
   let lessonUploadedPending = false;
   // For cameras mounted sideways or upside-down: each click turns the
   // view (and every captured frame) another quarter turn — 0/90/180/270°.
   let lessonCamQuarter = 0;
+  // Digital zoom: cycles 1x -> 1.5x -> 2x -> 1x. Applied both as a live
+  // CSS preview on the video and as a tighter crop in lessonCaptureFrame,
+  // so what the student sees is what gets sent.
+  const LESSON_ZOOM_LEVELS = [1, 1.5, 2];
+  let lessonCamZoom = 1;
   // Matches the .lesson-cam-guide CSS box (top/bottom 8%, left/right 13%)
   // — capture crops to exactly this region so what's captured always
   // matches what the guide showed the student. Keeps hands/background out
@@ -2453,13 +2463,29 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   });
   lessonCamVideo.addEventListener('loadedmetadata', applyLessonCamRotation);
 
+  // Visual zoom on the live feed: CSS-scaling the video (not the frame)
+  // leaves the guide overlay's on-screen position untouched, so a fixed
+  // guide box now represents a proportionally smaller slice of the real
+  // sensor frame — lessonCaptureFrame's crop math mirrors that exactly.
+  function applyLessonCamZoomPreview(){
+    lessonCamVideo.style.transform = lessonCamZoom !== 1 ? `scale(${lessonCamZoom})` : '';
+    lessonZoomBtn.textContent = `\u{1F50D} ${lessonCamZoom}×`;
+  }
+
+  lessonZoomBtn.addEventListener('click', () => {
+    const idx = LESSON_ZOOM_LEVELS.indexOf(lessonCamZoom);
+    lessonCamZoom = LESSON_ZOOM_LEVELS[(idx + 1) % LESSON_ZOOM_LEVELS.length];
+    applyLessonCamZoomPreview();
+  });
+
   // Like captureFrameFromVideo, but supports quarter turns (90/270 swap
   // the output dimensions so the captured photo is upright) AND crops to
-  // the guide region: the raw rotated frame is rendered at native
-  // resolution first, then only the guide's rectangle is drawn into the
-  // final (size-capped) canvas — everything outside it, hands and
-  // surroundings included, never leaves the browser.
-  function lessonCaptureFrame(video, maxDim, quarterTurns){
+  // the guide region (further tightened by the zoom level): the raw
+  // rotated frame is rendered at native resolution first, then only the
+  // guide's (zoomed) rectangle is drawn into the final (size-capped)
+  // canvas — everything outside it, hands and surroundings included,
+  // never leaves the browser.
+  function lessonCaptureFrame(video, maxDim, quarterTurns, zoom){
     const q = ((quarterTurns % 4) + 4) % 4;
     const vw = video.videoWidth, vh = video.videoHeight;
     const uprightW = (q % 2) ? vh : vw;
@@ -2472,11 +2498,17 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     fctx.rotate(q * Math.PI / 2);
     fctx.drawImage(video, -vw / 2, -vh / 2, vw, vh);
 
+    // Both the guide box and the zoom are centered, so zooming just
+    // shrinks the captured span around the same center point — at
+    // zoom 1 this reduces exactly to the plain guide-inset crop.
     const g = LESSON_GUIDE_INSET;
-    const cropX = Math.round(uprightW * g.left);
-    const cropY = Math.round(uprightH * g.top);
-    const cropW = Math.round(uprightW * (1 - g.left - g.right));
-    const cropH = Math.round(uprightH * (1 - g.top - g.bottom));
+    const z = zoom || 1;
+    const hSpan = (1 - g.left - g.right) / z;
+    const vSpan = (1 - g.top - g.bottom) / z;
+    const cropX = Math.round(uprightW * (0.5 - hSpan / 2));
+    const cropY = Math.round(uprightH * (0.5 - vSpan / 2));
+    const cropW = Math.round(uprightW * hSpan);
+    const cropH = Math.round(uprightH * vSpan);
 
     let outW = cropW, outH = cropH;
     if (outW > maxDim || outH > maxDim){
@@ -2678,7 +2710,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         lessonStatus.textContent = 'Camera is still starting — try again in a second…';
         return;
       }
-      lessonFreezeFrame(lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter));
+      lessonFreezeFrame(lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom));
     }
     lessonUploadedPending = false;
     lessonCheckBtn.disabled = true;
