@@ -2472,55 +2472,71 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const pad = 10;
       const boxR = lessonCamBox.getBoundingClientRect();
       const wrapR = imageWrap.getBoundingClientRect();
-      let barR = teacherBar.getBoundingClientRect();
-      const barW = barR.width || 340;
       const leftSpace = wrapR.left - boxR.left;
       const rightSpace = boxR.right - wrapR.right;
-      const side = (rightSpace >= barW + pad * 2) ? 'right'
-                 : (leftSpace >= barW + pad * 2) ? 'left'
-                 : null;
+      const bestSide = rightSpace >= leftSpace ? 'right' : 'left';
+      const sideSpace = Math.max(leftSpace, rightSpace);
       teacherBar.classList.remove('is-right-of', 'is-left-of');
-      if (side){
+      teacherBar.style.maxHeight = '';
+      teacherBar.style.overflowY = '';
+      // Any usable dark strip beside the photo wins: the bubble narrows to
+      // fit it rather than covering the student's work.
+      if (sideSpace >= 240 + pad * 2){
+        const width = Math.min(380, sideSpace - pad * 2);
+        teacherBar.style.minWidth = '0';
+        teacherBar.style.width = width + 'px';
         teacherBar.classList.remove('is-below', 'is-above');
-        teacherBar.classList.add(side === 'right' ? 'is-right-of' : 'is-left-of');
-        const markYPct = Number(teacherBar.dataset.markY);
-        const anchorY = Number.isFinite(markYPct)
-          ? wrapR.top + wrapR.height * markYPct / 100
-          : boxR.top + boxR.height / 2;
-        // The side tail sits ~24px below the bubble's top edge — line it
-        // up with the marked line, clamped inside the box.
-        let topPx = anchorY - 33;
-        topPx = Math.max(boxR.top + pad, Math.min(topPx, boxR.bottom - pad - barR.height));
-        teacherBar.style.top = (topPx - wrapR.top) + 'px';
-        teacherBar.style.bottom = 'auto';
-        teacherBar.style.left = side === 'right'
+        teacherBar.classList.add(bestSide === 'right' ? 'is-right-of' : 'is-left-of');
+        teacherBar.style.left = bestSide === 'right'
           ? (wrapR.width + pad) + 'px'
-          : (-(barW + pad)) + 'px';
-        return;
+          : (-(width + pad)) + 'px';
+      } else {
+        teacherBar.style.width = '';
+        teacherBar.style.minWidth = '';
       }
-      // Fallback: no dark side room — keep it on the photo but fully
-      // inside the box.
-      let shift = 0;
-      if (barR.right > boxR.right - pad) shift = (boxR.right - pad) - barR.right;
-      if (barR.left + shift < boxR.left + pad) shift = (boxR.left + pad) - barR.left;
-      if (shift !== 0){
-        teacherBar.style.left = (barR.left + shift - wrapR.left) + 'px';
+      // Always top-anchor: later growth (the Q&A opening under the
+      // explanation) must extend DOWNWARD — bottom-anchored bubbles grew
+      // upward past the box top where nothing can scroll.
+      let barR = teacherBar.getBoundingClientRect();
+      const sideMode = teacherBar.classList.contains('is-right-of') || teacherBar.classList.contains('is-left-of');
+      const markYPct = Number(teacherBar.dataset.markY);
+      let topPx = sideMode && Number.isFinite(markYPct)
+        ? wrapR.top + wrapR.height * markYPct / 100 - 33
+        : barR.top;
+      const maxH = boxR.height - pad * 2;
+      if (barR.height > maxH){
+        teacherBar.style.maxHeight = maxH + 'px';
+        teacherBar.style.overflowY = 'auto';
+        barR = teacherBar.getBoundingClientRect();
       }
-      barR = teacherBar.getBoundingClientRect();
-      if (barR.bottom > boxR.bottom - pad){
-        teacherBar.style.top = (barR.top - wrapR.top - (barR.bottom - (boxR.bottom - pad))) + 'px';
-        teacherBar.style.bottom = 'auto';
-      }
-      if (barR.top < boxR.top + pad){
-        teacherBar.style.top = (boxR.top + pad - wrapR.top) + 'px';
-        teacherBar.style.bottom = 'auto';
+      topPx = Math.max(boxR.top + pad, Math.min(topPx, boxR.bottom - pad - Math.min(barR.height, maxH)));
+      teacherBar.style.top = (topPx - wrapR.top) + 'px';
+      teacherBar.style.bottom = 'auto';
+      if (!sideMode){
+        // On-photo fallback (wide photo, no dark strip): clamp inside box.
+        barR = teacherBar.getBoundingClientRect();
+        let shift = 0;
+        if (barR.right > boxR.right - pad) shift = (boxR.right - pad) - barR.right;
+        if (barR.left + shift < boxR.left + pad) shift = (boxR.left + pad) - barR.left;
+        if (shift !== 0) teacherBar.style.left = (barR.left + shift - wrapR.left) + 'px';
       }
     });
+  }
+
+  // Clears the inline sizing/positioning the lesson placement gives the
+  // bubble, so the next render (lesson or guest) starts clean.
+  function resetLessonBubbleStyles(){
+    teacherBar.classList.remove('is-right-of', 'is-left-of');
+    teacherBar.style.width = '';
+    teacherBar.style.minWidth = '';
+    teacherBar.style.maxHeight = '';
+    teacherBar.style.overflowY = '';
   }
 
   function lessonShowLive(){
     imageWrap.classList.add('hidden');
     teacherBar.classList.add('hidden');
+    resetLessonBubbleStyles();
     annGroup.innerHTML = '';
     lessonCamVideo.classList.remove('hidden');
     lessonBackBtn.classList.add('hidden');
@@ -2536,6 +2552,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resultImg.src = frame.dataUrl;
     annGroup.innerHTML = '';
     teacherBar.classList.add('hidden');
+    resetLessonBubbleStyles();
     imageWrap.classList.remove('hidden');
     lessonCamVideo.classList.add('hidden');
     lessonBackBtn.classList.remove('hidden');
@@ -2574,6 +2591,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonModeEl.classList.add('hidden');
     modeToggle.classList.remove('hidden');
     imageWrap.classList.remove('hidden');
+    resetLessonBubbleStyles();
     resultPaper.insertBefore(imageWrap, resultPaper.firstChild);
     imageData = null;
     hideResults();
@@ -2699,6 +2717,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!question || qaSend.disabled) return;
     qaSection.classList.remove('hidden');
     const answerEl = addQaPair(question);
+    adjustLessonBubble();
     conversation.push({ role: 'user', content: question });
     qaSend.disabled = true;
     qaInput.disabled = true;
@@ -2723,6 +2742,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       qaSend.disabled = false;
       qaInput.disabled = false;
       detailBtn.disabled = false;
+      // The answer just changed the bubble's height — re-place it so it
+      // stays fully visible inside the lesson box.
+      adjustLessonBubble();
     }
   }
 
@@ -2740,6 +2762,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   askBtn.addEventListener('click', () => {
     qaSection.classList.remove('hidden');
+    adjustLessonBubble();
     qaSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     qaInput.focus({ preventScroll: true });
   });
