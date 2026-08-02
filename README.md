@@ -42,7 +42,7 @@ follow-up).
 In Homework mode, once a work photo is frozen a low-key "+ add a photo of
 the problem" link appears next to Check/Hint, for problems copied from a
 book or worksheet — entirely optional, per problem. It briefly swaps the
-box back to the live feed (same crop guide, rotation, and zoom) to snap
+box back to the live feed (same rotation and zoom) to snap
 the problem itself, then restores the work photo; once attached it's sent
 alongside every check/hint on that problem (so re-checking after a fix
 doesn't mean re-photographing the book) until removed via the chip's "×"

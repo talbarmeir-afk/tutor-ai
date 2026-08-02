@@ -91,26 +91,8 @@
      splitting it uselessly on both sides, so the feedback bubble
      consistently has real room to live in without ever covering the
      photo. */
-  /* Rotation is applied to this wrapper (not the video alone) so the crop
-     guide drawn on top of it rotates in lockstep with the video — the
-     student always sees the guide aligned to what the camera shows,
-     whichever quarter-turn is selected. */
   .lesson-cam-frame{ position:relative; display:inline-block; max-width:100%; transition:transform .2s ease; }
   .lesson-cam-frame video{ display:block; width:auto; max-width:100%; max-height:min(38vh, 400px); margin:0; background:#141310; }
-  /* The dashed guide marks exactly the region that gets captured — the
-     student fits their paper inside it and keeps hands/surroundings
-     outside. Capture crops to these same percentages, so what's shown is
-     what's sent: trims out anything outside the guide for both privacy
-     and a tighter, more legible photo of the actual work. */
-  .lesson-cam-guide{
-    position:absolute; top:10%; bottom:26%; left:15%; right:15%;
-    border:2px dashed rgba(255,255,255,0.75); border-radius:8px; pointer-events:none;
-  }
-  .lesson-cam-guide-label{
-    position:absolute; top:6px; left:6px; right:6px; text-align:center;
-    font-family:'Karla', sans-serif; font-size:11px; color:#fff;
-    background:rgba(16,15,12,0.65); padding:3px 6px; border-radius:5px;
-  }
   /* overflow:visible + a real minimum bubble width: on a narrow shrunken
      photo the teacher bubble may extend over the dark letterbox areas
      beside the picture instead of being squeezed/clipped inside it. */
@@ -999,9 +981,6 @@
     <div class="lesson-cam-box" id="lessonCamBox">
       <div class="lesson-cam-frame" id="lessonCamFrame">
         <video id="lessonCamVideo" autoplay playsinline muted></video>
-        <div class="lesson-cam-guide" id="lessonCamGuide">
-          <span class="lesson-cam-guide-label" id="lessonCamGuideLabel">Fit your work in here, hand below the line</span>
-        </div>
       </div>
       <button class="cam-rotate-btn" id="lessonRotateBtn" type="button" title="Rotate camera 90°" aria-label="Rotate camera by 90 degrees">&#10227; 90&deg;</button>
       <button class="cam-rotate-btn cam-zoom-btn" id="lessonZoomBtn" type="button" title="Zoom in" aria-label="Zoom the camera view">&#128269; 1&times;</button>
@@ -2508,7 +2487,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const stuckNudgeText = document.getElementById('stuckNudgeText');
   const stuckNudgeClose = document.getElementById('stuckNudgeClose');
   const stuckMascot = document.getElementById('stuckMascot');
-  const lessonCamGuideLabel = document.getElementById('lessonCamGuideLabel');
   const lessonCamActions = document.getElementById('lessonCamActions');
   const problemCaptureActions = document.getElementById('problemCaptureActions');
   const problemCaptureCancelBtn = document.getElementById('problemCaptureCancelBtn');
@@ -2517,8 +2495,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const addProblemPhotoBtn = document.getElementById('addProblemPhotoBtn');
   const problemPhotoChip = document.getElementById('problemPhotoChip');
   const problemPhotoRemoveBtn = document.getElementById('problemPhotoRemoveBtn');
-  const LESSON_CAM_GUIDE_TEXT = 'Fit your work in here, hand below the line';
-  const PROBLEM_CAM_GUIDE_TEXT = 'Fit the printed problem here';
   // The photo of the printed problem (when the student attaches one) —
   // homework-only, optional per problem, and sticky: once attached it's
   // sent with every check/hint until the student removes it, since
@@ -2676,12 +2652,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     hideStuckNudge();
   }
 
-  // Matches the .lesson-cam-guide CSS box (top/bottom 8%, left/right 13%)
-  // — capture crops to exactly this region so what's captured always
-  // matches what the guide showed the student. Keeps hands/background out
-  // of the photo (privacy) and gives the actual math more of the frame.
-  const LESSON_GUIDE_INSET = { top: 0.10, bottom: 0.26, left: 0.15, right: 0.15 };
-
   function applyLessonCamRotation(){
     const q = ((lessonCamQuarter % 4) + 4) % 4;
     if (!q){
@@ -2691,7 +2661,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     let scale = 1;
     if (q % 2 === 1 && lessonCamVideo.videoWidth && lessonCamVideo.videoHeight){
       // A quarter-turned frame is taller than the element's box — shrink
-      // it so the whole rotated picture (and its guide) stays visible.
+      // it so the whole rotated picture stays visible.
       scale = Math.min(lessonCamVideo.videoWidth, lessonCamVideo.videoHeight)
             / Math.max(lessonCamVideo.videoWidth, lessonCamVideo.videoHeight);
     }
@@ -2706,10 +2676,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   lessonCamVideo.addEventListener('loadedmetadata', applyLessonCamRotation);
 
   // Zooms whichever is currently on screen. Live view: CSS-scaling the
-  // video (not the frame) leaves the guide overlay's on-screen position
-  // untouched, so a fixed guide box now represents a proportionally
-  // smaller slice of the real sensor frame — lessonCaptureFrame's crop
-  // math mirrors that exactly. Frozen view: the photo and its annotation
+  // video — lessonCaptureFrame's crop math mirrors the same factor, so
+  // what's captured always matches what's shown. Frozen view: the photo
+  // and its annotation
   // overlay are scaled together (same factor, same default center
   // origin) so a circled mistake stays lined up with the work at any
   // zoom level — the teacher bubble is a separate sibling and is left
@@ -2729,12 +2698,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   });
 
   // Like captureFrameFromVideo, but supports quarter turns (90/270 swap
-  // the output dimensions so the captured photo is upright) AND crops to
-  // the guide region (further tightened by the zoom level): the raw
-  // rotated frame is rendered at native resolution first, then only the
-  // guide's (zoomed) rectangle is drawn into the final (size-capped)
-  // canvas — everything outside it, hands and surroundings included,
-  // never leaves the browser.
+  // the output dimensions so the captured photo is upright). Captures
+  // exactly what's visible on screen — no geometric crop — with zoom (if
+  // any) narrowing the captured span around the frame's center, matching
+  // the live CSS-scaled preview exactly.
   function lessonCaptureFrame(video, maxDim, quarterTurns, zoom){
     const q = ((quarterTurns % 4) + 4) % 4;
     const vw = video.videoWidth, vh = video.videoHeight;
@@ -2748,17 +2715,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     fctx.rotate(q * Math.PI / 2);
     fctx.drawImage(video, -vw / 2, -vh / 2, vw, vh);
 
-    // Both the guide box and the zoom are centered, so zooming just
-    // shrinks the captured span around the same center point — at
-    // zoom 1 this reduces exactly to the plain guide-inset crop.
-    const g = LESSON_GUIDE_INSET;
     const z = zoom || 1;
-    const hSpan = (1 - g.left - g.right) / z;
-    const vSpan = (1 - g.top - g.bottom) / z;
-    const cropX = Math.round(uprightW * (0.5 - hSpan / 2));
-    const cropY = Math.round(uprightH * (0.5 - vSpan / 2));
-    const cropW = Math.round(uprightW * hSpan);
-    const cropH = Math.round(uprightH * vSpan);
+    const span = 1 / z;
+    const cropX = Math.round(uprightW * (1 - span) / 2);
+    const cropY = Math.round(uprightH * (1 - span) / 2);
+    const cropW = Math.round(uprightW * span);
+    const cropH = Math.round(uprightH * span);
 
     let outW = cropW, outH = cropH;
     if (outW > maxDim || outH > maxDim){
@@ -2832,7 +2794,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     wasFrozenBeforeProblemCapture = !imageWrap.classList.contains('hidden');
     imageWrap.classList.add('hidden');
     lessonCamFrame.classList.remove('hidden');
-    lessonCamGuideLabel.textContent = PROBLEM_CAM_GUIDE_TEXT;
     lessonCamActions.classList.add('hidden');
     problemCaptureActions.classList.remove('hidden');
     updateProblemPhotoUI();
@@ -2841,7 +2802,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   function endProblemPhotoCapture(){
     capturingProblemPhoto = false;
-    lessonCamGuideLabel.textContent = LESSON_CAM_GUIDE_TEXT;
     problemCaptureActions.classList.add('hidden');
     lessonCamActions.classList.remove('hidden');
     if (wasFrozenBeforeProblemCapture){
@@ -2959,8 +2919,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teacherBar.classList.add('hidden');
     resetLessonBubbleStyles();
     imageWrap.classList.remove('hidden');
-    // Hides the whole video+guide frame together, not just the video —
-    // the crop guide has no reason to linger once there's a still photo.
     lessonCamFrame.classList.add('hidden');
     lessonBackBtn.classList.remove('hidden');
     updateWorkSourceLock();
