@@ -150,6 +150,21 @@
     padding:8px 12px; border-radius:8px; text-align:center;
   }
   .lesson-cam-actions{ display:flex; justify-content:center; gap:10px; margin-top:14px; }
+  /* Gentle "still there?" nudge — a normal-flow card, never overlaid on
+     the camera/photo, so it can never cover the student's work the way
+     the result bubble once did. Dismissible and non-blocking. */
+  .stuck-nudge{
+    display:flex; align-items:center; gap:12px; margin-top:12px;
+    background:var(--paper); border:1px solid var(--paper-line); border-radius:14px;
+    padding:10px 14px; box-shadow:0 2px 10px rgba(24,24,22,0.08);
+  }
+  .stuck-nudge .ring-mascot{ width:44px; height:50px; flex-shrink:0; }
+  .stuck-nudge p{ flex:1; margin:0; font-size:13.5px; color:var(--ink); }
+  .stuck-nudge-close{
+    background:none; border:none; font-size:20px; line-height:1; color:var(--chalk-muted);
+    cursor:pointer; padding:2px 4px; flex-shrink:0;
+  }
+  .stuck-nudge-close:hover{ color:var(--chalk); }
   .lesson-status{ text-align:center; font-size:13.5px; color:var(--chalk-muted); margin:10px 0 0; min-height:18px; }
   .lesson-upload-row{ text-align:center; margin-top:6px; }
   .link-btn{
@@ -984,6 +999,32 @@
       <button class="ghost-btn" id="lessonHintBtn" type="button">Give me a hint</button>
       <button class="primary-btn" id="lessonCheckBtn" type="button">Check</button>
       <button class="ghost-btn hidden" id="lessonBackBtn" type="button">Back to camera</button>
+    </div>
+    <!-- Shown when the student has gone quiet (no writing, nothing checked)
+         for a while — a gentle nudge, not a blocker; dismissible and also
+         auto-hides once the student acts. -->
+    <div class="stuck-nudge hidden" id="stuckNudge" role="status">
+      <svg class="ring-mascot" id="stuckMascot" viewBox="0 0 140 160" aria-hidden="true" focusable="false">
+        <ellipse class="rm-foot" cx="55" cy="140" rx="11" ry="6"/>
+        <ellipse class="rm-foot" cx="85" cy="140" rx="11" ry="6"/>
+        <circle class="rm-ring" cx="70" cy="80" r="55" transform="rotate(-50 70 80)"/>
+        <circle class="rm-body" cx="70" cy="80" r="47"/>
+        <line class="rm-arm" x1="28" y1="80" x2="10" y2="94"/>
+        <circle class="rm-hand" cx="10" cy="94" r="4"/>
+        <line class="rm-arm" x1="112" y1="80" x2="130" y2="94"/>
+        <circle class="rm-hand" cx="130" cy="94" r="4"/>
+        <ellipse class="rm-blush" cx="53" cy="86" rx="7" ry="4"/>
+        <ellipse class="rm-blush" cx="87" cy="86" rx="7" ry="4"/>
+        <path class="rm-brow" d="M46,58 L56,63"/>
+        <path class="rm-brow" d="M94,58 L84,63"/>
+        <circle class="rm-eye" cx="57" cy="70" r="4.5"/>
+        <circle class="rm-eye" cx="83" cy="70" r="4.5"/>
+        <path class="rm-mouth" d="M58,90 Q70,94 82,90"/>
+        <path class="rm-mouth-happy" d="M55,88 Q70,108 85,88 Q70,100 55,88 Z"/>
+        <ellipse class="rm-mouth-talk" cx="70" cy="93" rx="9" ry="7"/>
+      </svg>
+      <p id="stuckNudgeText">Still there? Try "Give me a hint" if you're not sure what's next.</p>
+      <button type="button" class="stuck-nudge-close" id="stuckNudgeClose" aria-label="Dismiss">&times;</button>
     </div>
     <p class="lesson-status" id="lessonStatus"></p>
     <div class="lesson-upload-row">
@@ -2425,6 +2466,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const imageWrap = document.querySelector('#resultPaper .image-wrap');
   const lessonRotateBtn = document.getElementById('lessonRotateBtn');
   const lessonZoomBtn = document.getElementById('lessonZoomBtn');
+  const stuckNudge = document.getElementById('stuckNudge');
+  const stuckNudgeText = document.getElementById('stuckNudgeText');
+  const stuckNudgeClose = document.getElementById('stuckNudgeClose');
+  const stuckMascot = document.getElementById('stuckMascot');
   let lessonCamStream = null;
   let lessonModeOn = false;
   let lessonUploadedPending = false;
@@ -2448,6 +2493,130 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   function saveLessonCamQuarter(){
     if (currentLessonId) localStorage.setItem(LESSON_CAM_ROTATION_PREFIX + currentLessonId, String(lessonCamQuarter));
+  }
+
+  // ---- "Still there?" stuck-student nudge ----
+  // Hybrid trigger: an idle clock that resets on any detected pen/hand
+  // motion in the live feed (reusing the same downscaled-frame-diff
+  // technique as Watch mode) as well as on every Check/Hint submission.
+  // Only genuine stillness with nothing submitted trips it — a student
+  // who's steadily writing, just slowly, is never interrupted.
+  const STUCK_SAMPLE_MS = 1000;
+  const STUCK_IDLE_MS = 4 * 60 * 1000;       // no motion + nothing submitted for this long -> nudge
+  const STUCK_RENOTIFY_MS = 3 * 60 * 1000;   // minimum gap between nudges while still idle
+  const STUCK_AUTO_HIDE_MS = 12000;
+  const STUCK_SMALL_W = 48, STUCK_SMALL_H = 36;
+  const STUCK_PIXEL_DIFF_THRESHOLD = 20;
+  const STUCK_CHANGED_FRACTION_THRESHOLD = 0.02;
+  let stuckIntervalId = null;
+  let stuckCanvas = null, stuckCtx = null;
+  let lastStuckFrame = null;
+  let lastStuckActivityAt = 0;
+  let lastStuckNudgeAt = 0;
+  let stuckAutoHideTimer = null;
+
+  function ensureStuckCanvas(){
+    if (!stuckCanvas){
+      stuckCanvas = document.createElement('canvas');
+      stuckCanvas.width = STUCK_SMALL_W; stuckCanvas.height = STUCK_SMALL_H;
+      stuckCtx = stuckCanvas.getContext('2d', { willReadFrequently: true });
+    }
+  }
+
+  function sampleStuckMotion(){
+    if (!lessonCamVideo.videoWidth) return null;
+    ensureStuckCanvas();
+    stuckCtx.drawImage(lessonCamVideo, 0, 0, STUCK_SMALL_W, STUCK_SMALL_H);
+    const frame = stuckCtx.getImageData(0, 0, STUCK_SMALL_W, STUCK_SMALL_H).data;
+    const gray = new Uint8ClampedArray(STUCK_SMALL_W * STUCK_SMALL_H);
+    for (let i = 0, p = 0; i < frame.length; i += 4, p++){
+      gray[p] = (frame[i] * 0.299 + frame[i + 1] * 0.587 + frame[i + 2] * 0.114) | 0;
+    }
+    return gray;
+  }
+
+  // A short two-tone chime synthesized on the fly — no audio asset to
+  // host, and it still works the first time even if the browser blocked
+  // autoplay, since it only ever runs in response to this timer (which
+  // itself only starts after the student's own "Start Lesson" click).
+  function playChime(){
+    try{
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      [660, 880].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        const start = ctx.currentTime + i * 0.14;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.15, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.3);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.32);
+      });
+      setTimeout(() => ctx.close(), 700);
+    } catch(e){ /* Web Audio unavailable — the visual nudge still shows */ }
+  }
+
+  function hideStuckNudge(){
+    stuckNudge.classList.add('hidden');
+    stuckMascot.classList.remove('is-talking');
+    if (stuckAutoHideTimer){ clearTimeout(stuckAutoHideTimer); stuckAutoHideTimer = null; }
+  }
+
+  function showStuckNudge(){
+    stuckNudge.classList.remove('hidden');
+    stuckMascot.classList.remove('is-ok', 'is-mistake', 'is-celebrating');
+    requestAnimationFrame(() => stuckMascot.classList.add('is-talking'));
+    playChime();
+    if (stuckAutoHideTimer) clearTimeout(stuckAutoHideTimer);
+    stuckAutoHideTimer = setTimeout(hideStuckNudge, STUCK_AUTO_HIDE_MS);
+  }
+
+  stuckNudgeClose.addEventListener('click', hideStuckNudge);
+
+  function resetStuckClock(){
+    lastStuckActivityAt = Date.now();
+  }
+
+  function tickStuckCheck(){
+    if (!lessonModeOn || lessonCamFrame.classList.contains('hidden') || !lessonCamStream){
+      // Not actively looking at a live feed right now (mid-check, camera
+      // off, etc.) — not "stuck", just reset the baseline so the idle
+      // clock only ever counts real live-view stillness.
+      resetStuckClock();
+      return;
+    }
+    const gray = sampleStuckMotion();
+    if (!gray){ resetStuckClock(); return; }
+    const now = Date.now();
+    if (lastStuckFrame){
+      let changed = 0;
+      for (let i = 0; i < gray.length; i++){
+        if (Math.abs(gray[i] - lastStuckFrame[i]) > STUCK_PIXEL_DIFF_THRESHOLD) changed++;
+      }
+      if (changed / gray.length > STUCK_CHANGED_FRACTION_THRESHOLD) lastStuckActivityAt = now;
+    }
+    lastStuckFrame = gray;
+
+    if (now - lastStuckActivityAt > STUCK_IDLE_MS && now - lastStuckNudgeAt > STUCK_RENOTIFY_MS){
+      lastStuckNudgeAt = now;
+      showStuckNudge();
+    }
+  }
+
+  function startStuckWatch(){
+    lastStuckFrame = null;
+    lastStuckNudgeAt = 0;
+    resetStuckClock();
+    if (!stuckIntervalId) stuckIntervalId = setInterval(tickStuckCheck, STUCK_SAMPLE_MS);
+  }
+
+  function stopStuckWatch(){
+    if (stuckIntervalId){ clearInterval(stuckIntervalId); stuckIntervalId = null; }
+    hideStuckNudge();
   }
 
   // Matches the .lesson-cam-guide CSS box (top/bottom 8%, left/right 13%)
@@ -2700,12 +2869,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonShowLive();
     hideResults(); hideError();
     startLessonCam();
+    startStuckWatch();
   }
 
   function exitLessonMode(){
     if (!lessonModeOn) return;
     lessonModeOn = false;
     document.body.classList.remove('lesson-cam-on');
+    stopStuckWatch();
     stopLessonCam();
     lessonModeEl.classList.add('hidden');
     modeToggle.classList.remove('hidden');
@@ -2719,6 +2890,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   async function lessonCapture(kind){
     if (lessonCheckBtn.disabled) return;
+    hideStuckNudge();
+    resetStuckClock();
     if (!lessonUploadedPending){
       // Each press works from a fresh frame while the camera runs — it
       // checks what's on the paper right now, not an old capture.
