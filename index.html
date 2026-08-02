@@ -801,6 +801,22 @@
     display:flex; align-items:center; justify-content:space-between; gap:12px;
     background:var(--paper); border:1px solid var(--paper-line); border-radius:10px; padding:12px 14px;
   }
+  .topic-row-clickable{
+    cursor:pointer; width:100%; text-align:left; font:inherit; transition:background .15s ease;
+  }
+  .topic-row-clickable:hover, .topic-row-clickable:focus-visible{ background:rgba(24,24,22,0.04); }
+  .topic-row-clickable:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
+  .history-filter-bar{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    background:rgba(24,24,22,0.05); border-radius:10px; padding:8px 12px; margin-bottom:14px;
+    font-size:13px; color:var(--ink-muted);
+  }
+  .history-filter-bar strong{ color:var(--ink); }
+  .history-filter-bar button{
+    background:none; border:none; font-size:18px; line-height:1; color:var(--ink-muted);
+    cursor:pointer; padding:0 4px;
+  }
+  .history-filter-bar button:hover{ color:var(--ink); }
   .topic-name{ font-weight:600; font-size:14px; color:var(--ink); }
   .topic-count{ font-size:12.5px; color:var(--ink-muted); margin-top:2px; }
   .topic-mastery{ font-size:12.5px; font-weight:700; padding:4px 10px; border-radius:20px; white-space:nowrap; }
@@ -1644,13 +1660,13 @@
   const homeLessonView = document.getElementById('homeLessonView');
   const homeHistoryView = document.getElementById('homeHistoryView');
 
-  function setHomeSubtab(name){
+  function setHomeSubtab(name, topic){
     homeSubtabs.querySelectorAll('.subtab-btn').forEach((btn) => {
       btn.classList.toggle('is-active', btn.dataset.subtab === name);
     });
     homeLessonView.classList.toggle('hidden', name !== 'lesson');
     homeHistoryView.classList.toggle('hidden', name !== 'history');
-    if (name === 'history' && window.mathTutorHistory) window.mathTutorHistory.openHistory();
+    if (name === 'history' && window.mathTutorHistory) window.mathTutorHistory.openHistory(topic);
   }
 
   homeSubtabs.addEventListener('click', (e) => {
@@ -1659,9 +1675,13 @@
     setHomeSubtab(btn.dataset.subtab);
   });
 
-  // Lets the auth module's "View history" button switch the subtab from
-  // the other script block.
-  window.mathTutorUI = { showHomeHistory: () => setHomeSubtab('history') };
+  // Lets the auth module's "View history" button, and the Dashboard's
+  // clickable topic tags, switch the subtab (and outer tab) from the
+  // other script block.
+  window.mathTutorUI = {
+    showHomeHistory: () => setHomeSubtab('history'),
+    showHomeHistoryForTopic: (topic) => { switchTab('home'); setHomeSubtab('history', topic); },
+  };
 
   function lessonOnSignIn(userId){
     lessonUserId = userId;
@@ -3623,6 +3643,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const signOutBtn = document.getElementById('signOutBtn');
   const homeHistoryView = document.getElementById('homeHistoryView');
   const historyList = document.getElementById('historyList');
+  const historyFilterBar = document.getElementById('historyFilterBar');
+  const historyFilterLabel = document.getElementById('historyFilterLabel');
+  const historyFilterClearBtn = document.getElementById('historyFilterClearBtn');
   const currentLessonSection = document.getElementById('currentLessonSection');
   const currentLessonList = document.getElementById('currentLessonList');
   const lightbox = document.getElementById('lightbox');
@@ -3798,10 +3821,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   // Past Lessons lives in a Home subtab now, not a modal — "opening" it
   // just means loading entries into the inline list; the main script owns
-  // the subtab switching and calls this through the mathTutorHistory bridge.
-  function openHistoryPanel(){
+  // the subtab switching and calls this through the mathTutorHistory
+  // bridge. An optional topic (from a clicked Dashboard topic tag) scopes
+  // the list to just that topic until cleared.
+  let historyTopicFilter = null;
+
+  function openHistoryPanel(topic){
+    historyTopicFilter = topic || null;
     loadHistory();
   }
+
+  function renderHistoryFilterBar(){
+    const active = !!historyTopicFilter;
+    historyFilterBar.classList.toggle('hidden', !active);
+    if (active) historyFilterLabel.textContent = historyTopicFilter;
+  }
+
+  historyFilterClearBtn.addEventListener('click', () => {
+    historyTopicFilter = null;
+    loadHistory();
+  });
 
   lightbox.addEventListener('click', () => lightbox.classList.add('hidden'));
 
@@ -4040,11 +4079,21 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   async function loadHistory(){
     if (!supabaseClient || !currentSession) return;
-    const { data, error } = await supabaseClient
+    renderHistoryFilterBar();
+    let query = supabaseClient
       .from('history_entries')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50);
+    if (historyTopicFilter){
+      // "Other" on the Dashboard also buckets rows with no topic set (pre-
+      // migration / never classified) — match both here so the filtered
+      // list matches what was actually counted into that tag.
+      query = historyTopicFilter === 'Other'
+        ? query.or('topic.is.null,topic.eq.Other')
+        : query.eq('topic', historyTopicFilter);
+    }
+    const { data, error } = await query;
     if (error){
       console.warn('Could not load history', error);
       return;
@@ -4450,8 +4499,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       Array.from(topicStats.entries())
         .sort((a, b) => b[1].total - a[1].total)
         .forEach(([topic, stats]) => {
-          const row = document.createElement('div');
-          row.className = 'topic-row';
+          const row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'topic-row topic-row-clickable';
+          row.addEventListener('click', () => {
+            if (window.mathTutorUI) window.mathTutorUI.showHomeHistoryForTopic(topic);
+          });
 
           const info = document.createElement('div');
           const nameEl = document.createElement('div');
