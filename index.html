@@ -86,8 +86,7 @@
      (width:auto + max-height, no letterboxing inside the element), which
      keeps the annotation overlay's percentage coordinates aligned with
      the visible picture. */
-  .lesson-cam-box video{ display:block; width:auto; max-width:100%; max-height:min(46vh, 440px); margin:0 auto; background:#141310; }
-  .lesson-cam-box video.is-rotated{ transform:rotate(180deg); }
+  .lesson-cam-box video{ display:block; width:auto; max-width:100%; max-height:min(46vh, 440px); margin:0 auto; background:#141310; transition:transform .2s ease; }
   /* overflow:visible + a real minimum bubble width: on a narrow shrunken
      photo the teacher bubble may extend over the dark letterbox areas
      beside the picture instead of being squeezed/clipped inside it. */
@@ -479,6 +478,8 @@
   }
   .teacher-bar.is-below::after{ top:-18px; border-bottom-color:rgba(255,255,255,0.95); }
   .teacher-bar.is-above::after{ bottom:-18px; border-top-color:rgba(255,255,255,0.95); }
+  .teacher-bar.is-right-of::after{ left:-18px; right:auto; top:24px; border:9px solid transparent; border-right-color:rgba(255,255,255,0.95); }
+  .teacher-bar.is-left-of::after{ right:-18px; left:auto; top:24px; border:9px solid transparent; border-left-color:rgba(255,255,255,0.95); }
   .ring-mascot{ width:76px; height:88px; flex-shrink:0; transform-origin:center bottom; }
   .teacher-bar .ring-mascot{ width:46px; height:53px; }
   @media (prefers-reduced-motion: no-preference){
@@ -928,7 +929,7 @@
   <div id="lessonMode" class="hidden">
     <div class="lesson-cam-box" id="lessonCamBox">
       <video id="lessonCamVideo" autoplay playsinline muted></video>
-      <button class="cam-rotate-btn" id="lessonRotateBtn" type="button" title="Rotate camera 180°" aria-label="Rotate camera 180 degrees">&#10227; 180&deg;</button>
+      <button class="cam-rotate-btn" id="lessonRotateBtn" type="button" title="Rotate camera 90°" aria-label="Rotate camera by 90 degrees">&#10227; 90&deg;</button>
       <div class="lesson-cam-note hidden" id="lessonCamNote"></div>
     </div>
     <div class="lesson-cam-actions">
@@ -2176,6 +2177,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       teacherBar.style.bottom = clamp(100 - y + 7, 4, 62) + '%';
     }
     teacherBar.style.left = clamp(x - 12, 3, 36) + '%';
+    teacherBar.dataset.markY = String(y);
     adjustLessonBubble();
   }
 
@@ -2305,6 +2307,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teacherBar.style.top = 'auto';
     teacherBar.style.bottom = '5%';
     teacherBar.style.left = '6%';
+    delete teacherBar.dataset.markY;
     adjustLessonBubble();
     watchResumeRow.classList.add('hidden');
     resultPaper.classList.remove('hidden');
@@ -2374,14 +2377,54 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   let lessonCamStream = null;
   let lessonModeOn = false;
   let lessonUploadedPending = false;
-  // For cameras mounted upside-down: flips the live view and every
-  // captured frame by 180° (same trick as watch mode's rotation toggle).
-  let lessonCamRotated = false;
+  // For cameras mounted sideways or upside-down: each click turns the
+  // view (and every captured frame) another quarter turn — 0/90/180/270°.
+  let lessonCamQuarter = 0;
+
+  function applyLessonCamRotation(){
+    const q = ((lessonCamQuarter % 4) + 4) % 4;
+    if (!q){
+      lessonCamVideo.style.transform = '';
+      return;
+    }
+    let scale = 1;
+    if (q % 2 === 1 && lessonCamVideo.videoWidth && lessonCamVideo.videoHeight){
+      // A quarter-turned frame is taller than the element's box — shrink
+      // it so the whole rotated picture stays visible.
+      scale = Math.min(lessonCamVideo.videoWidth, lessonCamVideo.videoHeight)
+            / Math.max(lessonCamVideo.videoWidth, lessonCamVideo.videoHeight);
+    }
+    lessonCamVideo.style.transform = `rotate(${q * 90}deg)` + (scale !== 1 ? ` scale(${scale})` : '');
+  }
 
   lessonRotateBtn.addEventListener('click', () => {
-    lessonCamRotated = !lessonCamRotated;
-    lessonCamVideo.classList.toggle('is-rotated', lessonCamRotated);
+    lessonCamQuarter = (lessonCamQuarter + 1) % 4;
+    applyLessonCamRotation();
   });
+  lessonCamVideo.addEventListener('loadedmetadata', applyLessonCamRotation);
+
+  // Like captureFrameFromVideo, but supports quarter turns: 90/270 swap
+  // the output dimensions so the captured photo is upright.
+  function lessonCaptureFrame(video, maxDim, quarterTurns){
+    const q = ((quarterTurns % 4) + 4) % 4;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    let outW = (q % 2) ? vh : vw;
+    let outH = (q % 2) ? vw : vh;
+    if (outW > maxDim || outH > maxDim){
+      if (outW > outH){ outH = Math.round(outH * maxDim / outW); outW = maxDim; }
+      else { outW = Math.round(outW * maxDim / outH); outH = maxDim; }
+    }
+    const canvas = document.createElement('canvas');
+    canvas.width = outW; canvas.height = outH;
+    const ctx = canvas.getContext('2d');
+    ctx.translate(outW / 2, outH / 2);
+    ctx.rotate(q * Math.PI / 2);
+    const drawW = (q % 2) ? outH : outW;
+    const drawH = (q % 2) ? outW : outH;
+    ctx.drawImage(video, -drawW / 2, -drawH / 2, drawW, drawH);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    return { dataUrl, base64: dataUrl.split(',')[1] };
+  }
 
   async function startLessonCam(){
     lessonCamNote.classList.add('hidden');
@@ -2416,18 +2459,47 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     workSourceSelect.title = midProblem ? 'Finish checking this problem first' : '';
   }
 
-  // The bubble is positioned in percent of the (possibly narrow, centered)
-  // image — on a shrunken lesson capture that can push it past the camera
-  // box's clipped edges. After each render, nudge it back fully inside the
-  // box; over the dark letterbox areas is fine, cut off is not.
+  // In the lesson box the bubble must never cover the student's work: when
+  // the (height-capped, centered) photo leaves dark letterbox room beside
+  // it, the bubble is parked entirely on that dark area, with its side
+  // tail pointing back at the picture at the marked line's height. Only
+  // when a wide photo leaves no side room does it fall back to sitting on
+  // the photo, clamped fully inside the box.
   function adjustLessonBubble(){
     if (!lessonModeOn) return;
     requestAnimationFrame(() => {
       if (teacherBar.classList.contains('hidden')) return;
-      const pad = 8;
+      const pad = 10;
       const boxR = lessonCamBox.getBoundingClientRect();
       const wrapR = imageWrap.getBoundingClientRect();
       let barR = teacherBar.getBoundingClientRect();
+      const barW = barR.width || 340;
+      const leftSpace = wrapR.left - boxR.left;
+      const rightSpace = boxR.right - wrapR.right;
+      const side = (rightSpace >= barW + pad * 2) ? 'right'
+                 : (leftSpace >= barW + pad * 2) ? 'left'
+                 : null;
+      teacherBar.classList.remove('is-right-of', 'is-left-of');
+      if (side){
+        teacherBar.classList.remove('is-below', 'is-above');
+        teacherBar.classList.add(side === 'right' ? 'is-right-of' : 'is-left-of');
+        const markYPct = Number(teacherBar.dataset.markY);
+        const anchorY = Number.isFinite(markYPct)
+          ? wrapR.top + wrapR.height * markYPct / 100
+          : boxR.top + boxR.height / 2;
+        // The side tail sits ~24px below the bubble's top edge — line it
+        // up with the marked line, clamped inside the box.
+        let topPx = anchorY - 33;
+        topPx = Math.max(boxR.top + pad, Math.min(topPx, boxR.bottom - pad - barR.height));
+        teacherBar.style.top = (topPx - wrapR.top) + 'px';
+        teacherBar.style.bottom = 'auto';
+        teacherBar.style.left = side === 'right'
+          ? (wrapR.width + pad) + 'px'
+          : (-(barW + pad)) + 'px';
+        return;
+      }
+      // Fallback: no dark side room — keep it on the photo but fully
+      // inside the box.
       let shift = 0;
       if (barR.right > boxR.right - pad) shift = (boxR.right - pad) - barR.right;
       if (barR.left + shift < boxR.left + pad) shift = (boxR.left + pad) - barR.left;
@@ -2522,7 +2594,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         lessonStatus.textContent = 'Camera is still starting — try again in a second…';
         return;
       }
-      lessonFreezeFrame(captureFrameFromVideo(lessonCamVideo, 1600, lessonCamRotated));
+      lessonFreezeFrame(lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter));
     }
     lessonUploadedPending = false;
     lessonCheckBtn.disabled = true;
