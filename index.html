@@ -2648,19 +2648,27 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   });
   lessonCamVideo.addEventListener('loadedmetadata', applyLessonCamRotation);
 
-  // Visual zoom on the live feed: CSS-scaling the video (not the frame)
-  // leaves the guide overlay's on-screen position untouched, so a fixed
-  // guide box now represents a proportionally smaller slice of the real
-  // sensor frame — lessonCaptureFrame's crop math mirrors that exactly.
-  function applyLessonCamZoomPreview(){
-    lessonCamVideo.style.transform = lessonCamZoom !== 1 ? `scale(${lessonCamZoom})` : '';
+  // Zooms whichever is currently on screen. Live view: CSS-scaling the
+  // video (not the frame) leaves the guide overlay's on-screen position
+  // untouched, so a fixed guide box now represents a proportionally
+  // smaller slice of the real sensor frame — lessonCaptureFrame's crop
+  // math mirrors that exactly. Frozen view: the photo and its annotation
+  // overlay are scaled together (same factor, same default center
+  // origin) so a circled mistake stays lined up with the work at any
+  // zoom level — the teacher bubble is a separate sibling and is left
+  // alone, so it never grows or shifts.
+  function applyLessonCamZoom(){
+    const t = lessonCamZoom !== 1 ? `scale(${lessonCamZoom})` : '';
+    lessonCamVideo.style.transform = t;
+    resultImg.style.transform = t;
+    overlaySvg.style.transform = t;
     lessonZoomBtn.textContent = `\u{1F50D} ${lessonCamZoom}×`;
   }
 
   lessonZoomBtn.addEventListener('click', () => {
     const idx = LESSON_ZOOM_LEVELS.indexOf(lessonCamZoom);
     lessonCamZoom = LESSON_ZOOM_LEVELS[(idx + 1) % LESSON_ZOOM_LEVELS.length];
-    applyLessonCamZoomPreview();
+    applyLessonCamZoom();
   });
 
   // Like captureFrameFromVideo, but supports quarter turns (90/270 swap
