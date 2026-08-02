@@ -1514,6 +1514,7 @@
     lessonRunning = false;
     clearLessonInterval();
     clearActiveLesson();
+    if (endedLessonId) localStorage.removeItem(LESSON_CAM_ROTATION_PREFIX + endedLessonId);
     if (window.mathTutorHistory && window.mathTutorHistory.hideCurrentLesson) window.mathTutorHistory.hideCurrentLesson();
     const recordPromise = window.mathTutorHistory
       ? window.mathTutorHistory.endLessonRecord(endedLessonId, durationSeconds)
@@ -2429,12 +2430,26 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   let lessonUploadedPending = false;
   // For cameras mounted sideways or upside-down: each click turns the
   // view (and every captured frame) another quarter turn — 0/90/180/270°.
+  // Persisted per-lesson (see saveLessonCamQuarter/loadLessonCamQuarter)
+  // so it survives a mid-lesson refresh instead of snapping back to 0.
   let lessonCamQuarter = 0;
   // Digital zoom: cycles 1x -> 1.5x -> 2x -> 1x. Applied both as a live
   // CSS preview on the video and as a tighter crop in lessonCaptureFrame,
   // so what the student sees is what gets sent.
   const LESSON_ZOOM_LEVELS = [1, 1.5, 2];
   let lessonCamZoom = 1;
+  const LESSON_CAM_ROTATION_PREFIX = 'mathTutorCamRotation:';
+
+  function loadLessonCamQuarter(lessonId){
+    if (!lessonId) return 0;
+    const v = parseInt(localStorage.getItem(LESSON_CAM_ROTATION_PREFIX + lessonId), 10);
+    return Number.isFinite(v) ? ((v % 4) + 4) % 4 : 0;
+  }
+
+  function saveLessonCamQuarter(){
+    if (currentLessonId) localStorage.setItem(LESSON_CAM_ROTATION_PREFIX + currentLessonId, String(lessonCamQuarter));
+  }
+
   // Matches the .lesson-cam-guide CSS box (top/bottom 8%, left/right 13%)
   // — capture crops to exactly this region so what's captured always
   // matches what the guide showed the student. Keeps hands/background out
@@ -2460,6 +2475,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   lessonRotateBtn.addEventListener('click', () => {
     lessonCamQuarter = (lessonCamQuarter + 1) % 4;
     applyLessonCamRotation();
+    saveLessonCamQuarter();
   });
   lessonCamVideo.addEventListener('loadedmetadata', applyLessonCamRotation);
 
@@ -2676,6 +2692,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     watchModeEl.classList.add('hidden');
     modeToggle.classList.add('hidden');
     lessonCamBox.appendChild(imageWrap);
+    // Restores this lesson's rotation if the student set one earlier (even
+    // across a mid-lesson refresh) — a fresh lesson id has no stored entry
+    // yet, so this comes back 0 for a brand-new lesson.
+    lessonCamQuarter = loadLessonCamQuarter(currentLessonId);
+    applyLessonCamRotation();
     lessonShowLive();
     hideResults(); hideError();
     startLessonCam();
