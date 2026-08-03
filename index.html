@@ -51,6 +51,12 @@
     color:var(--chalk-muted); font-weight:700; margin:6px 0 0 36px;
   }
   .lede{ color:var(--chalk-muted); font-size:16px; line-height:1.6; margin:16px 0 20px; }
+  .app-footer{
+    display:flex; justify-content:center; align-items:center; gap:8px;
+    margin:36px 0 8px; font-family:'Karla', sans-serif; font-size:12.5px; color:var(--chalk-muted);
+  }
+  .app-footer a{ color:var(--chalk-muted); text-decoration:underline; }
+  .app-footer a:hover{ color:var(--chalk); }
 
   .mode-toggle{ display:inline-flex; gap:8px; margin:0 0 28px; position:relative; }
   .mode-btn{
@@ -1438,6 +1444,12 @@
       <div class="settings-row"><span>Khan Academy</span><span class="settings-value muted">Coming soon</span></div>
     </div>
   </div>
+
+  <footer class="app-footer">
+    <a href="terms.html">Terms &amp; Conditions</a>
+    <span aria-hidden="true">·</span>
+    <a href="privacy.html">Privacy Policy</a>
+  </footer>
 </div>
 
 <script>
