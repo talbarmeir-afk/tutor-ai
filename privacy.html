@@ -13,14 +13,12 @@
     --bg: #F4F3EF; --chalk: #181816; --chalk-muted: rgba(24,24,22,0.62);
     --pen-red: #FF3B30; --paper: #FFFFFF; --paper-line: rgba(24,24,22,0.13);
     --ink: #181816; --ink-muted: rgba(24,24,22,0.58);
-    --callout-bg: rgba(255,59,48,0.07); --callout-border: rgba(255,59,48,0.25);
   }
   @media (prefers-color-scheme: dark){
     :root{
       --bg:#151512; --chalk:#F2F0EA; --chalk-muted: rgba(242,240,234,0.66);
       --pen-red:#FF5A4E; --paper:#1E1E1A; --paper-line: rgba(242,240,234,0.14);
       --ink:#F2F0EA; --ink-muted: rgba(242,240,234,0.6);
-      --callout-bg: rgba(255,90,78,0.1); --callout-border: rgba(255,90,78,0.3);
     }
   }
   *{ box-sizing:border-box; }
@@ -35,11 +33,6 @@
   header{ margin-bottom:36px; }
   h1{ font-family:'Nunito', sans-serif; font-weight:800; font-size:30px; margin:28px 0 4px; text-wrap:balance; }
   .updated{ color:var(--ink-muted); font-size:13.5px; margin:0 0 24px; }
-  .draft-note{
-    background:var(--callout-bg); border:1px solid var(--callout-border); border-radius:10px;
-    padding:14px 16px; font-size:14px; color:var(--ink); line-height:1.6; margin:0 0 32px;
-  }
-  .draft-note strong{ font-weight:700; }
   h2{ font-family:'Nunito', sans-serif; font-weight:800; font-size:19px; margin:36px 0 10px; }
   p, li{ color:var(--ink); }
   p{ margin:0 0 14px; }
@@ -66,9 +59,6 @@
     </a>
     <h1>Privacy Policy</h1>
     <p class="updated">Last updated: August 2, 2026</p>
-    <div class="draft-note">
-      <strong>This is a draft template, not legal advice.</strong> It describes what Claruno actually collects and does in the product today, but it has not been reviewed by a lawyer. Because Claruno is used by students — likely including minors — have this reviewed for compliance with applicable children's-privacy law (e.g. COPPA in the US, GDPR-K in the EU/UK, FERPA if used through a school) before relying on it publicly.
-    </div>
 
     <h2>What this covers</h2>
     <p>This policy explains what information Claruno ("we", "us") collects when you use the app, why, and how it's handled. "You" means anyone using Claruno, including students, parents, and teachers.</p>
