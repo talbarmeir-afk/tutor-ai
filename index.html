@@ -2685,28 +2685,36 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return Number.isFinite(v) ? ((v % 4) + 4) % 4 : 0;
   }
 
-  // Distinct from loadLessonCamQuarter returning 0 as a default — this
-  // tells us whether the student (or a previous auto-detect) actually set
-  // a rotation for this lesson, vs. nothing having been set at all yet.
-  function hasStoredLessonCamQuarter(lessonId){
-    return !!lessonId && localStorage.getItem(LESSON_CAM_ROTATION_PREFIX + lessonId) !== null;
-  }
-
   function saveLessonCamQuarter(){
     if (currentLessonId) localStorage.setItem(LESSON_CAM_ROTATION_PREFIX + currentLessonId, String(lessonCamQuarter));
   }
 
-  // Runs once per lesson, only if the student hasn't already set (or had
-  // auto-detected) a rotation — corrects a sideways/upside-down camera
-  // mount automatically instead of requiring a manual tap, while still
-  // leaving the rotate button free to override it at any time. Silent on
-  // failure/no-op: this is a convenience on top of a feature that already
-  // works manually, not something worth surfacing an error for. When it
-  // DOES change something, that's never silent — a wrong guess should be
-  // obvious and immediately fixable, not something the student has to
-  // notice on their own and puzzle over.
+  // Separate from the rotation value itself: once the student taps the
+  // rotate button, that's their call for the rest of the lesson — auto-
+  // detect backs off entirely rather than potentially fighting a correct
+  // manual choice with a lower-confidence guess of its own.
+  const LESSON_CAM_ROTATION_MANUAL_PREFIX = 'mathTutorCamRotationManual:';
+  function hasManualLessonCamRotation(lessonId){
+    return !!lessonId && localStorage.getItem(LESSON_CAM_ROTATION_MANUAL_PREFIX + lessonId) === '1';
+  }
+  function markLessonCamRotationManual(){
+    if (currentLessonId) localStorage.setItem(LESSON_CAM_ROTATION_MANUAL_PREFIX + currentLessonId, '1');
+  }
+
+  // Runs every time the live camera comes back up for a new capture (lesson
+  // start, retake, next problem) rather than just once per lesson — a
+  // camera mount only needs correcting once, but a student's paper gets
+  // picked up, turned, and put back down between problems all the time, so
+  // "once per lesson" left later problems stuck sideways with no recourse.
+  // Skips entirely once the student has manually rotated (see above), and
+  // never reverts a rotation on its own (a 0 answer is treated as "no
+  // opinion", not "definitely upright") — a wrong rotation is worse than a
+  // missed one. Silent on failure/no-op: this is a convenience on top of a
+  // feature that already works manually. When it DOES change something,
+  // that's never silent — a wrong guess should be obvious and immediately
+  // fixable, not something the student has to notice on their own.
   async function autoDetectLessonCamRotation(){
-    if (hasStoredLessonCamQuarter(currentLessonId)) return;
+    if (hasManualLessonCamRotation(currentLessonId)) return;
     if (!lessonCamVideo.videoWidth) return;
     try{
       const sample = lessonCaptureFrame(lessonCamVideo, 480, 0, 1, 0, 0);
@@ -2720,10 +2728,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         }),
       });
       const data = await response.json().catch(() => null);
-      if (!response.ok || !data || hasStoredLessonCamQuarter(currentLessonId)) return;
+      if (!response.ok || !data || hasManualLessonCamRotation(currentLessonId)) return;
       const rotation = [0, 90, 180, 270].includes(data.rotation) ? data.rotation : 0;
       if (rotation === 0) return;
-      lessonCamQuarter = rotation / 90;
+      const quarter = rotation / 90;
+      if (quarter === lessonCamQuarter) return;
+      lessonCamQuarter = quarter;
       applyLessonCamRotation();
       saveLessonCamQuarter();
       lessonCamNote.textContent = `Rotated the camera view automatically — tap ⟲ above if this looks wrong.`;
@@ -2876,6 +2886,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonCamQuarter = (lessonCamQuarter + 1) % 4;
     applyLessonCamRotation();
     saveLessonCamQuarter();
+    markLessonCamRotationManual();
   });
   lessonCamVideo.addEventListener('loadedmetadata', applyLessonCamRotation);
 
@@ -3205,6 +3216,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonUploadedPending = false;
     updateWorkSourceLock();
     updateAttachmentsUI();
+    // No-ops on the very first call of a lesson (camera isn't started yet,
+    // so videoWidth is still 0) — that initial check runs off the camera's
+    // own loadedmetadata event instead. On every later call (retake, next
+    // problem) the stream's already live, so this is what actually re-
+    // checks the paper's current orientation.
+    autoDetectLessonCamRotation();
   }
 
   function lessonFreezeFrame(frame){
