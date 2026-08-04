@@ -3087,17 +3087,24 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const fctx = full.getContext('2d');
     fctx.translate(uprightW / 2, uprightH / 2);
     fctx.rotate(q * Math.PI / 2);
+    const z = zoom || 1;
     // The pan happens in the video's own unrotated on-screen box (CSS
     // translate() runs before the parent frame's rotate()), so it's
     // applied here in the same pre-rotation local frame, converted from
     // rendered CSS pixels to native video pixels — the drawImage call
     // itself then gets carried through the same rotate+recenter as the
     // rest of the frame, exactly mirroring what the student saw live.
-    const px = ((panX || 0) * vw) / (video.clientWidth || vw);
-    const py = ((panY || 0) * vh) / (video.clientHeight || vh);
+    // Crucially also divided by zoom: translate() in the live CSS is a
+    // REAL screen-pixel offset applied on top of the already-scaled
+    // content (CSS composes translate() after scale()), so a given
+    // screen-pixel drag corresponds to a SMALLER shift in the video's own
+    // unscaled coordinate space the more it's zoomed in — omitting this
+    // meant the capture shifted the frame too far at any zoom above 1x,
+    // pushing the crop window past the drawn image into blank canvas
+    // (visible as a solid black band cutting off part of the photo).
+    const px = ((panX || 0) * vw) / (video.clientWidth || vw) / z;
+    const py = ((panY || 0) * vh) / (video.clientHeight || vh) / z;
     fctx.drawImage(video, -vw / 2 + px, -vh / 2 + py, vw, vh);
-
-    const z = zoom || 1;
     const span = 1 / z;
     const cropX = Math.round(uprightW * (1 - span) / 2);
     const cropY = Math.round(uprightH * (1 - span) / 2);
