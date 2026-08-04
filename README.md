@@ -134,6 +134,54 @@ check/analyze features.
      authorized redirect URI.
   2. **Supabase dashboard** → Authentication → Providers → Google → enable
      it and paste that Client ID and Client Secret in.
+- **Invite-only signup**: to restrict who can create an account (email/
+  password or Google alike) to an allowlist, without touching any app code,
+  run this once in the Supabase SQL Editor:
+
+  ```sql
+  create table if not exists public.allowed_emails (
+    email text primary key
+  );
+  alter table public.allowed_emails enable row level security;
+  -- No policies are added on purpose — this table is intentionally
+  -- unreachable via the public anon/authenticated API keys. Manage it
+  -- from the Supabase dashboard's Table Editor or SQL Editor only.
+
+  create or replace function public.check_allowed_email(event jsonb)
+  returns jsonb
+  language plpgsql
+  security definer
+  as $$
+  declare
+    user_email text;
+  begin
+    user_email := lower(event->'user'->>'email');
+    if exists (select 1 from public.allowed_emails where email = user_email) then
+      return '{}'::jsonb;
+    end if;
+    return jsonb_build_object(
+      'error', jsonb_build_object(
+        'message', 'Claruno is currently invite-only. Contact us if you believe you should have access.',
+        'http_code', 403
+      )
+    );
+  end;
+  $$;
+
+  grant execute on function public.check_allowed_email to supabase_auth_admin;
+  revoke execute on function public.check_allowed_email from authenticated, anon, public;
+
+  -- Add whoever should be allowed in, e.g.:
+  -- insert into public.allowed_emails (email) values ('you@example.com');
+  ```
+
+  Then in the dashboard: **Authentication → Hooks → Before User Created** →
+  choose **Postgres Function** → select `check_allowed_email`. This one hook
+  covers both signup paths, since Supabase fires it for any new account
+  regardless of provider — nothing in `index.html` needs to change. It only
+  blocks *new* signups; an account created before you add someone's email
+  can still sign back in unless you also add a **Before Token Generated**
+  hook doing the same lookup.
 
   Until both are done, the button surfaces whatever error Supabase returns
   (e.g. "provider is not enabled") instead of silently failing.
