@@ -2680,8 +2680,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // auto-detected) a rotation — corrects a sideways/upside-down camera
   // mount automatically instead of requiring a manual tap, while still
   // leaving the rotate button free to override it at any time. Silent on
-  // failure: this is a convenience on top of a feature that already works
-  // manually, not something worth surfacing an error for.
+  // failure/no-op: this is a convenience on top of a feature that already
+  // works manually, not something worth surfacing an error for. When it
+  // DOES change something, that's never silent — a wrong guess should be
+  // obvious and immediately fixable, not something the student has to
+  // notice on their own and puzzle over.
   async function autoDetectLessonCamRotation(){
     if (hasStoredLessonCamQuarter(currentLessonId)) return;
     if (!lessonCamVideo.videoWidth) return;
@@ -2703,6 +2706,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       lessonCamQuarter = rotation / 90;
       applyLessonCamRotation();
       saveLessonCamQuarter();
+      lessonCamNote.textContent = `Rotated the camera view automatically — tap ⟲ above if this looks wrong.`;
+      lessonCamNote.classList.remove('hidden');
+      setTimeout(() => lessonCamNote.classList.add('hidden'), 5000);
     } catch(err){ /* best-effort — the manual rotate button still works */ }
   }
 
