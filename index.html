@@ -2108,6 +2108,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
             if (bands[i].y0 - prev.y1 < h * 0.022) prev.y1 = bands[i].y1;
             else merged.push(bands[i]);
           }
+          // Drop bands that are solid dark objects (a laptop, a phone case,
+          // a shadow spilling into frame) rather than handwriting — sparse
+          // pen/pencil strokes fill only a fraction of their own bounding
+          // band, while a uniform dark object fills nearly all of it. Without
+          // this, a big enough object anywhere in the photo can out-compete
+          // the actual (thin, sparse) ink line for "nearest band to y".
+          const textLike = merged.filter((b) => {
+            let dark = 0;
+            for (let yy = b.y0; yy < b.y1; yy++) dark += rowCount[yy];
+            const area = (b.y1 - b.y0) * (mx1 - mx0);
+            return area > 0 && (dark / area) < 0.6;
+          });
+          if (!textLike.length){ resolve(null); return; }
           // Band choice: when the model's line count matches what the ink
           // shows, trust its ordinal ("the mistake is line 3 of 5") —
           // counting is something it does far more reliably than pixel
@@ -2115,12 +2128,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           let best = null;
           const li = Math.round(Number(lineIndex) || 0);
           const tl = Math.round(Number(totalLines) || 0);
-          if (li >= 1 && tl === merged.length && li <= merged.length){
-            best = merged[li - 1];
+          if (li >= 1 && tl === textLike.length && li <= textLike.length){
+            best = textLike[li - 1];
           } else {
             const targetY = h * roughY / 100;
             let bestD = Infinity;
-            for (const b of merged){
+            for (const b of textLike){
               const d = (targetY >= b.y0 && targetY <= b.y1)
                 ? 0
                 : Math.min(Math.abs(targetY - b.y0), Math.abs(targetY - b.y1));
