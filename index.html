@@ -149,7 +149,16 @@
   .cam-rotate-btn:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
   /* Sits at the opposite corner from rotate so neither control's tap
      target overlaps the other. */
-  .cam-zoom-btn{ left:10px; right:auto; }
+  .cam-zoom-btn{
+    left:10px; right:auto; display:flex; align-items:center; gap:8px;
+    padding:4px 10px;
+  }
+  .cam-zoom-step{
+    background:none; border:none; color:inherit; font-family:inherit;
+    font-size:15px; font-weight:700; line-height:1; padding:2px 3px;
+    cursor:pointer;
+  }
+  .cam-zoom-step:disabled{ opacity:.4; cursor:not-allowed; }
   .lesson-cam-note{
     position:absolute; left:12px; right:12px; bottom:12px;
     font-size:13px; color:#F4F3EF; background:rgba(16,15,12,0.75);
@@ -1096,7 +1105,11 @@
         </div>
       </div>
       <button class="cam-rotate-btn" id="lessonRotateBtn" type="button" title="Rotate camera 90°" aria-label="Rotate camera by 90 degrees">&#10227; 90&deg;</button>
-      <button class="cam-rotate-btn cam-zoom-btn" id="lessonZoomBtn" type="button" title="Zoom in" aria-label="Zoom the camera view">&#128269; 1&times;</button>
+      <div class="cam-rotate-btn cam-zoom-btn" id="lessonZoomGroup">
+        <button type="button" class="cam-zoom-step" id="lessonZoomOutBtn" title="Zoom out" aria-label="Zoom out">&#8722;</button>
+        <span id="lessonZoomLevel">1&times;</span>
+        <button type="button" class="cam-zoom-step" id="lessonZoomInBtn" title="Zoom in" aria-label="Zoom in">&#43;</button>
+      </div>
       <div class="lesson-cam-note hidden" id="lessonCamNote"></div>
     </div>
     <div class="lesson-cam-actions" id="lessonCamActions">
@@ -2701,7 +2714,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const lessonStatus = document.getElementById('lessonStatus');
   const imageWrap = document.querySelector('#resultPaper .image-wrap');
   const lessonRotateBtn = document.getElementById('lessonRotateBtn');
-  const lessonZoomBtn = document.getElementById('lessonZoomBtn');
+  const lessonZoomLevel = document.getElementById('lessonZoomLevel');
+  const lessonZoomOutBtn = document.getElementById('lessonZoomOutBtn');
+  const lessonZoomInBtn = document.getElementById('lessonZoomInBtn');
   const stuckNudge = document.getElementById('stuckNudge');
   const stuckNudgeText = document.getElementById('stuckNudgeText');
   const stuckNudgeClose = document.getElementById('stuckNudgeClose');
@@ -3006,7 +3021,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resultImg.style.cursor = draggable ? 'grab' : '';
     lessonCamVideo.style.touchAction = draggable ? 'none' : '';
     resultImg.style.touchAction = draggable ? 'none' : '';
-    lessonZoomBtn.textContent = `\u{1F50D} ${lessonCamZoom}×`;
+    lessonZoomLevel.textContent = `${lessonCamZoom}×`;
+    lessonZoomOutBtn.disabled = lessonCamZoom === LESSON_ZOOM_LEVELS[0];
+    lessonZoomInBtn.disabled = lessonCamZoom === LESSON_ZOOM_LEVELS[LESSON_ZOOM_LEVELS.length - 1];
   }
 
   // Keeps the zoomed content covering its element's own box (a rough,
@@ -3064,12 +3081,27 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   setupLessonPanDrag(lessonCamVideo);
   setupLessonPanDrag(resultImg);
 
-  lessonZoomBtn.addEventListener('click', () => {
+  // Steps and clamps rather than the old single-button "cycle up, wrap
+  // back to 1x at the top" — that made zooming back down only reachable by
+  // cycling all the way around. Re-clamps the pan against whichever
+  // element is actually on screen (live video or the frozen photo) since
+  // zooming OUT shrinks how far the existing pan is allowed to reach; the
+  // old cycle-only version only ever hit this via the wrap-to-1x special
+  // case, which reset pan outright instead of needing a real re-clamp.
+  function stepLessonZoom(direction){
     const idx = LESSON_ZOOM_LEVELS.indexOf(lessonCamZoom);
-    lessonCamZoom = LESSON_ZOOM_LEVELS[(idx + 1) % LESSON_ZOOM_LEVELS.length];
-    if (lessonCamZoom === 1){ lessonPanX = 0; lessonPanY = 0; }
+    const nextIdx = Math.max(0, Math.min(LESSON_ZOOM_LEVELS.length - 1, idx + direction));
+    lessonCamZoom = LESSON_ZOOM_LEVELS[nextIdx];
+    if (lessonCamZoom === 1){
+      lessonPanX = 0; lessonPanY = 0;
+    } else {
+      const activeEl = imageWrap.classList.contains('hidden') ? lessonCamVideo : resultImg;
+      clampLessonPan(activeEl);
+    }
     applyLessonCamZoom();
-  });
+  }
+  lessonZoomOutBtn.addEventListener('click', () => stepLessonZoom(-1));
+  lessonZoomInBtn.addEventListener('click', () => stepLessonZoom(1));
 
   // Like captureFrameFromVideo, but supports quarter turns (90/270 swap
   // the output dimensions so the captured photo is upright). Captures
