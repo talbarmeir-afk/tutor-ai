@@ -131,7 +131,7 @@
   body.lesson-cam-on .check-card-head{ margin-bottom:8px; }
   body.lesson-cam-on .lesson-cam-actions{ margin-top:10px; }
   body.lesson-cam-on .lesson-status{ margin-top:4px; min-height:16px; }
-  body.lesson-cam-on .lesson-upload-row{ margin-top:0; }
+  body.lesson-cam-on .lesson-attachments{ margin-top:8px; }
   .lesson-cam-box .teacher-bar{ min-width:min(330px, 82vw); max-width:380px; }
   .cam-rotate-btn{
     position:absolute; top:10px; right:10px; z-index:2;
@@ -151,16 +151,34 @@
     padding:8px 12px; border-radius:8px; text-align:center;
   }
   .lesson-cam-actions{ display:flex; justify-content:center; gap:10px; margin-top:14px; }
-  .problem-photo-row{ text-align:center; margin-top:8px; }
-  .problem-photo-chip{
-    display:inline-flex; align-items:center; gap:6px; font-size:13px; color:var(--chalk-muted);
-    background:rgba(24,24,22,0.06); border-radius:14px; padding:4px 6px 4px 10px;
+  /* One consistent thumbnail-plus-controls pattern for both images —
+     replaces the old text-only "Problem attached" chip and the separate
+     Back-to-camera / upload-instead buttons/links with something the
+     student can actually see and manage directly. */
+  .lesson-attachments{ display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; justify-content:center; }
+  .attachment-slot{
+    width:88px; flex-shrink:0; border-radius:10px; overflow:hidden;
+    background:var(--paper); border:1px solid var(--paper-line);
   }
-  .problem-photo-chip button{
-    background:none; border:none; font-size:16px; line-height:1; color:var(--chalk-muted);
-    cursor:pointer; padding:0 4px;
+  .attachment-slot img{ display:block; width:88px; height:64px; object-fit:cover; cursor:pointer; background:#00000010; }
+  .attachment-slot-bar{
+    display:flex; align-items:center; gap:2px; padding:3px 5px;
+    font-family:'Karla', sans-serif; font-size:10.5px; color:var(--chalk-muted);
   }
-  .problem-photo-chip button:hover{ color:var(--chalk); }
+  .attachment-slot-bar span{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .attachment-slot-bar button{
+    background:none; border:none; font-size:13px; line-height:1; color:var(--chalk-muted);
+    cursor:pointer; padding:2px;
+  }
+  .attachment-slot-bar button:hover{ color:var(--chalk); }
+  .attachment-add-slot{
+    width:88px; height:86px; flex-shrink:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:2px;
+    border:1.5px dashed rgba(24,24,22,0.25); border-radius:10px; background:none;
+    font-family:'Karla', sans-serif; font-size:11px; color:var(--chalk-muted); cursor:pointer;
+  }
+  .attachment-add-slot:hover{ border-color:rgba(24,24,22,0.4); color:var(--chalk); }
+  .attachment-add-icon{ font-size:20px; line-height:1; font-weight:700; }
   /* Gentle "still there?" nudge — a normal-flow card, never overlaid on
      the camera/photo, so it can never cover the student's work the way
      the result bubble once did. Dismissible and non-blocking. */
@@ -177,7 +195,6 @@
   }
   .stuck-nudge-close:hover{ color:var(--chalk); }
   .lesson-status{ text-align:center; font-size:13.5px; color:var(--chalk-muted); margin:10px 0 0; min-height:18px; }
-  .lesson-upload-row{ text-align:center; margin-top:6px; }
   .link-btn{
     background:none; border:none; color:var(--chalk-muted);
     font-family:'Karla', sans-serif; font-size:13px; text-decoration:underline;
@@ -1058,7 +1075,6 @@
     <div class="lesson-cam-actions" id="lessonCamActions">
       <button class="ghost-btn" id="lessonHintBtn" type="button">Give me a hint</button>
       <button class="primary-btn" id="lessonCheckBtn" type="button">Check</button>
-      <button class="ghost-btn hidden" id="lessonBackBtn" type="button">Back to camera</button>
     </div>
     <!-- Only relevant when the problem came from a book/worksheet — the
          student attaches it whenever it's actually needed, not every
@@ -1067,12 +1083,30 @@
       <button class="ghost-btn" id="problemCaptureCancelBtn" type="button">Cancel</button>
       <button class="primary-btn" id="problemCaptureSnapBtn" type="button">Take photo of the problem</button>
     </div>
-    <div class="problem-photo-row hidden" id="problemPhotoRow">
-      <button class="link-btn" id="addProblemPhotoBtn" type="button">+ add a photo of the problem</button>
-      <div class="problem-photo-chip hidden" id="problemPhotoChip">
-        <span>&#128196; Problem attached</span>
-        <button type="button" id="problemPhotoRemoveBtn" aria-label="Remove problem photo">&times;</button>
+    <!-- One consistent pattern for both images once a work photo exists —
+         a small thumbnail each, so the student can actually see what's
+         attached, with its own retake/upload/remove controls, instead of
+         a text-only chip for one and a full-size photo for the other. -->
+    <div class="lesson-attachments hidden" id="lessonAttachments">
+      <div class="attachment-slot" id="solutionSlot">
+        <img id="solutionThumb" alt="Your solution — click to view full size">
+        <div class="attachment-slot-bar">
+          <span>Solution</span>
+          <button type="button" id="solutionReplaceBtn" title="Retake with camera" aria-label="Retake solution photo with camera">&#8635;</button>
+          <button type="button" id="solutionUploadBtn" title="Upload a file instead" aria-label="Upload a solution photo file instead">&#8593;</button>
+        </div>
       </div>
+      <div class="attachment-slot hidden" id="problemSlot">
+        <img id="problemThumb" alt="The problem — click to view full size">
+        <div class="attachment-slot-bar">
+          <span>Problem</span>
+          <button type="button" id="problemReplaceBtn" title="Retake with camera" aria-label="Retake problem photo with camera">&#8635;</button>
+          <button type="button" id="problemDeleteBtn" title="Remove" aria-label="Remove problem photo">&#10005;</button>
+        </div>
+      </div>
+      <button type="button" class="attachment-add-slot" id="addProblemSlotBtn">
+        <span class="attachment-add-icon">+</span> Add problem photo
+      </button>
     </div>
     <!-- Shown when the student has gone quiet (no writing, nothing checked)
          for a while — a gentle nudge, not a blocker; dismissible and also
@@ -1101,10 +1135,7 @@
       <button type="button" class="stuck-nudge-close" id="stuckNudgeClose" aria-label="Dismiss">&times;</button>
     </div>
     <p class="lesson-status" id="lessonStatus"></p>
-    <div class="lesson-upload-row">
-      <button class="link-btn" id="lessonUploadBtn" type="button">or upload a photo instead</button>
-      <input type="file" id="lessonFileInput" accept="image/*">
-    </div>
+    <input type="file" id="lessonFileInput" accept="image/*" class="hidden">
   </div>
 
   <div id="uploadMode">
@@ -2203,7 +2234,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       teachPanel.classList.add('hidden');
     }
     updateLessonCamVisibility();
-    updateProblemPhotoUI();
+    updateAttachmentsUI();
   });
 
   async function requestLesson(){
@@ -2573,8 +2604,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const lessonCamNote = document.getElementById('lessonCamNote');
   const lessonCheckBtn = document.getElementById('lessonCheckBtn');
   const lessonHintBtn = document.getElementById('lessonHintBtn');
-  const lessonBackBtn = document.getElementById('lessonBackBtn');
-  const lessonUploadBtn = document.getElementById('lessonUploadBtn');
   const lessonFileInput = document.getElementById('lessonFileInput');
   const lessonStatus = document.getElementById('lessonStatus');
   const imageWrap = document.querySelector('#resultPaper .image-wrap');
@@ -2588,10 +2617,16 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const problemCaptureActions = document.getElementById('problemCaptureActions');
   const problemCaptureCancelBtn = document.getElementById('problemCaptureCancelBtn');
   const problemCaptureSnapBtn = document.getElementById('problemCaptureSnapBtn');
-  const problemPhotoRow = document.getElementById('problemPhotoRow');
-  const addProblemPhotoBtn = document.getElementById('addProblemPhotoBtn');
-  const problemPhotoChip = document.getElementById('problemPhotoChip');
-  const problemPhotoRemoveBtn = document.getElementById('problemPhotoRemoveBtn');
+  const lessonAttachments = document.getElementById('lessonAttachments');
+  const solutionSlot = document.getElementById('solutionSlot');
+  const solutionThumb = document.getElementById('solutionThumb');
+  const solutionReplaceBtn = document.getElementById('solutionReplaceBtn');
+  const solutionUploadBtn = document.getElementById('solutionUploadBtn');
+  const problemSlot = document.getElementById('problemSlot');
+  const problemThumb = document.getElementById('problemThumb');
+  const problemReplaceBtn = document.getElementById('problemReplaceBtn');
+  const problemDeleteBtn = document.getElementById('problemDeleteBtn');
+  const addProblemSlotBtn = document.getElementById('addProblemSlotBtn');
   // The photo of the printed problem (when the student attaches one) —
   // homework-only, optional per problem, and sticky: once attached it's
   // sent with every check/hint until the student removes it, since
@@ -2940,18 +2975,21 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     workSourceSelect.title = midProblem ? 'Finish checking this problem first' : '';
   }
 
-  // Homework-only: the "add a photo of the problem" link/chip only makes
-  // sense once there's a work photo to check it against (matches the
-  // student's own book-problem-then-written-solution order), and never
-  // while a problem photo is actively being snapped.
-  function updateProblemPhotoUI(){
+  // Shows both image slots once there's a work photo to manage (matches
+  // the student's own book-problem-then-written-solution order) — the
+  // Problem slot only in Homework mode, and never while a problem photo
+  // is actively being snapped.
+  function updateAttachmentsUI(){
     const frozen = !imageWrap.classList.contains('hidden');
-    const show = lessonModeOn && workSourceSelect.value === 'homework' && !capturingProblemPhoto && frozen;
-    problemPhotoRow.classList.toggle('hidden', !show);
+    const show = lessonModeOn && !capturingProblemPhoto && frozen;
+    lessonAttachments.classList.toggle('hidden', !show);
     if (!show) return;
+    if (imageData) solutionThumb.src = imageData.dataUrl;
+    const homework = workSourceSelect.value === 'homework';
     const attached = !!problemImageData;
-    addProblemPhotoBtn.classList.toggle('hidden', attached);
-    problemPhotoChip.classList.toggle('hidden', !attached);
+    problemSlot.classList.toggle('hidden', !(homework && attached));
+    addProblemSlotBtn.classList.toggle('hidden', !(homework && !attached));
+    if (attached) problemThumb.src = problemImageData.dataUrl;
   }
 
   // Temporarily swaps the box back to the live feed to snap a photo of
@@ -2969,7 +3007,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonCamFrame.classList.remove('hidden');
     lessonCamActions.classList.add('hidden');
     problemCaptureActions.classList.remove('hidden');
-    updateProblemPhotoUI();
+    updateAttachmentsUI();
     updateWorkSourceLock();
   }
 
@@ -2981,20 +3019,41 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       imageWrap.classList.remove('hidden');
       lessonCamFrame.classList.add('hidden');
     }
-    updateProblemPhotoUI();
+    updateAttachmentsUI();
     updateWorkSourceLock();
   }
 
-  addProblemPhotoBtn.addEventListener('click', startProblemPhotoCapture);
+  addProblemSlotBtn.addEventListener('click', startProblemPhotoCapture);
+  problemReplaceBtn.addEventListener('click', startProblemPhotoCapture);
   problemCaptureCancelBtn.addEventListener('click', endProblemPhotoCapture);
   problemCaptureSnapBtn.addEventListener('click', () => {
     problemImageData = lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom, lessonPanX, lessonPanY);
     endProblemPhotoCapture();
   });
-  problemPhotoRemoveBtn.addEventListener('click', () => {
+  problemDeleteBtn.addEventListener('click', () => {
     problemImageData = null;
-    updateProblemPhotoUI();
+    updateAttachmentsUI();
   });
+
+  // Retaking the solution goes straight back to live camera (same as the
+  // old "Back to camera" button); uploading a file reuses the same hidden
+  // input either way, whichever slot most recently triggered it.
+  solutionReplaceBtn.addEventListener('click', () => {
+    lessonShowLive();
+    hideResults(); hideError();
+  });
+  solutionUploadBtn.addEventListener('click', () => lessonFileInput.click());
+
+  function openAttachmentPreview(src){
+    if (!src) return;
+    const previewImg = document.getElementById('lightboxImg');
+    const previewOverlay = document.getElementById('lightbox');
+    if (!previewImg || !previewOverlay) return;
+    previewImg.src = src;
+    previewOverlay.classList.remove('hidden');
+  }
+  solutionThumb.addEventListener('click', () => openAttachmentPreview(imageData && imageData.dataUrl));
+  problemThumb.addEventListener('click', () => openAttachmentPreview(problemImageData && problemImageData.dataUrl));
 
   // In the lesson box the bubble must never cover the student's work: when
   // the (height-capped, centered) photo leaves dark letterbox room beside
@@ -3076,11 +3135,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resetLessonBubbleStyles();
     annGroup.innerHTML = '';
     lessonCamFrame.classList.remove('hidden');
-    lessonBackBtn.classList.add('hidden');
     imageData = null;
     lessonUploadedPending = false;
     updateWorkSourceLock();
-    updateProblemPhotoUI();
+    updateAttachmentsUI();
   }
 
   function lessonFreezeFrame(frame){
@@ -3093,9 +3151,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resetLessonBubbleStyles();
     imageWrap.classList.remove('hidden');
     lessonCamFrame.classList.add('hidden');
-    lessonBackBtn.classList.remove('hidden');
     updateWorkSourceLock();
-    updateProblemPhotoUI();
+    updateAttachmentsUI();
   }
 
   // In "Teach me & train" mode the camera box only appears once a practice
@@ -3213,11 +3270,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   lessonCheckBtn.addEventListener('click', () => lessonCapture('check'));
   lessonHintBtn.addEventListener('click', () => lessonCapture('hint'));
-  lessonBackBtn.addEventListener('click', () => {
-    lessonShowLive();
-    hideResults(); hideError();
-  });
-  lessonUploadBtn.addEventListener('click', () => lessonFileInput.click());
   lessonFileInput.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     lessonFileInput.value = '';
