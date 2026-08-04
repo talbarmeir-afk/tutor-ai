@@ -1,4 +1,5 @@
 const { analyzeImage } = require('../lib/anthropic');
+const { checkGuestLimit, GUEST_LIMIT_MESSAGE } = require('../lib/guestLimit');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -7,9 +8,14 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { base64, mediaType, problemBase64, problemMediaType } = req.body || {};
+    const { base64, mediaType, problemBase64, problemMediaType, accessToken } = req.body || {};
     if (!base64) {
       res.status(400).json({ error: 'Missing image data' });
+      return;
+    }
+    const { allowed } = await checkGuestLimit(req.headers, accessToken);
+    if (!allowed) {
+      res.status(429).json({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true });
       return;
     }
     const problemImage = problemBase64 ? { base64: problemBase64, mediaType: problemMediaType || 'image/jpeg' } : null;

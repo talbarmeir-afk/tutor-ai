@@ -134,6 +134,9 @@ check/analyze features.
      authorized redirect URI.
   2. **Supabase dashboard** → Authentication → Providers → Google → enable
      it and paste that Client ID and Client Secret in.
+
+  Until both are done, the button surfaces whatever error Supabase returns
+  (e.g. "provider is not enabled") instead of silently failing.
 - **Invite-only signup**: to restrict who can create an account (email/
   password or Google alike) to an allowlist, without touching any app code,
   run this once in the Supabase SQL Editor:
@@ -182,9 +185,61 @@ check/analyze features.
   blocks *new* signups; an account created before you add someone's email
   can still sign back in unless you also add a **Before Token Generated**
   hook doing the same lookup.
+- **Guest daily check limit**: signed-out visitors are capped at 3 checks/
+  hints per day, enforced server-side in `lib/guestLimit.js` (not just in
+  the browser, since the anon key is public and a client-only limit would
+  be trivial to bypass). It's keyed to a hashed IP address, since guests
+  have no account to key it to. Set this up once in the Supabase SQL
+  Editor:
 
-  Until both are done, the button surfaces whatever error Supabase returns
-  (e.g. "provider is not enabled") instead of silently failing.
+  ```sql
+  create table if not exists public.guest_check_counts (
+    ip_hash text not null,
+    day date not null default current_date,
+    count integer not null default 0,
+    primary key (ip_hash, day)
+  );
+  alter table public.guest_check_counts enable row level security;
+  -- No policies here either — same reasoning as allowed_emails. Only
+  -- code holding the service_role key (never the browser) can touch it.
+
+  create or replace function public.try_guest_check(p_ip_hash text, p_limit integer)
+  returns boolean
+  language plpgsql
+  security definer
+  as $$
+  declare
+    new_count integer;
+  begin
+    insert into public.guest_check_counts (ip_hash, day, count)
+    values (p_ip_hash, current_date, 0)
+    on conflict (ip_hash, day) do nothing;
+
+    update public.guest_check_counts
+    set count = count + 1
+    where ip_hash = p_ip_hash and day = current_date and count < p_limit
+    returning count into new_count;
+
+    return new_count is not null;
+  end;
+  $$;
+
+  grant execute on function public.try_guest_check to service_role;
+  revoke execute on function public.try_guest_check from authenticated, anon, public;
+  ```
+
+  Then set `SUPABASE_SERVICE_ROLE_KEY` (Project Settings → API → service_role
+  secret key — **never** the anon key) as an environment variable on
+  Vercel/Netlify, same place `ANTHROPIC_API_KEY` lives. A signed-in user is
+  detected by sending their Supabase access token along with the request and
+  verifying it against Supabase's own `/auth/v1/user` endpoint server-side
+  (not just checking that *some* token was present, which would be trivial
+  to fake) — signed-in users are exempt from the limit entirely.
+
+  If the env var isn't set, or Supabase is unreachable, the limiter fails
+  *open* (checks still work, just unlimited) rather than breaking the core
+  feature for everyone over an optional guardrail — same philosophy as the
+  rest of this app's Supabase integration.
 - History is saved after every upload-mode check, and after every watch-mode
   check that finds a mistake (not on every silent "still watching" tick).
 - Entries are grouped by `problem_id` in the history panel — a fresh id is

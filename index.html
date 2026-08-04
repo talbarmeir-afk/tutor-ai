@@ -2448,10 +2448,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           base64: griddedBase64,
           mediaType: 'image/jpeg',
           ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
+          accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
         signal: controller.signal
       });
       const data = await response.json().catch(() => { throw new Error('the server returned an invalid response (status ' + response.status + ')'); });
+      if (response.status === 429 && data.guestLimitReached){
+        showError(data.error);
+        return;
+      }
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const parsed = parseModelJson(data.text);
       if (parsed.has_mistake){
@@ -2529,10 +2534,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           base64: imageData.base64,
           mediaType: 'image/jpeg',
           ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
+          accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
         signal: controller.signal
       });
       const data = await response.json().catch(() => { throw new Error('the server returned an invalid response (status ' + response.status + ')'); });
+      if (response.status === 429 && data.guestLimitReached){
+        showError(data.error);
+        return;
+      }
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       renderHint((data.hint || '').trim());
     } catch(err){
@@ -3869,6 +3879,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   window.mathTutorAuth = {
     openLogin: () => openAuthForm('signin'),
     openSignup: () => openAuthForm('signup'),
+    // Lets the main script prove "this request is from a signed-in user" to
+    // the backend's guest-check rate limiter, without duplicating any
+    // session-handling logic here.
+    getAccessToken: () => (currentSession ? currentSession.access_token : null),
   };
 
   authForm.addEventListener('submit', async (e) => {
