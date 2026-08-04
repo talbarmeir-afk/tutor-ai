@@ -2745,18 +2745,20 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // camera mount only needs correcting once, but a student's paper gets
   // picked up, turned, and put back down between problems all the time, so
   // "once per lesson" left later problems stuck sideways with no recourse.
-  // Skips entirely once the student has manually rotated (see above), and
-  // never reverts a rotation on its own (a 0 answer is treated as "no
-  // opinion", not "definitely upright") — a wrong rotation is worse than a
-  // missed one. Silent on failure/no-op: this is a convenience on top of a
-  // feature that already works manually. When it DOES change something,
-  // that's never silent — a wrong guess should be obvious and immediately
-  // fixable, not something the student has to notice on their own.
-  // Temporary console.debug trail (prefixed "[auto-rotate]") at every exit
-  // point — a student reported this silently not firing on retake/next
-  // problem despite working at lesson start, and every code-read hypothesis
-  // for why has checked out fine, so this pins down which branch actually
-  // runs instead of guessing again. Safe to remove once confirmed.
+  // Skips entirely once the student has manually rotated (see above).
+  //
+  // Sends all 4 possible rotations of the current frame (already rotated
+  // client-side) rather than asking the model to reason about an angle from
+  // one image — see the comment on detectOrientation() in lib/anthropic.js
+  // for why. Because the model always picks one of 4 concrete options
+  // rather than hedging with "0 if unsure", a 0 answer is now just as
+  // confident as any other — so, unlike the earlier version, this CAN
+  // revert an earlier (wrong) rotation back to 0 when that's genuinely the
+  // best match.
+  //
+  // Temporary console.debug trail (prefixed "[auto-rotate]") — kept from
+  // debugging the previous single-image version; safe to remove once this
+  // one's confirmed reliable.
   async function autoDetectLessonCamRotation(){
     if (hasManualLessonCamRotation(currentLessonId)){
       console.debug('[auto-rotate] skipped: manually overridden for this lesson');
@@ -2768,13 +2770,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     console.debug('[auto-rotate] checking… current quarter =', lessonCamQuarter);
     try{
-      const sample = lessonCaptureFrame(lessonCamVideo, 480, 0, 1, 0, 0);
+      const images = [0, 1, 2, 3].map((q) => {
+        const frame = lessonCaptureFrame(lessonCamVideo, 380, q, 1, 0, 0);
+        return { rotation: q * 90, base64: frame.base64, mediaType: 'image/jpeg' };
+      });
       const response = await fetch('/api/detectOrientation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          base64: sample.base64,
-          mediaType: 'image/jpeg',
+          images,
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
       });
@@ -2782,10 +2786,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       console.debug('[auto-rotate] response', response.status, data);
       if (!response.ok || !data || hasManualLessonCamRotation(currentLessonId)) return;
       const rotation = [0, 90, 180, 270].includes(data.rotation) ? data.rotation : 0;
-      if (rotation === 0){
-        console.debug('[auto-rotate] model says 0 (no rotation needed / not confident) — leaving as-is');
-        return;
-      }
       const quarter = rotation / 90;
       if (quarter === lessonCamQuarter){
         console.debug('[auto-rotate] model agrees with current rotation, nothing to change');
