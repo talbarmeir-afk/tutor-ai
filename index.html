@@ -2769,9 +2769,22 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // confident as any other — so, unlike the earlier version, this CAN
   // revert an earlier (wrong) rotation back to 0 when that's genuinely the
   // best match.
+  // console.debug trail (prefixed "[auto-rotate]", hidden by default under
+  // most consoles' "Verbose" level) — kept permanently rather than
+  // stripped after each fix, since this feature has needed hands-on
+  // diagnosis more than once. Cheap, invisible to normal use, and saves a
+  // whole guess-fix-redeploy-retest cycle the next time something looks
+  // wrong here.
   async function autoDetectLessonCamRotation(){
-    if (hasManualLessonCamRotation(currentLessonId)) return;
-    if (!lessonCamVideo.videoWidth) return;
+    if (hasManualLessonCamRotation(currentLessonId)){
+      console.debug('[auto-rotate] skipped: manually overridden for this lesson');
+      return;
+    }
+    if (!lessonCamVideo.videoWidth){
+      console.debug('[auto-rotate] skipped: video not ready (videoWidth is 0)');
+      return;
+    }
+    console.debug('[auto-rotate] checking… current quarter =', lessonCamQuarter);
     try{
       const images = [0, 1, 2, 3].map((q) => {
         const frame = lessonCaptureFrame(lessonCamVideo, 380, q, 1, 0, 0);
@@ -2786,17 +2799,24 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         }),
       });
       const data = await response.json().catch(() => null);
+      console.debug('[auto-rotate] response', response.status, data);
       if (!response.ok || !data || hasManualLessonCamRotation(currentLessonId)) return;
       const rotation = [0, 90, 180, 270].includes(data.rotation) ? data.rotation : 0;
       const quarter = rotation / 90;
-      if (quarter === lessonCamQuarter) return;
+      if (quarter === lessonCamQuarter){
+        console.debug('[auto-rotate] model agrees with current rotation, nothing to change');
+        return;
+      }
+      console.debug('[auto-rotate] applying new rotation', quarter * 90, 'degrees (was', lessonCamQuarter * 90, ')');
       lessonCamQuarter = quarter;
       applyLessonCamRotation();
       saveLessonCamQuarter();
       lessonCamNote.textContent = `Rotated the camera view automatically — tap ⟲ above if this looks wrong.`;
       lessonCamNote.classList.remove('hidden');
       setTimeout(() => lessonCamNote.classList.add('hidden'), 5000);
-    } catch(err){ /* best-effort — the manual rotate button still works */ }
+    } catch(err){
+      console.debug('[auto-rotate] error', err);
+    }
   }
 
   // ---- "Still there?" stuck-student nudge ----
