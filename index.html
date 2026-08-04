@@ -98,7 +98,12 @@
      consistently has real room to live in without ever covering the
      photo. */
   .lesson-cam-frame{ position:relative; display:inline-block; max-width:100%; transition:transform .2s ease; }
-  .lesson-cam-frame video{ display:block; width:auto; max-width:100%; max-height:min(38vh, 400px); margin:0; background:#141310; }
+  /* touch-action:none as a static rule, not just the JS-toggled inline
+     style applied when zoomed — some browsers only reliably suppress the
+     native touch-scroll/pinch gesture (which otherwise steals a drag-to-
+     pan gesture before our own pointer handlers see it) when this is set
+     up front rather than switched on right as a touch sequence begins. */
+  .lesson-cam-frame video{ display:block; width:auto; max-width:100%; max-height:min(38vh, 400px); margin:0; background:#141310; touch-action:none; }
   /* Purely a nudge, not a boundary the photo is cropped to — the capture
      always sends the full frame (see lessonCaptureFrame). Inset close to
      the true edges so it only warns when work is genuinely at risk of
@@ -116,7 +121,7 @@
      photo the teacher bubble may extend over the dark letterbox areas
      beside the picture instead of being squeezed/clipped inside it. */
   .lesson-cam-box .image-wrap{ border-radius:0; width:fit-content; margin:0; overflow:visible; }
-  .lesson-cam-box .image-wrap img{ width:auto; max-width:100%; max-height:min(38vh, 400px); }
+  .lesson-cam-box .image-wrap img{ width:auto; max-width:100%; max-height:min(38vh, 400px); touch-action:none; }
   /* Compact chrome while the lesson camera is on: the goal is the whole
      working set — header, tabs, timer, camera box, Check/Hint, upload
      link — visible without scrolling. The marketing lede is noise
@@ -149,6 +154,7 @@
     position:absolute; left:12px; right:12px; bottom:12px;
     font-size:13px; color:#F4F3EF; background:rgba(16,15,12,0.75);
     padding:8px 12px; border-radius:8px; text-align:center;
+    pointer-events:none;
   }
   .lesson-cam-actions{ display:flex; justify-content:center; gap:10px; margin-top:14px; }
   /* One consistent thumbnail-plus-controls pattern for both images —
@@ -2645,10 +2651,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // Persisted per-lesson (see saveLessonCamQuarter/loadLessonCamQuarter)
   // so it survives a mid-lesson refresh instead of snapping back to 0.
   let lessonCamQuarter = 0;
-  // Digital zoom: cycles 1x -> 1.5x -> 2x -> 1x. Applied both as a live
-  // CSS preview on the video and as a tighter crop in lessonCaptureFrame,
-  // so what the student sees is what gets sent.
-  const LESSON_ZOOM_LEVELS = [1, 1.5, 2];
+  // Digital zoom: cycles through these levels and back to 1x. Applied
+  // both as a live CSS preview on the video and as a tighter crop in
+  // lessonCaptureFrame, so what the student sees is what gets sent. Pan
+  // (below) is what makes the higher levels actually usable — at 4x
+  // there's a lot of the frame to move around to find the right part.
+  const LESSON_ZOOM_LEVELS = [1, 1.5, 2, 3, 4];
   let lessonCamZoom = 1;
   // Drag-to-pan while zoomed in — in screen pixels, applied after the
   // scale (translate() before scale() in the transform string) so a
