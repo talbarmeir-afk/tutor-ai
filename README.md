@@ -14,9 +14,9 @@ explains what went wrong, and answers follow-up questions.
   frontend code works on either platform unchanged
 
 The API key never reaches the browser — the frontend calls `/api/analyze`,
-`/api/ask`, `/api/watch`, `/api/teach`, and `/api/hint` on your own domain,
-and those functions call Anthropic server-side using an environment
-variable.
+`/api/ask`, `/api/watch`, `/api/teach`, `/api/hint`, and
+`/api/detectOrientation` on your own domain, and those functions call
+Anthropic server-side using an environment variable.
 
 `/api/hint` powers the "Give me a hint" button next to "Check my work":
 it reads the uploaded work-in-progress and nudges the student toward the
@@ -39,19 +39,29 @@ clarification question — both continue the same conversation through the
 same endpoint (send `{subject}` for a fresh lesson, `{conversation}` for a
 follow-up).
 
-In Homework mode, once a work photo is frozen a low-key "+ add a photo of
-the problem" link appears next to Check/Hint, for problems copied from a
-book or worksheet — entirely optional, per problem. It briefly swaps the
-box back to the live feed (same rotation and zoom) to snap
-the problem itself, then restores the work photo; once attached it's sent
-alongside every check/hint on that problem (so re-checking after a fix
-doesn't mean re-photographing the book) until removed via the chip's "×"
-or the problem changes. `/api/analyze` and `/api/hint` accept it as an
-optional `problemBase64`/`problemMediaType` pair, shown to the model
+Once a work photo is frozen, both it and (in Homework mode) an optional
+photo of the printed problem show as small thumbnails in an attachments
+row next to Check/Hint — each with its own retake control, since a
+problem from a book/worksheet is per-problem and optional, not something
+every check needs. Adding a problem photo briefly swaps the box back to
+the live feed (same rotation and zoom) to snap it, then restores the work
+photo; once attached it's sent alongside every check/hint on that problem
+(so re-checking after a fix doesn't mean re-photographing the book) until
+removed or the problem changes. `/api/analyze` and `/api/hint` accept it
+as an optional `problemBase64`/`problemMediaType` pair, shown to the model
 before the work photo so it checks against the actual printed problem
 instead of inferring it from the handwriting; omitted entirely, the
 request is unchanged from before this existed. If attached, its thumbnail
 is saved alongside the solution's in that history entry.
+
+`/api/detectOrientation` powers automatic camera-rotation correction: once
+per lesson, right as the live camera starts, a small sample frame is sent
+for a fast yes/no-style read on how many degrees of rotation would make
+any visible text upright — deliberately no extended thinking, since this
+only needs to be quick, not deeply reasoned. It only runs if the student
+hasn't already set (or had auto-detected) a rotation for that lesson, so
+it never overrides a manual choice, and the rotate button still works
+exactly as before for whenever it guesses wrong.
 
 ### Watch mode
 

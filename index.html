@@ -2665,8 +2665,45 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return Number.isFinite(v) ? ((v % 4) + 4) % 4 : 0;
   }
 
+  // Distinct from loadLessonCamQuarter returning 0 as a default — this
+  // tells us whether the student (or a previous auto-detect) actually set
+  // a rotation for this lesson, vs. nothing having been set at all yet.
+  function hasStoredLessonCamQuarter(lessonId){
+    return !!lessonId && localStorage.getItem(LESSON_CAM_ROTATION_PREFIX + lessonId) !== null;
+  }
+
   function saveLessonCamQuarter(){
     if (currentLessonId) localStorage.setItem(LESSON_CAM_ROTATION_PREFIX + currentLessonId, String(lessonCamQuarter));
+  }
+
+  // Runs once per lesson, only if the student hasn't already set (or had
+  // auto-detected) a rotation — corrects a sideways/upside-down camera
+  // mount automatically instead of requiring a manual tap, while still
+  // leaving the rotate button free to override it at any time. Silent on
+  // failure: this is a convenience on top of a feature that already works
+  // manually, not something worth surfacing an error for.
+  async function autoDetectLessonCamRotation(){
+    if (hasStoredLessonCamQuarter(currentLessonId)) return;
+    if (!lessonCamVideo.videoWidth) return;
+    try{
+      const sample = lessonCaptureFrame(lessonCamVideo, 480, 0, 1, 0, 0);
+      const response = await fetch('/api/detectOrientation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64: sample.base64,
+          mediaType: 'image/jpeg',
+          accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || hasStoredLessonCamQuarter(currentLessonId)) return;
+      const rotation = [0, 90, 180, 270].includes(data.rotation) ? data.rotation : 0;
+      if (rotation === 0) return;
+      lessonCamQuarter = rotation / 90;
+      applyLessonCamRotation();
+      saveLessonCamQuarter();
+    } catch(err){ /* best-effort — the manual rotate button still works */ }
   }
 
   // ---- "Still there?" stuck-student nudge ----
@@ -2952,6 +2989,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         audio: false,
       });
       lessonCamVideo.srcObject = lessonCamStream;
+      lessonCamVideo.addEventListener('loadedmetadata', autoDetectLessonCamRotation, { once: true });
     } catch(err){
       lessonCamNote.textContent = 'Couldn\'t access the camera — use "upload a photo instead" below.';
       lessonCamNote.classList.remove('hidden');
