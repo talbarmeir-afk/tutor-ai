@@ -1455,6 +1455,18 @@
       <input type="number" id="examScore" placeholder="Score (optional)" min="0" max="100">
       <button type="submit" class="ghost-btn">Add test</button>
     </form>
+
+    <h2 class="panel-heading">Progress reports</h2>
+    <p class="settings-note">A weekly email summary — lessons vs. target,
+      streak, and per-topic mastery. No photos of the student's work are
+      included, just the same stats shown on the Dashboard.</p>
+    <div id="recipientsList" class="exams-list">
+      <p class="empty-note">No recipients added yet.</p>
+    </div>
+    <form id="recipientForm" class="exam-form">
+      <input type="email" id="recipientEmail" placeholder="Parent or teacher's email" required>
+      <button type="submit" class="ghost-btn">Add recipient</button>
+    </form>
   </div>
 
   <div id="tabSettings" class="hidden">
@@ -3908,6 +3920,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const examSubject = document.getElementById('examSubject');
   const examDate = document.getElementById('examDate');
   const examScore = document.getElementById('examScore');
+  const recipientsList = document.getElementById('recipientsList');
+  const recipientForm = document.getElementById('recipientForm');
+  const recipientEmail = document.getElementById('recipientEmail');
 
   const settingsEmail = document.getElementById('settingsEmail');
   const passwordForm = document.getElementById('passwordForm');
@@ -4602,6 +4617,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     profileScheduleDuration.value = data && data.schedule_duration_minutes ? String(data.schedule_duration_minutes) : '45';
     profileWeeklyTarget.value = (data && data.weekly_target_lessons) || 3;
     loadExams();
+    loadRecipients();
   }
 
   profileForm.addEventListener('submit', async (e) => {
@@ -4717,6 +4733,80 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       loadExams();
     } catch(err){
       console.warn('Could not save exam', err);
+    }
+  });
+
+  function renderRecipients(recipients){
+    recipientsList.innerHTML = '';
+    if (!recipients || !recipients.length){
+      const empty = document.createElement('p');
+      empty.className = 'empty-note';
+      empty.textContent = 'No recipients added yet.';
+      recipientsList.appendChild(empty);
+      return;
+    }
+    recipients.forEach((r) => {
+      const item = document.createElement('div');
+      item.className = 'exam-item';
+
+      const info = document.createElement('div');
+      const emailEl = document.createElement('div');
+      emailEl.className = 'subject';
+      emailEl.textContent = r.email;
+      const metaEl = document.createElement('div');
+      metaEl.className = 'meta';
+      metaEl.textContent = r.unsubscribed_at ? 'Unsubscribed' : 'Weekly';
+      info.appendChild(emailEl);
+      info.appendChild(metaEl);
+      item.appendChild(info);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'remove-btn';
+      removeBtn.textContent = '×';
+      removeBtn.setAttribute('aria-label', 'Remove recipient');
+      removeBtn.addEventListener('click', () => deleteRecipient(r.id));
+      item.appendChild(removeBtn);
+
+      recipientsList.appendChild(item);
+    });
+  }
+
+  async function loadRecipients(){
+    if (!supabaseClient || !currentSession) return;
+    const { data, error } = await supabaseClient
+      .from('progress_recipients')
+      .select('*')
+      .eq('user_id', currentSession.user.id)
+      .order('created_at', { ascending: true });
+    if (error){ console.warn('Could not load progress-report recipients', error); return; }
+    renderRecipients(data);
+  }
+
+  async function deleteRecipient(id){
+    if (!supabaseClient || !currentSession) return;
+    try{
+      const { error } = await supabaseClient.from('progress_recipients').delete().eq('id', id);
+      if (error) throw error;
+      loadRecipients();
+    } catch(err){
+      console.warn('Could not remove recipient', err);
+    }
+  }
+
+  recipientForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!supabaseClient || !currentSession) return;
+    try{
+      const { error } = await supabaseClient.from('progress_recipients').insert({
+        user_id: currentSession.user.id,
+        email: recipientEmail.value.trim().toLowerCase(),
+      });
+      if (error) throw error;
+      recipientForm.reset();
+      loadRecipients();
+    } catch(err){
+      console.warn('Could not add recipient', err);
     }
   });
 

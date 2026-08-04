@@ -326,8 +326,49 @@ not eagerly on sign-in.
   in the existing `schedule_time` text column, so no migration needed;
   older single-time rows load as that time on every selected day.
   **Stored only**: nothing sends reminders or auto-starts a lesson from
-  it, since there's no notification infrastructure), and a simple
-  add/delete list of tests (subject, date, optional score).
+  this schedule), a simple add/delete list of tests (subject, date,
+  optional score), and a list of **progress-report recipients** — see
+  below.
+
+  Adding an email there gets it a weekly digest (lessons vs. target,
+  streak, per-topic mastery, total checks/accuracy) — stats only, no
+  photos of the student's work, since a recurring email to a third-party
+  inbox is a bigger privacy step than an in-app check. Sent by a
+  scheduled job (`api/cron/send-progress-reports.js` on Vercel,
+  `netlify/functions/send-progress-reports.js` on Netlify, both calling
+  the shared `lib/progressReport.js`), every Monday, via
+  [Resend](https://resend.com). Needs three things beyond what's already
+  set up:
+
+  1. A `RESEND_API_KEY` environment variable (see `.env.example`) — the
+     free tier works to start, though mail can only go out from Resend's
+     shared `onboarding@resend.dev` address until you verify your own
+     sending domain with them.
+  2. `SUPABASE_SERVICE_ROLE_KEY` (also needed for the guest check limit,
+     above) — the cron job reads across every account's data in one
+     batch run, which the public anon key can't do.
+  3. This migration, run once in the Supabase SQL Editor:
+
+  ```sql
+  create table if not exists public.progress_recipients (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid references auth.users not null,
+    email text not null,
+    unsubscribe_token uuid not null default gen_random_uuid(),
+    unsubscribed_at timestamptz,
+    created_at timestamptz not null default now(),
+    unique(user_id, email)
+  );
+  alter table public.progress_recipients enable row level security;
+  create policy "Users can view their own recipients" on progress_recipients for select using (auth.uid() = user_id);
+  create policy "Users can insert their own recipients" on progress_recipients for insert with check (auth.uid() = user_id);
+  create policy "Users can delete their own recipients" on progress_recipients for delete using (auth.uid() = user_id);
+  ```
+
+  Each email in the digest includes an unsubscribe link
+  (`/api/unsubscribe?token=…`) that works without logging in — the
+  recipient is often a parent/teacher who isn't a Claruno account holder
+  at all, just an email address the student added.
 - **Settings** has account (email, password change via
   `supabaseClient.auth.updateUser`), and placeholder Billing/Integrations
   sections — no real payment processing or third-party connections exist

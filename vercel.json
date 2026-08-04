@@ -1,7 +1,13 @@
 {
   "functions": {
-    "api/*.js": {
+    "api/**/*.js": {
       "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/send-progress-reports",
+      "schedule": "0 13 * * 1"
+    }
+  ]
 }
