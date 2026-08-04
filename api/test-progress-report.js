@@ -1,4 +1,4 @@
-const { computeDigest, renderDigestHtml, sendEmail } = require('../lib/progressReport');
+const { computeDigest, renderDigestHtml, sendEmail, subjectLine } = require('../lib/progressReport');
 
 const SUPABASE_URL = 'https://obmesjsljpbrbaewzsyq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibWVzanNsanBicmJhZXd6c3lxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNjY3MTIsImV4cCI6MjEwMDY0MjcxMn0.0A1Z5_tmWEyVN-BsO8SColQMBr0kTjStBub0Lpgfbjc';
@@ -41,7 +41,7 @@ module.exports = async (req, res) => {
     // Not tied to a real recipient row, so there's no real unsubscribe
     // token to use — the link just points at the unsubscribe page itself.
     const html = renderDigestHtml(digest, `${baseUrl}/api/unsubscribe`);
-    await sendEmail(user.email, '[Test] Your weekly Claruno progress report', html, resendKey, fromAddress);
+    await sendEmail(user.email, `[Test] ${subjectLine(digest)}`, html, resendKey, fromAddress);
     res.status(200).json({ sent: true, email: user.email });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong sending the test email' });

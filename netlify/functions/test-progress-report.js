@@ -1,4 +1,4 @@
-const { computeDigest, renderDigestHtml, sendEmail } = require('../../lib/progressReport');
+const { computeDigest, renderDigestHtml, sendEmail, subjectLine } = require('../../lib/progressReport');
 
 const SUPABASE_URL = 'https://obmesjsljpbrbaewzsyq.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ibWVzanNsanBicmJhZXd6c3lxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUwNjY3MTIsImV4cCI6MjEwMDY0MjcxMn0.0A1Z5_tmWEyVN-BsO8SColQMBr0kTjStBub0Lpgfbjc';
@@ -35,7 +35,7 @@ exports.handler = async (event) => {
 
     const digest = await computeDigest(user.id, serviceKey);
     const html = renderDigestHtml(digest, `${baseUrl}/api/unsubscribe`);
-    await sendEmail(user.email, '[Test] Your weekly Claruno progress report', html, resendKey, fromAddress);
+    await sendEmail(user.email, `[Test] ${subjectLine(digest)}`, html, resendKey, fromAddress);
     return { statusCode: 200, body: JSON.stringify({ sent: true, email: user.email }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Something went wrong sending the test email' }) };
