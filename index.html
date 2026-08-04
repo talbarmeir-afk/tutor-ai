@@ -4761,6 +4761,20 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   window.mathTutorProfile = { loadDashboard, loadProfile, loadSettings };
 
+  // Supabase redirects OAuth failures back with an error in the URL (query
+  // string or hash, depending on flow) instead of a session — e.g. the
+  // invite-only signup hook rejecting an email. Without this, a rejected
+  // "Continue with Google" attempt silently dropped the visitor back on the
+  // homepage with no explanation at all.
+  (function showAuthRedirectError(){
+    const fromHash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const fromQuery = new URLSearchParams(window.location.search);
+    const description = fromHash.get('error_description') || fromQuery.get('error_description');
+    if (!description) return;
+    setAuthError(description);
+    history.replaceState(null, '', window.location.pathname);
+  })();
+
   if (supabaseClient){
     supabaseClient.auth.onAuthStateChange((_event, session) => {
       currentSession = session;
