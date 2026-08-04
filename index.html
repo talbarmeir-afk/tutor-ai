@@ -650,6 +650,14 @@
   .verdict-icon-btn:hover{ background:rgba(24,24,22,0.1); color:#181816; border-color:rgba(24,24,22,0.35); }
   .verdict-icon-btn:focus-visible{ outline:2px solid #E03A2F; outline-offset:2px; }
   .verdict-icon-btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .verdict-next-btn{
+    display:block; width:100%; margin-top:8px; padding:7px 10px;
+    font-family:'Karla', sans-serif; font-weight:700; font-size:13px;
+    background:#2FA04C; color:#fff; border:none; border-radius:8px; cursor:pointer;
+    transition:background .15s ease;
+  }
+  .verdict-next-btn:hover{ background:#26893f; }
+  .verdict-next-btn:focus-visible{ outline:2px solid #2FA04C; outline-offset:2px; }
 
   .reset-row{ margin-top:22px; text-align:right; }
   button.ghost-btn{
@@ -1325,6 +1333,12 @@
               </svg>
             </button>
           </div>
+          <!-- Homework mode only, and only once the check comes back
+               correct — a mistake is expected to be fixed on the same
+               paper and re-checked, but a correct answer has nothing left
+               to do here except move on, which otherwise had no clear next
+               step once this bubble appeared. -->
+          <button type="button" class="verdict-next-btn hidden" id="lessonNextProblemBtn">Next problem &#8594;</button>
           <div class="qa-section hidden" id="qaSection">
             <div class="qa-thread" id="qaThread"></div>
             <form class="qa-form" id="qaForm">
@@ -1535,6 +1549,7 @@
   const qaSend = document.getElementById('qaSend');
   const detailBtn = document.getElementById('detailBtn');
   const askBtn = document.getElementById('askBtn');
+  const lessonNextProblemBtn = document.getElementById('lessonNextProblemBtn');
   const errorNote = document.getElementById('errorNote');
   const errorText = document.getElementById('errorText');
   const retryBtn = document.getElementById('retryBtn');
@@ -2449,6 +2464,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       verdictFix.style.display = 'none';
     }
     resultPaper.classList.remove('hidden');
+    lessonNextProblemBtn.classList.toggle('hidden',
+      !(lessonModeOn && !parsed.has_mistake && workSourceSelect.value === 'homework'));
 
     conversation = [
       { role: 'user', content: [
@@ -3120,6 +3137,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     hideResults(); hideError();
   });
   solutionUploadBtn.addEventListener('click', () => lessonFileInput.click());
+
+  // A correct homework check has nothing left to fix on the same paper —
+  // this clears both attachments (a genuinely new problem, not a retake of
+  // the old one) and drops straight back to live camera, ready for a photo.
+  lessonNextProblemBtn.addEventListener('click', () => {
+    problemImageData = null;
+    lessonShowLive();
+    hideResults(); hideError();
+  });
 
   function openAttachmentPreview(src){
     if (!src) return;
