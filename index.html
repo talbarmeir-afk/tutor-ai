@@ -157,6 +157,16 @@
     pointer-events:none;
   }
   .lesson-cam-actions{ display:flex; justify-content:center; gap:10px; margin-top:14px; }
+  /* Deliberately understated — this is an escape hatch for a problem the
+     student wants to abandon, not a peer of Hint/Check, so it must never
+     compete visually with them. */
+  .skip-problem-link{
+    display:block; margin:8px auto 0; padding:2px 4px;
+    font-family:'Karla', sans-serif; font-size:12.5px; color:var(--ink-muted);
+    background:none; border:none; cursor:pointer; text-decoration:underline;
+    text-underline-offset:2px;
+  }
+  .skip-problem-link:hover{ color:var(--ink); }
   /* One consistent thumbnail-plus-controls pattern for both images —
      replaces the old text-only "Problem attached" chip and the separate
      Back-to-camera / upload-instead buttons/links with something the
@@ -1093,6 +1103,7 @@
       <button class="ghost-btn" id="lessonHintBtn" type="button">Give me a hint</button>
       <button class="primary-btn" id="lessonCheckBtn" type="button">Check</button>
     </div>
+    <button type="button" class="skip-problem-link" id="skipProblemBtn">Skip this problem</button>
     <!-- Only relevant when the problem came from a book/worksheet — the
          student attaches it whenever it's actually needed, not every
          problem, and it stays attached across re-checks until removed. -->
@@ -2497,7 +2508,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // alongside the Next-problem button itself, not more broadly.
     const showNextProblem = lessonModeOn && !parsed.has_mistake && workSourceSelect.value === 'homework';
     lessonNextProblemBtn.classList.toggle('hidden', !showNextProblem);
-    if (lessonModeOn) lessonCamActions.classList.toggle('hidden', showNextProblem);
+    if (lessonModeOn){
+      lessonCamActions.classList.toggle('hidden', showNextProblem);
+      skipProblemBtn.classList.toggle('hidden', showNextProblem);
+    }
 
     conversation = [
       { role: 'user', content: [
@@ -2687,6 +2701,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const stuckNudgeClose = document.getElementById('stuckNudgeClose');
   const stuckMascot = document.getElementById('stuckMascot');
   const lessonCamActions = document.getElementById('lessonCamActions');
+  const skipProblemBtn = document.getElementById('skipProblemBtn');
   const problemCaptureActions = document.getElementById('problemCaptureActions');
   const problemCaptureCancelBtn = document.getElementById('problemCaptureCancelBtn');
   const problemCaptureSnapBtn = document.getElementById('problemCaptureSnapBtn');
@@ -3160,6 +3175,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     imageWrap.classList.add('hidden');
     lessonCamFrame.classList.remove('hidden');
     lessonCamActions.classList.add('hidden');
+    skipProblemBtn.classList.add('hidden');
     problemCaptureActions.classList.remove('hidden');
     updateAttachmentsUI();
     updateWorkSourceLock();
@@ -3169,6 +3185,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     capturingProblemPhoto = false;
     problemCaptureActions.classList.add('hidden');
     lessonCamActions.classList.remove('hidden');
+    skipProblemBtn.classList.remove('hidden');
     if (wasFrozenBeforeProblemCapture){
       imageWrap.classList.remove('hidden');
       lessonCamFrame.classList.add('hidden');
@@ -3202,6 +3219,16 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // this clears both attachments (a genuinely new problem, not a retake of
   // the old one) and drops straight back to live camera, ready for a photo.
   lessonNextProblemBtn.addEventListener('click', () => {
+    problemImageData = null;
+    lessonShowLive();
+    hideResults(); hideError();
+  });
+
+  // Same reset as Next problem, but reachable any time Hint/Check are —
+  // stuck, uninterested, or just wants to move on, no correct check
+  // required first. Deliberately low-key styling so it never reads as an
+  // equally-weighted third option next to Hint/Check.
+  skipProblemBtn.addEventListener('click', () => {
     problemImageData = null;
     lessonShowLive();
     hideResults(); hideError();
@@ -3299,6 +3326,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     annGroup.innerHTML = '';
     lessonCamFrame.classList.remove('hidden');
     lessonCamActions.classList.remove('hidden');
+    skipProblemBtn.classList.remove('hidden');
     imageData = null;
     lessonUploadedPending = false;
     updateWorkSourceLock();
