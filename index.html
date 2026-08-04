@@ -2624,6 +2624,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     adjustLessonBubble();
     watchResumeRow.classList.add('hidden');
     resultPaper.classList.remove('hidden');
+    // A hint never yields a "correct" verdict — unlike renderResult(),
+    // which sets this on every call, this reuses the same bubble without
+    // otherwise touching it, so a leftover "not hidden" class from an
+    // earlier correct result in this same lesson would silently keep
+    // showing Next-problem alongside hints for the rest of the lesson.
+    lessonNextProblemBtn.classList.add('hidden');
     conversation = [
       { role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageData.base64 } },
