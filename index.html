@@ -1054,6 +1054,11 @@
 
   <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
 
+  <!-- TEMP TEST ONLY — remove once nudge testing is done. Not part of the
+       real product; fires the same showStuckNudge() the 1-minute-idle
+       timer would, on demand. -->
+  <button type="button" id="testTriggerNudgeBtn" style="font-size:11px; color:#999; background:none; border:1px dashed #ccc; border-radius:6px; padding:2px 8px; cursor:pointer; margin-bottom:8px;">TEST: trigger stuck nudge</button>
+
   <div class="check-card" id="checkCard">
   <div class="check-card-head">
     <h2 class="check-card-title">Check my scribbled work</h2>
@@ -2936,6 +2941,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   }
 
   stuckNudgeClose.addEventListener('click', hideStuckNudge);
+
+  // TEMP TEST ONLY — remove alongside the button above once nudge testing
+  // is done.
+  const testTriggerNudgeBtn = document.getElementById('testTriggerNudgeBtn');
+  if (testTriggerNudgeBtn) testTriggerNudgeBtn.addEventListener('click', showStuckNudge);
 
   function resetStuckClock(){
     lastStuckActivityAt = Date.now();
