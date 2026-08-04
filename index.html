@@ -2486,8 +2486,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       verdictFix.style.display = 'none';
     }
     resultPaper.classList.remove('hidden');
-    lessonNextProblemBtn.classList.toggle('hidden',
-      !(lessonModeOn && !parsed.has_mistake && workSourceSelect.value === 'homework'));
+    // Hint and Check both become dead ends once "Next problem" shows —
+    // nothing left to hint about, and Check would just silently re-check
+    // the same already-correct frozen photo. A mistake still needs both
+    // (fix it on the same paper, or ask for a hint), so this only kicks in
+    // alongside the Next-problem button itself, not more broadly.
+    const showNextProblem = lessonModeOn && !parsed.has_mistake && workSourceSelect.value === 'homework';
+    lessonNextProblemBtn.classList.toggle('hidden', !showNextProblem);
+    if (lessonModeOn) lessonCamActions.classList.toggle('hidden', showNextProblem);
 
     conversation = [
       { role: 'user', content: [
@@ -3264,6 +3270,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resetLessonBubbleStyles();
     annGroup.innerHTML = '';
     lessonCamFrame.classList.remove('hidden');
+    lessonCamActions.classList.remove('hidden');
     imageData = null;
     lessonUploadedPending = false;
     updateWorkSourceLock();
