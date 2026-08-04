@@ -369,6 +369,14 @@ not eagerly on sign-in.
   (`/api/unsubscribe?token=…`) that works without logging in — the
   recipient is often a parent/teacher who isn't a Claruno account holder
   at all, just an email address the student added.
+
+  The student's own account email is added as a recipient automatically
+  the first time this section loads (removable, and it won't come back
+  once removed — tracked client-side per account, not just "list is
+  currently empty"). A **Send a test email** button next to the list
+  sends that same signed-in user a one-off copy of their own digest
+  immediately (`/api/test-progress-report`), so setup can be verified
+  without waiting for Monday.
 - **Settings** has account (email, password change via
   `supabaseClient.auth.updateUser`), and placeholder Billing/Integrations
   sections — no real payment processing or third-party connections exist

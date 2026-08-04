@@ -1476,7 +1476,9 @@
     <h2 class="panel-heading">Progress reports</h2>
     <p class="settings-note">A weekly email summary — lessons vs. target,
       streak, and per-topic mastery. No photos of the student's work are
-      included, just the same stats shown on the Dashboard.</p>
+      included, just the same stats shown on the Dashboard. Your own
+      account email is added by default — remove it below if you'd rather
+      not get a copy yourself.</p>
     <div id="recipientsList" class="exams-list">
       <p class="empty-note">No recipients added yet.</p>
     </div>
@@ -1484,6 +1486,10 @@
       <input type="email" id="recipientEmail" placeholder="Parent or teacher's email" required>
       <button type="submit" class="ghost-btn">Add recipient</button>
     </form>
+    <div class="form-actions">
+      <button type="button" class="ghost-btn" id="testReportBtn">Send a test email</button>
+      <span class="save-status" id="testReportStatus"></span>
+    </div>
   </div>
 
   <div id="tabSettings" class="hidden">
@@ -3969,6 +3975,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   const recipientsList = document.getElementById('recipientsList');
   const recipientForm = document.getElementById('recipientForm');
   const recipientEmail = document.getElementById('recipientEmail');
+  const testReportBtn = document.getElementById('testReportBtn');
+  const testReportStatus = document.getElementById('testReportStatus');
 
   const settingsEmail = document.getElementById('settingsEmail');
   const passwordForm = document.getElementById('passwordForm');
@@ -4818,6 +4826,13 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     });
   }
 
+  // Seeds the student's own account email as the first recipient, once —
+  // so progress reports work out of the box without an extra step, but a
+  // student who deliberately removes it isn't fought on the next visit.
+  // Tracked per-account rather than "list is empty", since an empty list
+  // after a deliberate removal must stay empty.
+  const RECIPIENT_SEEDED_PREFIX = 'mathTutorRecipientSeeded:';
+
   async function loadRecipients(){
     if (!supabaseClient || !currentSession) return;
     const { data, error } = await supabaseClient
@@ -4826,6 +4841,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       .eq('user_id', currentSession.user.id)
       .order('created_at', { ascending: true });
     if (error){ console.warn('Could not load progress-report recipients', error); return; }
+    const seededKey = RECIPIENT_SEEDED_PREFIX + currentSession.user.id;
+    if (!data.length && currentSession.user.email && !localStorage.getItem(seededKey)){
+      const { error: seedError } = await supabaseClient.from('progress_recipients').insert({
+        user_id: currentSession.user.id,
+        email: currentSession.user.email.toLowerCase(),
+      });
+      localStorage.setItem(seededKey, '1');
+      if (!seedError){ loadRecipients(); return; }
+    }
     renderRecipients(data);
   }
 
@@ -4853,6 +4877,28 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       loadRecipients();
     } catch(err){
       console.warn('Could not add recipient', err);
+    }
+  });
+
+  testReportBtn.addEventListener('click', async () => {
+    if (!currentSession) return;
+    testReportBtn.disabled = true;
+    testReportStatus.classList.remove('is-error');
+    testReportStatus.textContent = 'Sending…';
+    try{
+      const response = await fetch('/api/test-progress-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: currentSession.access_token }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data || !data.sent) throw new Error((data && data.error) || 'Something went wrong');
+      testReportStatus.textContent = `Sent to ${data.email} — check your inbox.`;
+    } catch(err){
+      testReportStatus.classList.add('is-error');
+      testReportStatus.textContent = err.message || 'Could not send test email';
+    } finally {
+      testReportBtn.disabled = false;
     }
   });
 
