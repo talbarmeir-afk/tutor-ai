@@ -1884,7 +1884,11 @@
   // Kept in sync with the ANALYSIS_PROMPT in lib/anthropic.js — this copy is
   // only used to reconstruct conversation history for follow-up questions,
   // the actual analysis call is made server-side.
-  const ANALYSIS_PROMPT = `Look at this photo of handwritten math work.
+  const ANALYSIS_PROMPT = `Look at this photo, which is meant to show handwritten math work.
+
+STEP 0 — First, confirm the photo actually shows handwritten or printed math work somewhere in the frame — equations, numbers, or a worked solution. If it instead shows something else entirely (a blank page, an empty desk, a laptop, a phone, a person, furniture, or anything without legible math content), set no_work_found to true, leave has_mistake as false, and set explanation to one plain sentence describing what the photo actually shows instead of math work — then skip every step below and go straight to the JSON response. A photo with no work in it is NOT the same as a correct solution; never report has_mistake: false just because there's nothing to find wrong with.
+
+If real math work IS visible, continue with the steps below (no_work_found stays false):
 
 Before anything else, check whether the photo's frame cuts off any part of the work — a line running off the bottom, top, left, or right edge, or too blurred/obscured to actually read in full. Treat any such line as unread: never guess, infer, or assume what it says or whether it's correct, even if the visible portion looks like an obvious continuation (a visible "1+1" right at a cut-off edge is NOT evidence it goes on to say "=2" — you cannot verify a value you cannot actually see written on the page). Do not mention, evaluate, or count a cut-off line at all — treat the last fully visible and legible line as the actual end of the readable work, as if nothing came after it.
 
@@ -1909,7 +1913,7 @@ Also classify the problem into exactly one topic from this fixed list, choosing 
 Write explanation and fix speaking directly TO the student as "you" (e.g. "you subtracted 37 instead of adding it" or "you're on the right track — try..."), the way a teacher would say it out loud sitting next to them. Never write in the third person — never say "the student" or "they".
 
 Respond with ONLY this JSON object, no markdown fences, no extra text:
-{"has_mistake": true or false, "problem_title": "short label for the overall problem, per the instructions above", "topic": "exactly one topic from the fixed list above", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "wrong_token": "the exact incorrect number, sign, or term as written (empty string if no mistake)", "explanation": "1-2 plain sentences on what's wrong", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token, "total_lines": total count of distinct handwritten lines visible in the photo counted top to bottom — INCLUDING crossed-out lines and the original problem line; a fraction (number over a bar over a number) counts as ONE line, "mistake_line_index": which of those lines (1-based from the top, same counting) contains the mistake, or 0 if has_mistake is false}
+{"no_work_found": true or false, per Step 0, "has_mistake": true or false — always false when no_work_found is true, "problem_title": "short label for the overall problem, per the instructions above — empty string if no_work_found is true", "topic": "exactly one topic from the fixed list above — best guess or \"Other\" if no_work_found is true", "crossed_out_lines": array of exact text strings for each line identified as crossed out in Step 1 (empty array if none), "line_quote": "short exact snippet of text/expression from that line", "wrong_token": "the exact incorrect number, sign, or term as written (empty string if no mistake)", "explanation": "1-2 plain sentences on what's wrong, or — if no_work_found is true — one plain sentence on what the photo actually shows instead", "fix": "one sentence on the correct step, or empty string if there's no mistake", "y": percent from the top edge of the photo to the vertical center of the specific wrong token, "x": percent from the left edge of the photo to the horizontal position of the specific wrong token, "total_lines": total count of distinct handwritten lines visible in the photo counted top to bottom — INCLUDING crossed-out lines and the original problem line; a fraction (number over a bar over a number) counts as ONE line, "mistake_line_index": which of those lines (1-based from the top, same counting) contains the mistake, or 0 if has_mistake is false}
 
 A light blue coordinate grid with percent labels is drawn over the photo purely to help you report positions: the numbers along the top edge are x percentages and the numbers along the left edge are y percentages. The grid is NOT part of the student's work — ignore it when reading the math. Read x and y directly off the nearest gridlines instead of estimating proportions by eye.
 
@@ -2555,6 +2559,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       }
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const parsed = parseModelJson(data.text);
+      if (parsed.no_work_found){
+        showError(`Couldn't find any math work in that photo. ${parsed.explanation || 'Try again with your solution clearly in frame.'}`);
+        return;
+      }
       if (parsed.has_mistake){
         statusText.textContent = 'Pinpointing the exact spot…';
         await refineMistakeLocation(parsed, imageData.dataUrl);
