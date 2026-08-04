@@ -5100,12 +5100,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   })();
 
   if (supabaseClient){
+    // onAuthStateChange alone is the source of truth — it already fires
+    // immediately on subscribe with whatever session currently exists (from
+    // storage, or freshly parsed from a Google redirect's URL hash), then
+    // again on every later change. A separate getSession() call used to run
+    // alongside it, racing to write the same currentSession variable with no
+    // ordering guarantee — right after an OAuth redirect, both are reading
+    // the same in-flight session parse, and whichever settled LAST won, even
+    // if it read a stale/incomplete result. That's what made Google sign-in
+    // look flaky ("works sometimes, retry until it does") instead of reliably
+    // broken or reliably working.
     supabaseClient.auth.onAuthStateChange((_event, session) => {
       currentSession = session;
-      updateAuthUI();
-    });
-    supabaseClient.auth.getSession().then(({ data }) => {
-      currentSession = data.session;
       updateAuthUI();
     });
   } else {
