@@ -2752,9 +2752,21 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // feature that already works manually. When it DOES change something,
   // that's never silent — a wrong guess should be obvious and immediately
   // fixable, not something the student has to notice on their own.
+  // Temporary console.debug trail (prefixed "[auto-rotate]") at every exit
+  // point — a student reported this silently not firing on retake/next
+  // problem despite working at lesson start, and every code-read hypothesis
+  // for why has checked out fine, so this pins down which branch actually
+  // runs instead of guessing again. Safe to remove once confirmed.
   async function autoDetectLessonCamRotation(){
-    if (hasManualLessonCamRotation(currentLessonId)) return;
-    if (!lessonCamVideo.videoWidth) return;
+    if (hasManualLessonCamRotation(currentLessonId)){
+      console.debug('[auto-rotate] skipped: manually overridden for this lesson');
+      return;
+    }
+    if (!lessonCamVideo.videoWidth){
+      console.debug('[auto-rotate] skipped: video not ready (videoWidth is 0)');
+      return;
+    }
+    console.debug('[auto-rotate] checking… current quarter =', lessonCamQuarter);
     try{
       const sample = lessonCaptureFrame(lessonCamVideo, 480, 0, 1, 0, 0);
       const response = await fetch('/api/detectOrientation', {
@@ -2767,18 +2779,28 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         }),
       });
       const data = await response.json().catch(() => null);
+      console.debug('[auto-rotate] response', response.status, data);
       if (!response.ok || !data || hasManualLessonCamRotation(currentLessonId)) return;
       const rotation = [0, 90, 180, 270].includes(data.rotation) ? data.rotation : 0;
-      if (rotation === 0) return;
+      if (rotation === 0){
+        console.debug('[auto-rotate] model says 0 (no rotation needed / not confident) — leaving as-is');
+        return;
+      }
       const quarter = rotation / 90;
-      if (quarter === lessonCamQuarter) return;
+      if (quarter === lessonCamQuarter){
+        console.debug('[auto-rotate] model agrees with current rotation, nothing to change');
+        return;
+      }
+      console.debug('[auto-rotate] applying new rotation', quarter * 90, 'degrees (was', lessonCamQuarter * 90, ')');
       lessonCamQuarter = quarter;
       applyLessonCamRotation();
       saveLessonCamQuarter();
       lessonCamNote.textContent = `Rotated the camera view automatically — tap ⟲ above if this looks wrong.`;
       lessonCamNote.classList.remove('hidden');
       setTimeout(() => lessonCamNote.classList.add('hidden'), 5000);
-    } catch(err){ /* best-effort — the manual rotate button still works */ }
+    } catch(err){
+      console.debug('[auto-rotate] error', err);
+    }
   }
 
   // ---- "Still there?" stuck-student nudge ----
@@ -3269,6 +3291,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // own loadedmetadata event instead. On every later call (retake, next
     // problem) the stream's already live, so this is what actually re-
     // checks the paper's current orientation.
+    console.debug('[auto-rotate] lessonShowLive() calling autoDetectLessonCamRotation');
     autoDetectLessonCamRotation();
   }
 
