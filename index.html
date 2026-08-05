@@ -2199,6 +2199,127 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     });
   }
 
+  // Finds the overall bounding box of actual handwritten ink in a photo,
+  // so the frozen result can be auto-zoomed to it — cropping out dead
+  // margin (desk, chair, background) from what's DISPLAYED to the
+  // student, without touching what's sent to the model for analysis (that
+  // still needs the full, untouched frame). Reuses the same luminance-
+  // threshold ink detection and "reject solid objects, not just sparse
+  // strokes" density filter as snapBoxToInk above (see there for why),
+  // generalized from finding one line to the union of every inked line.
+  function computeInkBoundingBox(dataUrl){
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onerror = () => resolve(null);
+      img.onload = () => {
+        try{
+          const scale = Math.min(1, 700 / img.width);
+          const w = Math.max(1, Math.round(img.width * scale));
+          const h = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const px = ctx.getImageData(0, 0, w, h).data;
+          const mx0 = Math.round(w * 0.02), mx1 = Math.round(w * 0.98);
+          const my0 = Math.round(h * 0.02), my1 = Math.round(h * 0.98);
+          const lum = new Float32Array(w * h);
+          let sum = 0, n = 0;
+          for (let yy = my0; yy < my1; yy++){
+            for (let xx = mx0; xx < mx1; xx++){
+              const i = (yy * w + xx) * 4;
+              const L = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+              lum[yy * w + xx] = L;
+              sum += L; n++;
+            }
+          }
+          const mean = sum / n;
+          let varSum = 0;
+          for (let yy = my0; yy < my1; yy++){
+            for (let xx = mx0; xx < mx1; xx++){
+              const d = lum[yy * w + xx] - mean;
+              varSum += d * d;
+            }
+          }
+          const std = Math.sqrt(varSum / n);
+          const thr = mean - Math.max(18, std * 1.1);
+
+          const rowCount = new Int32Array(h);
+          for (let yy = my0; yy < my1; yy++){
+            let c = 0;
+            for (let xx = mx0; xx < mx1; xx++) if (lum[yy * w + xx] < thr) c++;
+            rowCount[yy] = c;
+          }
+          const minRow = Math.max(2, Math.round((mx1 - mx0) * 0.004));
+          const bands = [];
+          let start = -1;
+          for (let yy = my0; yy <= my1; yy++){
+            const inked = yy < my1 && rowCount[yy] >= minRow;
+            if (inked && start < 0) start = yy;
+            if (!inked && start >= 0){
+              if (yy - start >= Math.max(3, h * 0.008)) bands.push({ y0: start, y1: yy });
+              start = -1;
+            }
+          }
+          if (!bands.length){ resolve(null); return; }
+          const merged = [bands[0]];
+          for (let i = 1; i < bands.length; i++){
+            const prev = merged[merged.length - 1];
+            if (bands[i].y0 - prev.y1 < h * 0.022) prev.y1 = bands[i].y1;
+            else merged.push(bands[i]);
+          }
+          const textLike = merged.filter((b) => {
+            let dark = 0;
+            for (let yy = b.y0; yy < b.y1; yy++) dark += rowCount[yy];
+            const area = (b.y1 - b.y0) * (mx1 - mx0);
+            return area > 0 && (dark / area) < 0.6;
+          });
+          if (!textLike.length){ resolve(null); return; }
+
+          const top = textLike[0].y0;
+          const bottom = textLike[textLike.length - 1].y1;
+
+          // Horizontal extent measured only within the ink lines' own
+          // vertical span, not the full photo height — otherwise an object
+          // above or below the actual work (say a laptop below the page)
+          // could pull the crop wider than the lines themselves need.
+          let left = -1, right = -1;
+          for (let xx = mx0; xx < mx1; xx++){
+            let has = false;
+            for (const b of textLike){
+              for (let yy = b.y0; yy < b.y1; yy++){
+                if (lum[yy * w + xx] < thr){ has = true; break; }
+              }
+              if (has) break;
+            }
+            if (has){
+              if (left < 0) left = xx;
+              right = xx;
+            }
+          }
+          if (left < 0 || right <= left){ resolve(null); return; }
+
+          // Generous padding so the crop breathes rather than clipping
+          // right at the ink's edge, plus a floor so a tiny scrap of work
+          // doesn't zoom in to an unreasonably tight crop.
+          const padX = Math.max((right - left) * 0.15, w * 0.04);
+          const padY = Math.max((bottom - top) * 0.15, h * 0.04);
+          const x0 = Math.max(0, left - padX);
+          const x1 = Math.min(w, right + padX);
+          const y0 = Math.max(0, top - padY);
+          const y1 = Math.min(h, bottom + padY);
+          if (x1 - x0 < w * 0.15 || y1 - y0 < h * 0.15){ resolve(null); return; }
+
+          resolve({
+            x0: x0 / w * 100, x1: x1 / w * 100,
+            y0: y0 / h * 100, y1: y1 / h * 100,
+          });
+        } catch(err){ resolve(null); }
+      };
+      img.src = dataUrl;
+    });
+  }
+
   // Pointer placement, deterministic: the checker reports WHICH handwritten
   // line has the mistake ("line 3 of 5") — an ordinal judgment models make
   // reliably — and the ink detector above measures where the actual lines
@@ -2785,6 +2906,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // there's a lot of the frame to move around to find the right part.
   const LESSON_ZOOM_LEVELS = [1, 1.5, 2, 3, 4];
   let lessonCamZoom = 1;
+  // Tracks whether the current zoom came from auto-zoom-to-content
+  // (below) rather than the student's own +/- or drag — so returning to
+  // live view can safely reset an auto-zoom (irrelevant to the next,
+  // differently-framed photo) without also undoing a zoom level the
+  // student deliberately chose and would reasonably expect to persist.
+  let lessonZoomIsAuto = false;
   // Drag-to-pan while zoomed in — in screen pixels, applied after the
   // scale (translate() before scale() in the transform string) so a
   // mouse/touch move of N px always shifts the content by N px on
@@ -3052,9 +3179,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resultImg.style.cursor = draggable ? 'grab' : '';
     lessonCamVideo.style.touchAction = draggable ? 'none' : '';
     resultImg.style.touchAction = draggable ? 'none' : '';
-    lessonZoomLevel.textContent = `${lessonCamZoom}×`;
-    lessonZoomOutBtn.disabled = lessonCamZoom === LESSON_ZOOM_LEVELS[0];
-    lessonZoomInBtn.disabled = lessonCamZoom === LESSON_ZOOM_LEVELS[LESSON_ZOOM_LEVELS.length - 1];
+    // Rounded for display only — auto-zoom-to-content (below) sets a
+    // continuous value, not one of the discrete step levels.
+    lessonZoomLevel.textContent = `${Math.round(lessonCamZoom * 10) / 10}×`;
+    lessonZoomOutBtn.disabled = lessonCamZoom <= LESSON_ZOOM_LEVELS[0] + 0.001;
+    lessonZoomInBtn.disabled = lessonCamZoom >= LESSON_ZOOM_LEVELS[LESSON_ZOOM_LEVELS.length - 1] - 0.001;
   }
 
   // Keeps the zoomed content covering its element's own box (a rough,
@@ -3097,6 +3226,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       }
       lessonPanX = lessonPanDrag.baseX + dx;
       lessonPanY = lessonPanDrag.baseY + dy;
+      lessonZoomIsAuto = false;
       clampLessonPan(el);
       applyLessonCamZoom();
       el.style.cursor = 'grabbing';
@@ -3119,10 +3249,23 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // zooming OUT shrinks how far the existing pan is allowed to reach; the
   // old cycle-only version only ever hit this via the wrap-to-1x special
   // case, which reset pan outright instead of needing a real re-clamp.
+  //
+  // Finds the nearest level strictly above/below the CURRENT zoom rather
+  // than indexOf-ing it directly, since auto-zoom-to-content (below) can
+  // leave lessonCamZoom at a continuous value that isn't exactly one of
+  // the discrete steps — indexOf would return -1 and collapse every
+  // direction to the same level.
   function stepLessonZoom(direction){
-    const idx = LESSON_ZOOM_LEVELS.indexOf(lessonCamZoom);
-    const nextIdx = Math.max(0, Math.min(LESSON_ZOOM_LEVELS.length - 1, idx + direction));
-    lessonCamZoom = LESSON_ZOOM_LEVELS[nextIdx];
+    let nextZoom;
+    if (direction > 0){
+      nextZoom = LESSON_ZOOM_LEVELS.find((z) => z > lessonCamZoom + 0.001);
+      if (nextZoom === undefined) nextZoom = LESSON_ZOOM_LEVELS[LESSON_ZOOM_LEVELS.length - 1];
+    } else {
+      const below = LESSON_ZOOM_LEVELS.filter((z) => z < lessonCamZoom - 0.001);
+      nextZoom = below.length ? below[below.length - 1] : LESSON_ZOOM_LEVELS[0];
+    }
+    lessonCamZoom = nextZoom;
+    lessonZoomIsAuto = false;
     if (lessonCamZoom === 1){
       lessonPanX = 0; lessonPanY = 0;
     } else {
@@ -3411,6 +3554,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     skipProblemBtn.classList.remove('hidden');
     imageData = null;
     lessonUploadedPending = false;
+    // An auto-zoom from the last frozen photo is meaningless for the next,
+    // differently-framed shot — clear it so the live view (and its framing
+    // guide) starts full-frame again. A zoom the student set manually is
+    // left alone, since they'd reasonably expect that to persist.
+    if (lessonZoomIsAuto){
+      lessonCamZoom = 1; lessonPanX = 0; lessonPanY = 0;
+      applyLessonCamZoom();
+    }
     updateWorkSourceLock();
     updateAttachmentsUI();
     // No-ops on the very first call of a lesson (camera isn't started yet,
@@ -3419,6 +3570,43 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // problem) the stream's already live, so this is what actually re-
     // checks the paper's current orientation.
     autoDetectLessonCamRotation();
+  }
+
+  // Zooms the DISPLAYED frozen photo (and its overlay, via the same
+  // shared CSS transform applyLessonCamZoom() already puts on both —
+  // see there) into the detected handwriting, so dead margin — desk,
+  // chair, background — doesn't dominate what the student actually sees.
+  // The frame already sent to the model for analysis is untouched; this
+  // is purely cosmetic and runs after the fact. Because the transform is
+  // shared with the overlay, the mistake marker's percent-of-image
+  // coordinates need no adjustment at all once the real result comes in —
+  // this is exactly why auto-zoom reuses the manual zoom/pan mechanism
+  // instead of physically re-cropping the image.
+  async function autoZoomToContent(dataUrl){
+    await new Promise((resolve) => {
+      if (resultImg.complete && resultImg.naturalWidth){ resolve(); return; }
+      resultImg.addEventListener('load', resolve, { once: true });
+      resultImg.addEventListener('error', resolve, { once: true });
+    });
+    const box = await computeInkBoundingBox(dataUrl);
+    // Bail if a newer capture or a return to live view superseded this
+    // one while detection (async, off the main image) was still running.
+    if (imageWrap.classList.contains('hidden') || !imageData || imageData.dataUrl !== dataUrl) return;
+    lessonCamZoom = 1; lessonPanX = 0; lessonPanY = 0;
+    if (box){
+      const boxW = resultImg.clientWidth, boxH = resultImg.clientHeight;
+      const contentW = box.x1 - box.x0, contentH = box.y1 - box.y0;
+      if (boxW && boxH && contentW > 0 && contentH > 0){
+        const zoom = Math.min(4, Math.max(1, Math.min(100 / contentW, 100 / contentH)));
+        const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
+        lessonCamZoom = zoom;
+        lessonPanX = zoom * boxW * (0.5 - cx / 100);
+        lessonPanY = zoom * boxH * (0.5 - cy / 100);
+        clampLessonPan(resultImg);
+      }
+    }
+    lessonZoomIsAuto = true;
+    applyLessonCamZoom();
   }
 
   function lessonFreezeFrame(frame){
@@ -3433,6 +3621,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonCamFrame.classList.add('hidden');
     updateWorkSourceLock();
     updateAttachmentsUI();
+    autoZoomToContent(frame.dataUrl);
   }
 
   // In "Teach me & train" mode the camera box only appears once a practice
