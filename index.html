@@ -3595,9 +3595,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       resultImg.addEventListener('error', resolve, { once: true });
     });
     const box = await computeInkBoundingBox(dataUrl);
+    console.debug('[auto-zoom] detected box (% of image)', box);
     // Bail if a newer capture or a return to live view superseded this
     // one while detection (async, off the main image) was still running.
     if (imageWrap.classList.contains('hidden') || !imageData || imageData.dataUrl !== dataUrl) return;
+    // TEMP DEBUG — draws the detected region directly on the frozen photo
+    // (in the same percent-of-image space the rest of the overlay uses)
+    // so a screenshot shows exactly what was detected instead of raw
+    // numbers. Gets overwritten by the real mistake marker once the check
+    // completes; remove alongside the console.debug calls once this is
+    // confirmed working.
+    if (box){
+      annGroup.innerHTML = `<rect x="${box.x0}" y="${box.y0}" width="${box.x1 - box.x0}" height="${box.y1 - box.y0}" fill="none" stroke="#1e90ff" stroke-width="0.6" stroke-dasharray="2 1.4"/>`;
+    }
     lessonCamZoom = 1; lessonPanX = 0; lessonPanY = 0;
     if (box){
       const boxW = resultImg.clientWidth, boxH = resultImg.clientHeight;
@@ -3609,7 +3619,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         lessonPanX = zoom * boxW * (0.5 - cx / 100);
         lessonPanY = zoom * boxH * (0.5 - cy / 100);
         clampLessonPan(resultImg);
+        console.debug('[auto-zoom] applying zoom =', zoom, 'contentW% =', contentW, 'contentH% =', contentH);
+      } else {
+        console.debug('[auto-zoom] skipped: resultImg not measurable yet or degenerate box', { boxW, boxH, contentW, contentH });
       }
+    } else {
+      console.debug('[auto-zoom] no box detected — falling back to 1x');
     }
     lessonZoomIsAuto = true;
     applyLessonCamZoom();
