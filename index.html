@@ -833,6 +833,7 @@
   .history-verdict{ font-weight:700; font-size:14px; }
   .history-verdict.is-mistake{ color:var(--pen-red); }
   .history-verdict.is-ok{ color:var(--chalk-green); }
+  .history-verdict.is-skipped{ color:var(--ink-muted); }
   .history-quote{ font-size:13px; font-style:italic; color:var(--ink-muted); margin-top:2px; }
   .history-explanation{ font-size:13px; color:var(--ink); margin-top:4px; line-height:1.5; }
   .history-fix{ font-size:13px; color:var(--ink); margin-top:2px; line-height:1.5; }
@@ -3282,8 +3283,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // Same reset as Next problem, but reachable any time Hint/Check are —
   // stuck, uninterested, or just wants to move on, no correct check
   // required first. Deliberately low-key styling so it never reads as an
-  // equally-weighted third option next to Hint/Check.
+  // equally-weighted third option next to Hint/Check. Only logged to
+  // history if a solution photo actually exists yet — skipping straight
+  // from the live camera, before ever taking one, has nothing to show.
   skipProblemBtn.addEventListener('click', () => {
+    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData);
     problemImageData = null;
     lessonShowLive();
     hideResults(); hideError();
@@ -3579,6 +3583,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonNextProblemBtn.classList.remove('hidden');
     lessonCamActions.classList.add('hidden');
     skipProblemBtn.classList.add('hidden');
+    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData);
   }
 
   async function submitQuestion(question){
@@ -4355,8 +4360,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     info.appendChild(dateEl);
 
     const verdictEl = document.createElement('div');
-    verdictEl.className = 'history-verdict ' + (entry.has_mistake ? 'is-mistake' : 'is-ok');
-    verdictEl.textContent = entry.has_mistake ? 'Mistake found' : 'Looks correct';
+    verdictEl.className = 'history-verdict ' + (entry.skipped ? 'is-skipped' : entry.has_mistake ? 'is-mistake' : 'is-ok');
+    verdictEl.textContent = entry.skipped ? 'Skipped' : entry.has_mistake ? 'Mistake found' : 'Looks correct';
     info.appendChild(verdictEl);
 
     if (entry.has_mistake && entry.line_quote){
@@ -4720,6 +4725,42 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
+  // For a problem that was skipped, or solved for the student via the Q&A
+  // "just solve it" reveal — no check ever ran, so there's no verdict/
+  // topic/mistake data to store, just the photo and the fact that this
+  // problem didn't get a genuine attempt. Kept distinct from saveEntry
+  // rather than overloading it with an empty "parsed" shape, since the
+  // two have almost nothing in common beyond both producing a row.
+  async function saveSkipped(frame, mode, problemId, lessonId, problemFrame){
+    if (!supabaseClient || !currentSession || !frame) return;
+    try{
+      const thumbnail = await makeThumbnail(frame.dataUrl, 480);
+      const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480) : null;
+      const { error } = await supabaseClient.from('history_entries').insert({
+        user_id: currentSession.user.id,
+        problem_id: problemId,
+        lesson_id: lessonId,
+        problem_title: '',
+        topic: '',
+        mode,
+        has_mistake: false,
+        skipped: true,
+        line_quote: '',
+        explanation: '',
+        fix: '',
+        thumbnail,
+        problem_thumbnail: problemThumbnail,
+      });
+      if (error) throw error;
+      lastHistoryEntryId = null;
+      currentQAList = [];
+      if (!homeHistoryView.classList.contains('hidden')) loadHistory();
+      if (lessonId && lessonId === activeLessonId) loadCurrentLesson();
+    } catch(err){
+      console.warn('Could not save skipped history entry', err);
+    }
+  }
+
   async function startLessonRecord(lessonId){
     if (!supabaseClient || !currentSession) return;
     try{
@@ -4773,7 +4814,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  window.mathTutorHistory = { saveEntry, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord, showCurrentLesson, hideCurrentLesson, recordTaughtSubject, recordQA };
+  window.mathTutorHistory = { saveEntry, saveSkipped, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord, showCurrentLesson, hideCurrentLesson, recordTaughtSubject, recordQA };
 
   // ---- Profile, exams, dashboard, settings ----
   // Loaded lazily (on tab switch, via window.mathTutorProfile) rather than
@@ -5089,7 +5130,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (!supabaseClient || !currentSession) return;
     const [lessonsRes, entriesRes, profileRes] = await Promise.all([
       supabaseClient.from('lessons').select('started_at').eq('user_id', currentSession.user.id),
-      supabaseClient.from('history_entries').select('topic, has_mistake').eq('user_id', currentSession.user.id),
+      // Skipped problems (or ones solved for the student via Q&A) never
+      // got a genuine attempt — counting them here would inflate mastery
+      // with checks that didn't actually happen.
+      supabaseClient.from('history_entries').select('topic, has_mistake').eq('user_id', currentSession.user.id).eq('skipped', false),
       supabaseClient.from('profiles').select('weekly_target_lessons').eq('user_id', currentSession.user.id).maybeSingle(),
     ]);
     if (lessonsRes.error) console.warn('Could not load lessons for dashboard', lessonsRes.error);

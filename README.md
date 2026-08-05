@@ -392,6 +392,7 @@ everything tabs need — topic column, `profiles`, `exams`):
 alter table history_entries add column if not exists topic text;
 alter table history_entries add column if not exists problem_thumbnail text;
 alter table history_entries add column if not exists qa jsonb;
+alter table history_entries add column if not exists skipped boolean not null default false;
 
 create table if not exists profiles (
   user_id uuid primary key references auth.users,
