@@ -135,7 +135,6 @@
   body.lesson-cam-on .check-card{ padding:14px 18px 16px; margin-bottom:18px; }
   body.lesson-cam-on .check-card-head{ margin-bottom:8px; }
   body.lesson-cam-on .lesson-cam-actions{ margin-top:10px; }
-  body.lesson-cam-on .lesson-status{ margin-top:4px; min-height:16px; }
   body.lesson-cam-on .lesson-attachments{ margin-top:8px; }
   /* Was capped at 380px regardless of how much dark letterbox space
      actually existed beside the photo — adjustLessonBubble() now sizes
@@ -223,7 +222,6 @@
     cursor:pointer; padding:2px 4px; flex-shrink:0;
   }
   .stuck-nudge-close:hover{ color:var(--chalk); }
-  .lesson-status{ text-align:center; font-size:13.5px; color:var(--chalk-muted); margin:10px 0 0; min-height:18px; }
   .link-btn{
     background:none; border:none; color:var(--chalk-muted);
     font-family:'Karla', sans-serif; font-size:13px; text-decoration:underline;
@@ -1185,7 +1183,6 @@
       <p id="stuckNudgeText">Still there? Try "Give me a hint" if you're not sure what's next.</p>
       <button type="button" class="stuck-nudge-close" id="stuckNudgeClose" aria-label="Dismiss">&times;</button>
     </div>
-    <p class="lesson-status" id="lessonStatus"></p>
     <input type="file" id="lessonFileInput" accept="image/*" class="hidden">
   </div>
 
@@ -2741,7 +2738,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const lessonCheckBtn = document.getElementById('lessonCheckBtn');
   const lessonHintBtn = document.getElementById('lessonHintBtn');
   const lessonFileInput = document.getElementById('lessonFileInput');
-  const lessonStatus = document.getElementById('lessonStatus');
   const imageWrap = document.querySelector('#resultPaper .image-wrap');
   const lessonRotateBtn = document.getElementById('lessonRotateBtn');
   const lessonZoomLevel = document.getElementById('lessonZoomLevel');
@@ -3500,7 +3496,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         return;
       }
       if (!lessonCamVideo.videoWidth){
-        lessonStatus.textContent = 'Camera is still starting — try again in a second…';
+        lessonCamNote.textContent = 'Camera is still starting — try again in a second…';
+        lessonCamNote.classList.remove('hidden');
         return;
       }
       lessonFreezeFrame(lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom, lessonPanX, lessonPanY));
@@ -3510,14 +3507,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonHintBtn.disabled = true;
     updateWorkSourceLock();
     // A counting ticker so a long check visibly makes progress — a static
-    // "checking…" line for 30s reads as a frozen app.
+    // "checking…" line for 30s reads as a frozen app. Shown in lessonCamNote
+    // (overlaid right on the camera box) rather than a status line below
+    // the attachments row, which — especially now that the photo/video
+    // renders much larger — routinely sat below the fold where a student
+    // mid-check would never actually see it.
     const baseMsg = kind === 'check'
       ? 'Checking every line — this can take up to half a minute…'
       : 'Reading your work and thinking of a good hint…';
     const startedAt = Date.now();
-    lessonStatus.textContent = baseMsg;
+    lessonCamNote.textContent = baseMsg;
+    lessonCamNote.classList.remove('hidden');
     const ticker = setInterval(() => {
-      lessonStatus.textContent = `${baseMsg} ${Math.round((Date.now() - startedAt) / 1000)}s`;
+      lessonCamNote.textContent = `${baseMsg} ${Math.round((Date.now() - startedAt) / 1000)}s`;
     }, 1000);
     try{
       if (kind === 'check') await runCheck();
@@ -3527,11 +3529,16 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       lessonCheckBtn.disabled = false;
       lessonHintBtn.disabled = false;
       updateWorkSourceLock();
-      // If the run failed, its message lands in the error note below the
-      // fold — mirror it right here where the student is looking.
-      lessonStatus.textContent = errorNote.classList.contains('hidden')
-        ? ''
-        : errorText.textContent;
+      // A failed run's message already lands in the error note below the
+      // fold — mirror it here too since a student mid-check is looking at
+      // the camera box, not scrolled down to it. A successful run needs no
+      // lingering note here at all: the verdict bubble now shows the result.
+      if (!errorNote.classList.contains('hidden')){
+        lessonCamNote.textContent = errorText.textContent;
+        lessonCamNote.classList.remove('hidden');
+      } else {
+        lessonCamNote.classList.add('hidden');
+      }
     }
   }
 
@@ -3562,9 +3569,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const frame = await resizeImage(file, 1600);
       lessonFreezeFrame(frame);
       lessonUploadedPending = true;
-      lessonStatus.textContent = 'Photo loaded — press Check or Give me a hint.';
+      lessonCamNote.textContent = 'Photo loaded — press Check or Give me a hint.';
+      lessonCamNote.classList.remove('hidden');
+      setTimeout(() => lessonCamNote.classList.add('hidden'), 5000);
     } catch(err){
-      lessonStatus.textContent = "That photo didn't load — try a different file.";
+      lessonCamNote.textContent = "That photo didn't load — try a different file.";
+      lessonCamNote.classList.remove('hidden');
     }
   });
 
