@@ -10,8 +10,8 @@ exports.handler = async (event) => {
     if (!Array.isArray(conversation)) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing conversation' }) };
     }
-    const answer = await askFollowup(conversation);
-    return { statusCode: 200, body: JSON.stringify({ answer }) };
+    const { text, revealed } = await askFollowup(conversation);
+    return { statusCode: 200, body: JSON.stringify({ answer: text, revealedSolution: revealed }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Something went wrong' }) };
   }

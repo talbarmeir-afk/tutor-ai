@@ -12,8 +12,8 @@ module.exports = async (req, res) => {
       res.status(400).json({ error: 'Missing conversation' });
       return;
     }
-    const answer = await askFollowup(conversation);
-    res.status(200).json({ answer });
+    const { text, revealed } = await askFollowup(conversation);
+    res.status(200).json({ answer: text, revealedSolution: revealed });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong' });
   }

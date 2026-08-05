@@ -3568,6 +3568,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return a;
   }
 
+  // The student directly asked for the solution (via the Q&A box) and got
+  // it — same UI outcome as a correct check or the Skip link: nothing
+  // left to check on THIS problem, so Hint/Check give way to Next problem
+  // rather than sitting there as if there's still something to solve.
+  // Homework-only, same as the other Next-problem triggers — teach mode's
+  // practice problems continue through its own chat-driven flow.
+  function markProblemRevealedInQa(){
+    if (!lessonModeOn || workSourceSelect.value !== 'homework') return;
+    lessonNextProblemBtn.classList.remove('hidden');
+    lessonCamActions.classList.add('hidden');
+    skipProblemBtn.classList.add('hidden');
+  }
+
   async function submitQuestion(question){
     if (!question || qaSend.disabled) return;
     qaSection.classList.remove('hidden');
@@ -3590,6 +3603,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       answerEl.textContent = answer;
       answerEl.classList.remove('is-pending');
       if (window.mathTutorHistory) window.mathTutorHistory.recordQA(question, answer);
+      if (data.revealedSolution) markProblemRevealedInQa();
     } catch(err){
       answerEl.textContent = "Sorry, that question didn't go through. Try asking again.";
       answerEl.classList.remove('is-pending');
