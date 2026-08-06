@@ -1174,6 +1174,7 @@
     <div class="homework-upload-thumbs" id="homeworkUploadThumbs"></div>
     <p class="homework-upload-status hidden" id="homeworkUploadStatus"></p>
     <div class="lesson-cam-actions">
+      <button type="button" class="ghost-btn" id="homeworkTakePhotoBtn">Take photo</button>
       <button type="button" class="ghost-btn" id="homeworkUploadAddBtn">+ Add photos</button>
       <button type="button" class="primary-btn" id="homeworkUploadStartBtn" disabled>Start homework</button>
     </div>
@@ -1243,6 +1244,13 @@
     <div class="lesson-cam-actions hidden" id="problemCaptureActions">
       <button class="ghost-btn" id="problemCaptureCancelBtn" type="button">Cancel</button>
       <button class="primary-btn" id="problemCaptureSnapBtn" type="button">Take photo of the problem</button>
+    </div>
+    <!-- Homework Take-photo option — temporarily commandeers this same
+         camera box (see startHomeworkPhotoCapture), same pattern as
+         problemCaptureActions above. -->
+    <div class="lesson-cam-actions hidden" id="homeworkCaptureActions">
+      <button class="ghost-btn" id="homeworkCaptureCancelBtn" type="button">Cancel</button>
+      <button class="primary-btn" id="homeworkCaptureSnapBtn" type="button">Take photo</button>
     </div>
     <!-- One consistent pattern for both images once a work photo exists —
          a small thumbnail each, so the student can actually see what's
@@ -2959,6 +2967,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const homeworkUploadStartBtn = document.getElementById('homeworkUploadStartBtn');
   const homeworkUploadInput = document.getElementById('homeworkUploadInput');
   const homeworkProblemBanner = document.getElementById('homeworkProblemBanner');
+  const homeworkTakePhotoBtn = document.getElementById('homeworkTakePhotoBtn');
+  const homeworkCaptureActions = document.getElementById('homeworkCaptureActions');
+  const homeworkCaptureCancelBtn = document.getElementById('homeworkCaptureCancelBtn');
+  const homeworkCaptureSnapBtn = document.getElementById('homeworkCaptureSnapBtn');
 
   // Homework-queue state: problems transcribed from photos taken at the
   // start of the "homework" segment (see startHomeworkQueue), presented
@@ -2969,6 +2981,43 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   let homeworkQueue = [];
   let homeworkQueueIndex = 0;
   let homeworkUploadPhotos = [];
+  let capturingHomeworkPhoto = false;
+
+  // Temporarily commandeers the same camera box used later for solving
+  // (same pattern as startProblemPhotoCapture) so a homework photo can be
+  // snapped directly rather than only uploaded from the device's gallery.
+  function startHomeworkPhotoCapture(){
+    if (!lessonCamStream || !lessonCamVideo.videoWidth){
+      lessonCamNote.textContent = 'Camera is off — start the camera to take a photo.';
+      lessonCamNote.classList.remove('hidden');
+      return;
+    }
+    capturingHomeworkPhoto = true;
+    imageWrap.classList.add('hidden');
+    lessonCamFrame.classList.remove('hidden');
+    lessonCamActions.classList.add('hidden');
+    skipProblemBtn.classList.add('hidden');
+    homeworkProblemBanner.classList.add('hidden');
+    homeworkCaptureActions.classList.remove('hidden');
+    updateLessonCamVisibility();
+  }
+
+  function endHomeworkPhotoCapture(){
+    capturingHomeworkPhoto = false;
+    homeworkCaptureActions.classList.add('hidden');
+    lessonCamActions.classList.remove('hidden');
+    skipProblemBtn.classList.remove('hidden');
+    updateLessonCamVisibility();
+  }
+
+  homeworkTakePhotoBtn.addEventListener('click', startHomeworkPhotoCapture);
+  homeworkCaptureCancelBtn.addEventListener('click', endHomeworkPhotoCapture);
+  homeworkCaptureSnapBtn.addEventListener('click', () => {
+    const photo = lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom, lessonPanX, lessonPanY);
+    homeworkUploadPhotos.push(photo);
+    renderHomeworkUploadThumbs();
+    endHomeworkPhotoCapture();
+  });
 
   function renderHomeworkUploadThumbs(){
     homeworkUploadThumbs.innerHTML = '';
@@ -3915,7 +3964,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!lessonModeOn) return;
     const teaching = workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep';
     const problemDelivered = !teachActions.classList.contains('hidden');
-    const homeworkNeedsSetup = workSourceSelect.value === 'homework' && !homeworkQueue.length;
+    // capturingHomeworkPhoto temporarily commandeers this same camera box
+    // to snap a homework photo directly — the upload panel stays hidden
+    // and the box shown for that duration regardless of queue state.
+    const homeworkNeedsSetup = workSourceSelect.value === 'homework' && !homeworkQueue.length && !capturingHomeworkPhoto;
     lessonModeEl.classList.toggle('hidden', (teaching && !problemDelivered) || homeworkNeedsSetup);
     homeworkUploadPanel.classList.toggle('hidden', !homeworkNeedsSetup);
   }
