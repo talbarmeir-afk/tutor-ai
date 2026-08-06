@@ -1,4 +1,4 @@
-const { analyzeImage } = require('../lib/anthropic');
+const { extractHomeworkProblems } = require('../lib/anthropic');
 const { checkGuestLimit, GUEST_LIMIT_MESSAGE } = require('../lib/guestLimit');
 
 module.exports = async (req, res) => {
@@ -8,8 +8,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { base64, mediaType, problemBase64, problemMediaType, problemText, accessToken } = req.body || {};
-    if (!base64) {
+    const { images, accessToken } = req.body || {};
+    if (!Array.isArray(images) || !images.length || images.some((img) => !img || !img.base64)) {
       res.status(400).json({ error: 'Missing image data' });
       return;
     }
@@ -18,9 +18,8 @@ module.exports = async (req, res) => {
       res.status(429).json({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true });
       return;
     }
-    const problemImage = problemBase64 ? { base64: problemBase64, mediaType: problemMediaType || 'image/jpeg' } : null;
-    const text = await analyzeImage(base64, mediaType || 'image/jpeg', problemImage, problemText || null);
-    res.status(200).json({ text });
+    const problems = await extractHomeworkProblems(images);
+    res.status(200).json({ problems });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong' });
   }
