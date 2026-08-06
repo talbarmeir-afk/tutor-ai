@@ -2516,8 +2516,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // at, and the model's x/y for this case is a meaningless placeholder,
     // not a real position.
     resultImg.onload = parsed.unreadable
-      ? () => { annGroup.innerHTML = ''; }
-      : () => buildOverlay(computeLocation(parsed), !!parsed.has_mistake);
+      ? () => { annGroup.innerHTML = ''; appendAutoZoomDebugRect(); }
+      : () => { buildOverlay(computeLocation(parsed), !!parsed.has_mistake); appendAutoZoomDebugRect(); };
 
     verdict.classList.toggle('is-ok', !parsed.has_mistake && !parsed.unreadable);
     if (parsed.unreadable){
@@ -2797,6 +2797,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // differently-framed photo) without also undoing a zoom level the
   // student deliberately chose and would reasonably expect to persist.
   let lessonZoomIsAuto = false;
+  // TEMP DEBUG — the last auto-zoom detection box, re-drawn alongside the
+  // real mistake mark once a check completes (see appendAutoZoomDebugRect
+  // and renderResult) so it doesn't get overwritten and vanish the moment
+  // the result comes in, before there's time to screenshot it. Remove
+  // alongside the rest of the auto-zoom debug instrumentation.
+  let lastAutoZoomDebugBox = null;
   // Drag-to-pan while zoomed in — in screen pixels, applied after the
   // scale (translate() before scale() in the transform string) so a
   // mouse/touch move of N px always shifts the content by N px on
@@ -3457,6 +3463,16 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     autoDetectLessonCamRotation();
   }
 
+  // TEMP DEBUG — appends (not replaces) the last detected auto-zoom box
+  // onto whatever's currently in annGroup, so it survives alongside the
+  // real mistake mark/checkmark once renderResult draws it, instead of
+  // being wiped out the instant the check completes.
+  function appendAutoZoomDebugRect(){
+    if (!lastAutoZoomDebugBox) return;
+    const b = lastAutoZoomDebugBox;
+    annGroup.insertAdjacentHTML('beforeend', `<rect x="${b.x0}" y="${b.y0}" width="${b.x1 - b.x0}" height="${b.y1 - b.y0}" fill="none" stroke="#1e90ff" stroke-width="0.6" stroke-dasharray="2 1.4"/>`);
+  }
+
   // Zooms the DISPLAYED frozen photo (and its overlay, via the same
   // shared CSS transform applyLessonCamZoom() already puts on both —
   // see there) into the actual math content, so dead margin — desk,
@@ -3503,12 +3519,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // TEMP DEBUG — draws the detected region directly on the frozen photo
     // (in the same percent-of-image space the rest of the overlay uses)
     // so a screenshot shows exactly what was detected instead of raw
-    // numbers. Gets overwritten by the real mistake marker once the check
-    // completes; remove alongside the console.debug calls once this is
-    // confirmed working.
-    if (box){
-      annGroup.innerHTML = `<rect x="${box.x0}" y="${box.y0}" width="${box.x1 - box.x0}" height="${box.y1 - box.y0}" fill="none" stroke="#1e90ff" stroke-width="0.6" stroke-dasharray="2 1.4"/>`;
-    }
+    // numbers. Stashed in lastAutoZoomDebugBox and re-drawn alongside the
+    // real mistake mark once the check completes (see
+    // appendAutoZoomDebugRect, called from renderResult) instead of being
+    // overwritten and vanishing the moment the result comes in.
+    lastAutoZoomDebugBox = box;
+    if (box) appendAutoZoomDebugRect();
     lessonCamZoom = 1; lessonPanX = 0; lessonPanY = 0;
     if (box){
       const boxW = resultImg.clientWidth, boxH = resultImg.clientHeight;
@@ -3537,6 +3553,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resultImg.onload = null;
     resultImg.src = frame.dataUrl;
     annGroup.innerHTML = '';
+    lastAutoZoomDebugBox = null; // TEMP DEBUG — don't carry a stale box into the next problem
     teacherBar.classList.add('hidden');
     resetLessonBubbleStyles();
     imageWrap.classList.remove('hidden');
