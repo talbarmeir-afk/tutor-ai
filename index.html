@@ -267,14 +267,14 @@
     font-family:'Nunito', sans-serif; font-weight:800; font-size:17px;
     color:var(--ink); margin:0;
   }
-  .work-source-select{
-    font-family:'Karla', sans-serif; font-weight:600; font-size:13.5px;
-    color:var(--chalk); background:rgba(24,24,22,0.035);
-    border:1px solid rgba(24,24,22,0.18); border-radius:9px;
-    padding:8px 10px; cursor:pointer;
-  }
-  .work-source-select:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:2px; }
-  .work-source-select:disabled{ opacity:.55; cursor:not-allowed; }
+  /* No longer a control the student interacts with directly — which modes
+     run this lesson is chosen once up front on #lessonModePicker, and the
+     sequencer (advanceLessonMode) drives this element's value from there.
+     Kept in the DOM rather than removed since the rest of the app gates
+     UI on workSourceSelect.value in many places (renderResult,
+     updateAttachmentsUI, updateLessonCamVisibility, etc) — hiding it here
+     is far lower-risk than touching every one of those call sites. */
+  .work-source-select{ display:none; }
   .teach-row{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
   .teach-input{
     flex:1; min-width:220px; font-family:'Karla', sans-serif; font-size:14px;
@@ -745,6 +745,21 @@
   .lesson-note p{ font-size:14px; color:var(--ink-muted); line-height:1.6; margin:0 0 16px; }
   .lesson-note-actions{ display:flex; gap:10px; flex-wrap:wrap; }
 
+  .lesson-mode-picker{ display:flex; flex-direction:column; gap:10px; margin:0 0 18px; }
+  .lesson-mode-option{
+    display:flex; align-items:center; gap:10px; font-size:14px;
+    color:var(--ink); cursor:pointer;
+  }
+  .lesson-mode-option input{ width:17px; height:17px; accent-color:var(--chalk); cursor:pointer; flex-shrink:0; }
+  /* Sits near the lesson timer so the student always knows where they are
+     in a multi-mode lesson — hidden entirely for a single-mode lesson,
+     where a "progress" readout of one item would just be clutter. */
+  .lesson-mode-progress{
+    font-family:'Karla', sans-serif; font-size:12.5px; color:var(--ink-muted);
+    margin:-10px 0 20px;
+  }
+  .lesson-mode-progress strong{ color:var(--ink); font-weight:700; }
+
   .history-lesson + .history-lesson{ padding-top:18px; border-top:1px solid var(--paper-line); }
   .history-lesson-header{
     font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
@@ -1050,7 +1065,21 @@
   <div id="homeLessonView">
   <div class="lesson-note hidden" id="lessonStartPrompt">
     <h2>Ready for a lesson?</h2>
-    <p>Start a 45-minute lesson to begin checking your work.</p>
+    <p>What do you want to do this lesson? Pick as many as you like — Claruno will work through them in order, starting a 45-minute lesson once you begin.</p>
+    <div class="lesson-mode-picker" id="lessonModePicker">
+      <label class="lesson-mode-option">
+        <input type="checkbox" name="lessonMode" value="homework" checked>
+        <span>Homework — check problems I've done</span>
+      </label>
+      <label class="lesson-mode-option">
+        <input type="checkbox" name="lessonMode" value="teach">
+        <span>Learn &amp; practice a new subject</span>
+      </label>
+      <label class="lesson-mode-option">
+        <input type="checkbox" name="lessonMode" value="test_prep">
+        <span>Prep for a test</span>
+      </label>
+    </div>
     <div class="lesson-note-actions">
       <button class="primary-btn" id="startLessonBtn" type="button">Start Lesson</button>
     </div>
@@ -1066,6 +1095,8 @@
   </div>
 
   <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
+  <!-- Only shown for a multi-mode lesson — see renderLessonModeProgress(). -->
+  <div class="lesson-mode-progress hidden" id="lessonModeProgress"></div>
 
   <!-- TEMP TEST ONLY — remove once nudge testing is done. Not part of the
        real product; fires the same showStuckNudge() the 1-minute-idle
@@ -1078,6 +1109,7 @@
     <select id="workSourceSelect" class="work-source-select" aria-label="What do you want to work on?">
       <option value="homework" selected>My homework</option>
       <option value="teach">Teach me &amp; train on a subject</option>
+      <option value="test_prep">Prep for a test</option>
     </select>
   </div>
   <div class="teach-row hidden" id="teachRow">
@@ -1653,12 +1685,48 @@
   const lessonEndedHistoryBtn = document.getElementById('lessonEndedHistoryBtn');
   const startLessonBtn = document.getElementById('startLessonBtn');
   const startNewLessonBtn = document.getElementById('startNewLessonBtn');
+  const lessonModePicker = document.getElementById('lessonModePicker');
+  const lessonModeProgress = document.getElementById('lessonModeProgress');
 
   let currentLessonId = null;
   let lessonUserId = null;
   let lessonStartedAt = null;
   let lessonRunning = false;
   let lessonIntervalId = null;
+
+  // Which modes the student picked for this lesson (#lessonModePicker),
+  // always driven into this fixed order regardless of check-box order —
+  // "the tutor drives the lesson" means homework gets checked first, new
+  // material comes next, test prep last, same as a real tutoring session.
+  const LESSON_MODE_ORDER = ['homework', 'teach', 'test_prep'];
+  const LESSON_MODE_LABELS = { homework: 'Homework', teach: 'New topic', test_prep: 'Test prep' };
+  let lessonModeQueue = [];
+  let lessonModeIndex = 0;
+
+  function renderLessonModeProgress(){
+    if (lessonModeQueue.length < 2){
+      lessonModeProgress.classList.add('hidden');
+      return;
+    }
+    lessonModeProgress.classList.remove('hidden');
+    lessonModeProgress.innerHTML = lessonModeQueue.map((mode, i) => {
+      const label = LESSON_MODE_LABELS[mode] || mode;
+      return i === lessonModeIndex ? `<strong>${label}</strong>` : label;
+    }).join(' &rarr; ');
+  }
+
+  // Moves the lesson on to the next mode the student selected, driving
+  // workSourceSelect (and everything already gated on its value) rather
+  // than duplicating that logic here. If the queue is already on its last
+  // mode, this is a no-op — the lesson just continues in that mode, no
+  // forced end.
+  function advanceLessonMode(){
+    if (lessonModeIndex >= lessonModeQueue.length - 1) return;
+    lessonModeIndex++;
+    workSourceSelect.value = lessonModeQueue[lessonModeIndex];
+    workSourceSelect.dispatchEvent(new Event('change'));
+    renderLessonModeProgress();
+  }
 
   function activeLessonKey(userId){ return ACTIVE_LESSON_STORAGE_PREFIX + userId; }
 
@@ -1778,22 +1846,36 @@
 
   function beginLesson(){
     if (!lessonUserId) return;
+    const checked = new Set(Array.from(lessonModePicker.querySelectorAll('input[name="lessonMode"]:checked')).map((el) => el.value));
+    lessonModeQueue = LESSON_MODE_ORDER.filter((mode) => checked.has(mode));
+    if (!lessonModeQueue.length) lessonModeQueue = ['homework'];
+    lessonModeIndex = 0;
     currentLessonId = crypto.randomUUID();
     lessonStartedAt = Date.now();
     lessonRunning = true;
     saveActiveLesson();
-    if (window.mathTutorHistory) window.mathTutorHistory.startLessonRecord(currentLessonId);
+    if (window.mathTutorHistory) window.mathTutorHistory.startLessonRecord(currentLessonId, lessonModeQueue);
     clearLessonInterval();
     lessonIntervalId = setInterval(tickLesson, 1000);
     renderLessonTimer();
     showCheckUI();
     lessonTimerEl.classList.remove('hidden');
+    workSourceSelect.value = lessonModeQueue[0];
+    workSourceSelect.dispatchEvent(new Event('change'));
+    renderLessonModeProgress();
     enterLessonMode();
     if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
   }
 
   startLessonBtn.addEventListener('click', beginLesson);
-  startNewLessonBtn.addEventListener('click', beginLesson);
+  // "Start a new lesson" (shown once a lesson has ended) returns to the
+  // mode picker rather than immediately reusing whatever the checkboxes
+  // were last left at — the student should choose fresh each time.
+  startNewLessonBtn.addEventListener('click', showStartPrompt);
+  lessonModePicker.addEventListener('change', () => {
+    const anyChecked = lessonModePicker.querySelector('input[name="lessonMode"]:checked');
+    startLessonBtn.disabled = !anyChecked;
+  });
   lessonEndedHistoryBtn.addEventListener('click', () => {
     setHomeSubtab('history');
   });
@@ -2363,7 +2445,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   }
 
   workSourceSelect.addEventListener('change', () => {
-    const teaching = workSourceSelect.value === 'teach';
+    // test_prep reuses the exact same teach-row/teach-panel UI as teach —
+    // see requestLesson()/teachSubject() for where the two diverge (label,
+    // placeholder, seed prompt framing).
+    const teaching = workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep';
     teachRow.classList.toggle('hidden', !teaching);
     if (teaching){
       teachSubjectInput.focus();
@@ -3611,7 +3696,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // exactly then) — before that there's nothing to photograph yet.
   function updateLessonCamVisibility(){
     if (!lessonModeOn) return;
-    const teaching = workSourceSelect.value === 'teach';
+    const teaching = workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep';
     const problemDelivered = !teachActions.classList.contains('hidden');
     lessonModeEl.classList.toggle('hidden', teaching && !problemDelivered);
   }
@@ -3720,7 +3805,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // new: the student fixes it and checks again first.
   function maybeTeachNextProblem(parsed){
     if (!lessonModeOn) return;
-    if (workSourceSelect.value !== 'teach') return;
+    if (workSourceSelect.value !== 'teach' && workSourceSelect.value !== 'test_prep') return;
     if (!teachConversation.length) return;
     if (parsed.has_mistake) return;
     teachFollowupAsk(
@@ -4969,13 +5054,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  async function startLessonRecord(lessonId){
+  async function startLessonRecord(lessonId, modes){
     if (!supabaseClient || !currentSession) return;
     try{
       const { error } = await supabaseClient.from('lessons').insert({
         id: lessonId,
         user_id: currentSession.user.id,
         started_at: new Date().toISOString(),
+        ...(Array.isArray(modes) && modes.length ? { planned_modes: modes.join(',') } : {}),
       });
       if (error) throw error;
     } catch(err){
