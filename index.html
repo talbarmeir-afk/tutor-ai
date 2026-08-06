@@ -2081,14 +2081,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     });
   }
 
-  // Deterministic ink snapping: given a rough y (percent of image height),
-  // find the actual handwritten line nearest it by scanning for dark "ink"
-  // pixels — rows with enough dark pixels form bands, the band closest to
-  // the rough y wins, and its measured pixel extent becomes the box. The
-  // model only has to be roughly right about WHICH line; the circle's
-  // geometry then comes from the pixels themselves, not from model
-  // perception (which kept missing by a token's width).
-  function snapBoxToInk(dataUrl, roughY, lineIndex, totalLines){
+  // Shared ink-band detector: scans for rows with enough dark pixels to
+  // form horizontal "bands", merges bands separated by small gaps (so a
+  // fraction — numerator, bar, denominator — reads as ONE line, matching
+  // how the model counts lines), and drops bands that are solid dark
+  // objects (a laptop, a phone case, a shadow) rather than handwriting —
+  // sparse pen/pencil strokes fill only a fraction of their own bounding
+  // band, while a uniform dark object fills nearly all of it. Returns the
+  // detected textLike bands (top to bottom) plus the raw luminance data
+  // needed to measure x-extent within any range of them. Used both to
+  // locate one specific line (snapBoxToInk) and to bound the full block of
+  // work (computeContentBoxFromInk) — same pixel data, same filtering,
+  // no model call, no per-line coordinate estimation to get wrong.
+  function findInkBands(dataUrl){
     return new Promise((resolve) => {
       const img = new Image();
       img.onerror = () => resolve(null);
@@ -2142,21 +2147,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
             }
           }
           if (!bands.length){ resolve(null); return; }
-          // Merge bands separated by small gaps so a fraction (numerator,
-          // bar, denominator) reads as ONE line, matching how the model
-          // counts lines.
           const merged = [bands[0]];
           for (let i = 1; i < bands.length; i++){
             const prev = merged[merged.length - 1];
             if (bands[i].y0 - prev.y1 < h * 0.022) prev.y1 = bands[i].y1;
             else merged.push(bands[i]);
           }
-          // Drop bands that are solid dark objects (a laptop, a phone case,
-          // a shadow spilling into frame) rather than handwriting — sparse
-          // pen/pencil strokes fill only a fraction of their own bounding
-          // band, while a uniform dark object fills nearly all of it. Without
-          // this, a big enough object anywhere in the photo can out-compete
-          // the actual (thin, sparse) ink line for "nearest band to y".
           const textLike = merged.filter((b) => {
             let dark = 0;
             for (let yy = b.y0; yy < b.y1; yy++) dark += rowCount[yy];
@@ -2164,45 +2160,83 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
             return area > 0 && (dark / area) < 0.6;
           });
           if (!textLike.length){ resolve(null); return; }
-          // Band choice: when the model's line count matches what the ink
-          // shows, trust its ordinal ("the mistake is line 3 of 5") —
-          // counting is something it does far more reliably than pixel
-          // positions. Otherwise fall back to nearest-band-to-y.
-          let best = null;
-          const li = Math.round(Number(lineIndex) || 0);
-          const tl = Math.round(Number(totalLines) || 0);
-          if (li >= 1 && tl === textLike.length && li <= textLike.length){
-            best = textLike[li - 1];
-          } else {
-            const targetY = h * roughY / 100;
-            let bestD = Infinity;
-            for (const b of textLike){
-              const d = (targetY >= b.y0 && targetY <= b.y1)
-                ? 0
-                : Math.min(Math.abs(targetY - b.y0), Math.abs(targetY - b.y1));
-              if (d < bestD){ bestD = d; best = b; }
-            }
-            if (bestD > h * 0.12) best = null;
-          }
-          if (!best){ resolve(null); return; }
-          const xs = [];
-          for (let yy = best.y0; yy < best.y1; yy++){
-            for (let xx = mx0; xx < mx1; xx++){
-              if (lum[yy * w + xx] < thr) xs.push(xx);
-            }
-          }
-          if (xs.length < 10){ resolve(null); return; }
-          xs.sort((a, b) => a - b);
-          const xLo = xs[Math.floor(xs.length * 0.02)];
-          const xHi = xs[Math.floor(xs.length * 0.98)];
-          resolve({
-            x0: xLo / w * 100, x1: xHi / w * 100,
-            y0: best.y0 / h * 100, y1: best.y1 / h * 100
-          });
+          resolve({ w, h, mx0, mx1, lum, thr, textLike });
         } catch(err){ resolve(null); }
       };
       img.src = dataUrl;
     });
+  }
+
+  // Robust (2nd-98th percentile, outlier-resistant) x-extent of dark pixels
+  // within a given pixel y-range, as percent of image width.
+  function inkXExtent(info, y0, y1){
+    const { w, mx0, mx1, lum, thr } = info;
+    const xs = [];
+    for (let yy = y0; yy < y1; yy++){
+      for (let xx = mx0; xx < mx1; xx++){
+        if (lum[yy * w + xx] < thr) xs.push(xx);
+      }
+    }
+    if (xs.length < 10) return null;
+    xs.sort((a, b) => a - b);
+    const xLo = xs[Math.floor(xs.length * 0.02)];
+    const xHi = xs[Math.floor(xs.length * 0.98)];
+    return { x0: xLo / w * 100, x1: xHi / w * 100 };
+  }
+
+  // Deterministic ink snapping: given a rough y (percent of image height),
+  // find the actual handwritten line nearest it — the band closest to the
+  // rough y wins, and its measured pixel extent becomes the box. The
+  // model only has to be roughly right about WHICH line; the circle's
+  // geometry then comes from the pixels themselves, not from model
+  // perception (which kept missing by a token's width).
+  async function snapBoxToInk(dataUrl, roughY, lineIndex, totalLines){
+    const info = await findInkBands(dataUrl);
+    if (!info) return null;
+    const { h, textLike } = info;
+    // Band choice: when the model's line count matches what the ink
+    // shows, trust its ordinal ("the mistake is line 3 of 5") —
+    // counting is something it does far more reliably than pixel
+    // positions. Otherwise fall back to nearest-band-to-y.
+    let best = null;
+    const li = Math.round(Number(lineIndex) || 0);
+    const tl = Math.round(Number(totalLines) || 0);
+    if (li >= 1 && tl === textLike.length && li <= textLike.length){
+      best = textLike[li - 1];
+    } else {
+      const targetY = h * roughY / 100;
+      let bestD = Infinity;
+      for (const b of textLike){
+        const d = (targetY >= b.y0 && targetY <= b.y1)
+          ? 0
+          : Math.min(Math.abs(targetY - b.y0), Math.abs(targetY - b.y1));
+        if (d < bestD){ bestD = d; best = b; }
+      }
+      if (bestD > h * 0.12) best = null;
+    }
+    if (!best) return null;
+    const xExtent = inkXExtent(info, best.y0, best.y1);
+    if (!xExtent) return null;
+    return { x0: xExtent.x0, x1: xExtent.x1, y0: best.y0 / h * 100, y1: best.y1 / h * 100 };
+  }
+
+  // Full-content box for auto-zoom: the union of every detected ink band,
+  // top to bottom — no model call, no coordinate estimation. Replaces an
+  // earlier model-based detector (asking a vision model to report exact
+  // percent coordinates, even one line at a time with a reasoning budget)
+  // that repeatedly misjudged where content sat on the page despite
+  // correctly identifying what/how many lines there were — seeing "5
+  // lines" but not where. This reuses the same deterministic ink-band
+  // scan already proven reliable for the mistake-marker circle, just
+  // taking the outer bounds across ALL bands instead of one chosen band.
+  async function computeContentBoxFromInk(dataUrl){
+    const info = await findInkBands(dataUrl);
+    if (!info) return null;
+    const { h, textLike } = info;
+    const y0px = textLike[0].y0, y1px = textLike[textLike.length - 1].y1;
+    const xExtent = inkXExtent(info, y0px, y1px);
+    if (!xExtent) return null;
+    return { x0: xExtent.x0, x1: xExtent.x1, y0: y0px / h * 100, y1: y1px / h * 100 };
   }
 
   // Pointer placement, deterministic: the checker reports WHICH handwritten
@@ -3484,14 +3518,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // auto-zoom reuses the manual zoom/pan mechanism instead of physically
   // re-cropping the image.
   //
-  // Detection is a small model call (detectContentBox in lib/anthropic.js)
-  // rather than local pixel analysis — three rounds of pixel heuristics
-  // (row density, average brightness, contiguous dark-run length) each
-  // fixed one failure mode on a real photo and broke on the next. Telling
-  // ink apart from background clutter is a visual judgment call the model
-  // is already reliably good at elsewhere in this app; worth the extra
-  // small API round-trip per capture instead of continuing to chase pixel
-  // thresholds that don't generalize.
+  // Detection is local ink-band scanning (computeContentBoxFromInk), the
+  // same deterministic approach already used for the mistake-marker
+  // circle — see the comment there for why: a model asked to report exact
+  // percent coordinates for the whole page (tried both as one aggregate
+  // box and as a per-line enumeration with a reasoning budget) kept
+  // correctly identifying WHAT/how many lines existed but misjudging
+  // WHERE they actually sat.
   async function autoZoomToContent(frame){
     await new Promise((resolve) => {
       if (resultImg.complete && resultImg.naturalWidth){ resolve(); return; }
@@ -3500,39 +3533,21 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     });
     let box = null;
     try{
-      // Same coordinate-grid overlay already used for the mistake marker
-      // (see addCoordinateGrid) — that fix note says it plainly: "pointer
-      // placement was consistently sloppy without it". Reading labeled
-      // gridlines off the photo is a much more reliable way for the model
-      // to report a position than estimating proportions by eye.
-      const griddedBase64 = await addCoordinateGrid(frame.dataUrl);
-      const response = await fetch('/api/detectContentBox', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          base64: griddedBase64,
-          mediaType: 'image/jpeg',
-          accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
-        }),
-      });
-      const data = await response.json().catch(() => null);
-      if (response.ok && data){
-        box = data.box || null;
-        // TEMP DEBUG — the raw per-line list the model actually reported,
-        // before padding/union. Remove once auto-zoom is confirmed solid.
-        console.debug('[auto-zoom] raw model items', data.rawItems, data.rawText);
-      }
+      // Deterministic ink-band detection (see findInkBands/
+      // computeContentBoxFromInk) — no model call. A model-based detector
+      // (first one aggregate box, then per-line enumeration with a
+      // reasoning budget) was tried first and repeatedly misjudged WHERE
+      // content sat on the page despite correctly identifying WHAT/how
+      // many lines there were. This reuses the exact same pixel-scanning
+      // approach already proven reliable for the mistake-marker circle.
+      box = await computeContentBoxFromInk(frame.dataUrl);
     } catch(err){ /* best-effort — falls back to no zoom */ }
-    // Vision models are reliably good at WHAT the content is, but reliably
-    // imprecise about exact pixel-percent box edges — a model call fixed
-    // the "wrong region entirely" failures the old pixel heuristic had,
-    // but a too-tight box can still clip a line at the edge of its guess.
-    // Padding is a cheap, safe hedge against that specific, much smaller
-    // kind of error — a little extra dead space at the crop's edge is a
-    // trivial cost next to cutting off part of the actual work.
+    // The ink scan already measures real pixel extents, but a little extra
+    // margin is still a cheap hedge against clipping a line right at its
+    // edge (e.g. a faint stroke end just below the detection threshold).
     if (box){
-      const padX = Math.max((box.x1 - box.x0) * 0.10, 3);
-      const padY = Math.max((box.y1 - box.y0) * 0.10, 3);
+      const padX = Math.max((box.x1 - box.x0) * 0.06, 2);
+      const padY = Math.max((box.y1 - box.y0) * 0.06, 2);
       box = {
         x0: Math.max(0, box.x0 - padX), x1: Math.min(100, box.x1 + padX),
         y0: Math.max(0, box.y0 - padY), y1: Math.min(100, box.y1 + padY),
