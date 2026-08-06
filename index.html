@@ -3500,11 +3500,17 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     });
     let box = null;
     try{
+      // Same coordinate-grid overlay already used for the mistake marker
+      // (see addCoordinateGrid) — that fix note says it plainly: "pointer
+      // placement was consistently sloppy without it". Reading labeled
+      // gridlines off the photo is a much more reliable way for the model
+      // to report a position than estimating proportions by eye.
+      const griddedBase64 = await addCoordinateGrid(frame.dataUrl);
       const response = await fetch('/api/detectContentBox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          base64: frame.base64,
+          base64: griddedBase64,
           mediaType: 'image/jpeg',
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
@@ -3512,7 +3518,22 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const data = await response.json().catch(() => null);
       if (response.ok && data) box = data.box || null;
     } catch(err){ /* best-effort — falls back to no zoom */ }
-    console.debug('[auto-zoom] detected box (% of image)', box);
+    // Vision models are reliably good at WHAT the content is, but reliably
+    // imprecise about exact pixel-percent box edges — a model call fixed
+    // the "wrong region entirely" failures the old pixel heuristic had,
+    // but a too-tight box can still clip a line at the edge of its guess.
+    // Padding is a cheap, safe hedge against that specific, much smaller
+    // kind of error — a little extra dead space at the crop's edge is a
+    // trivial cost next to cutting off part of the actual work.
+    if (box){
+      const padX = Math.max((box.x1 - box.x0) * 0.18, 5);
+      const padY = Math.max((box.y1 - box.y0) * 0.18, 5);
+      box = {
+        x0: Math.max(0, box.x0 - padX), x1: Math.min(100, box.x1 + padX),
+        y0: Math.max(0, box.y0 - padY), y1: Math.min(100, box.y1 + padY),
+      };
+    }
+    console.debug('[auto-zoom] detected box (% of image, padded)', box);
     // Bail if a newer capture or a return to live view superseded this
     // one while the request was still in flight.
     if (imageWrap.classList.contains('hidden') || !imageData || imageData.dataUrl !== frame.dataUrl) return;
