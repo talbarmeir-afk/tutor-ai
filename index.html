@@ -2205,148 +2205,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     });
   }
 
-  // Finds the overall bounding box of actual handwritten ink in a photo,
-  // so the frozen result can be auto-zoomed to it — cropping out dead
-  // margin (desk, chair, background) from what's DISPLAYED to the
-  // student, without touching what's sent to the model for analysis (that
-  // still needs the full, untouched frame). Reuses the same luminance-
-  // threshold ink detection and "reject solid objects, not just sparse
-  // strokes" density filter as snapBoxToInk above (see there for why),
-  // generalized from finding one line to the union of every inked line.
-  function computeInkBoundingBox(dataUrl){
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onerror = () => resolve(null);
-      img.onload = () => {
-        try{
-          const scale = Math.min(1, 700 / img.width);
-          const w = Math.max(1, Math.round(img.width * scale));
-          const h = Math.max(1, Math.round(img.height * scale));
-          const canvas = document.createElement('canvas');
-          canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, w, h);
-          const px = ctx.getImageData(0, 0, w, h).data;
-          const mx0 = Math.round(w * 0.02), mx1 = Math.round(w * 0.98);
-          const my0 = Math.round(h * 0.02), my1 = Math.round(h * 0.98);
-          const lum = new Float32Array(w * h);
-          let sum = 0, n = 0;
-          for (let yy = my0; yy < my1; yy++){
-            for (let xx = mx0; xx < mx1; xx++){
-              const i = (yy * w + xx) * 4;
-              const L = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
-              lum[yy * w + xx] = L;
-              sum += L; n++;
-            }
-          }
-          const mean = sum / n;
-          let varSum = 0;
-          for (let yy = my0; yy < my1; yy++){
-            for (let xx = mx0; xx < mx1; xx++){
-              const d = lum[yy * w + xx] - mean;
-              varSum += d * d;
-            }
-          }
-          const std = Math.sqrt(varSum / n);
-          const thr = mean - Math.max(18, std * 1.1);
-
-          // Row-average density/brightness both turned out NOT to reliably
-          // tell ink apart from a background object (a laptop, a phone):
-          // both average over the row's FULL width, and a narrow dark
-          // object surrounded by a lot of bright desk space reads fine on
-          // that average even though the object itself is solid — measured
-          // live, picking up a laptop over the actual paper below it. What
-          // actually distinguishes them structurally is CONTIGUITY: a pen
-          // stroke is short and broken up (individual letters/digits), a
-          // solid object is one long unbroken dark run regardless of how
-          // much bright space surrounds it. So track each row's LONGEST
-          // contiguous dark run, not just its total dark pixel count.
-          const rowCount = new Int32Array(h);
-          const rowMaxRun = new Int32Array(h);
-          for (let yy = my0; yy < my1; yy++){
-            let c = 0, run = 0, maxRun = 0;
-            for (let xx = mx0; xx < mx1; xx++){
-              if (lum[yy * w + xx] < thr){ c++; run++; if (run > maxRun) maxRun = run; }
-              else run = 0;
-            }
-            rowCount[yy] = c;
-            rowMaxRun[yy] = maxRun;
-          }
-          const minRow = Math.max(2, Math.round((mx1 - mx0) * 0.004));
-          const maxRunLimit = Math.max(10, Math.round((mx1 - mx0) * 0.1));
-          const bands = [];
-          let start = -1;
-          for (let yy = my0; yy <= my1; yy++){
-            const inked = yy < my1 && rowCount[yy] >= minRow && rowMaxRun[yy] <= maxRunLimit;
-            if (inked && start < 0) start = yy;
-            if (!inked && start >= 0){
-              if (yy - start >= Math.max(3, h * 0.008)) bands.push({ y0: start, y1: yy });
-              start = -1;
-            }
-          }
-          if (!bands.length){ resolve(null); return; }
-          const merged = [bands[0]];
-          for (let i = 1; i < bands.length; i++){
-            const prev = merged[merged.length - 1];
-            if (bands[i].y0 - prev.y1 < h * 0.022) prev.y1 = bands[i].y1;
-            else merged.push(bands[i]);
-          }
-          // Density kept as a light secondary check — the max-run filter
-          // above already excludes solid-object rows before a band can
-          // even form, so this mainly catches anything band-merging
-          // pulled together that shouldn't have been.
-          const textLike = merged.filter((b) => {
-            let dark = 0;
-            for (let yy = b.y0; yy < b.y1; yy++) dark += rowCount[yy];
-            const area = (b.y1 - b.y0) * (mx1 - mx0);
-            return area > 0 && (dark / area) < 0.6;
-          });
-          if (!textLike.length){ resolve(null); return; }
-
-          const top = textLike[0].y0;
-          const bottom = textLike[textLike.length - 1].y1;
-
-          // Horizontal extent measured only within the ink lines' own
-          // vertical span, not the full photo height — otherwise an object
-          // above or below the actual work (say a laptop below the page)
-          // could pull the crop wider than the lines themselves need.
-          let left = -1, right = -1;
-          for (let xx = mx0; xx < mx1; xx++){
-            let has = false;
-            for (const b of textLike){
-              for (let yy = b.y0; yy < b.y1; yy++){
-                if (lum[yy * w + xx] < thr){ has = true; break; }
-              }
-              if (has) break;
-            }
-            if (has){
-              if (left < 0) left = xx;
-              right = xx;
-            }
-          }
-          if (left < 0 || right <= left){ resolve(null); return; }
-
-          // Generous padding so the crop breathes rather than clipping
-          // right at the ink's edge, plus a floor so a tiny scrap of work
-          // doesn't zoom in to an unreasonably tight crop.
-          const padX = Math.max((right - left) * 0.15, w * 0.04);
-          const padY = Math.max((bottom - top) * 0.15, h * 0.04);
-          const x0 = Math.max(0, left - padX);
-          const x1 = Math.min(w, right + padX);
-          const y0 = Math.max(0, top - padY);
-          const y1 = Math.min(h, bottom + padY);
-          if (x1 - x0 < w * 0.15 || y1 - y0 < h * 0.15){ resolve(null); return; }
-
-          resolve({
-            x0: x0 / w * 100, x1: x1 / w * 100,
-            y0: y0 / h * 100, y1: y1 / h * 100,
-          });
-        } catch(err){ resolve(null); }
-      };
-      img.src = dataUrl;
-    });
-  }
-
   // Pointer placement, deterministic: the checker reports WHICH handwritten
   // line has the mistake ("line 3 of 5") — an ordinal judgment models make
   // reliably — and the ink detector above measures where the actual lines
@@ -3601,25 +3459,47 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   // Zooms the DISPLAYED frozen photo (and its overlay, via the same
   // shared CSS transform applyLessonCamZoom() already puts on both —
-  // see there) into the detected handwriting, so dead margin — desk,
+  // see there) into the actual math content, so dead margin — desk,
   // chair, background — doesn't dominate what the student actually sees.
-  // The frame already sent to the model for analysis is untouched; this
-  // is purely cosmetic and runs after the fact. Because the transform is
-  // shared with the overlay, the mistake marker's percent-of-image
-  // coordinates need no adjustment at all once the real result comes in —
-  // this is exactly why auto-zoom reuses the manual zoom/pan mechanism
-  // instead of physically re-cropping the image.
-  async function autoZoomToContent(dataUrl){
+  // The frame already sent to the model for the real check is untouched;
+  // this is purely cosmetic. Because the transform is shared with the
+  // overlay, the mistake marker's percent-of-image coordinates need no
+  // adjustment at all once the real result comes in — this is exactly why
+  // auto-zoom reuses the manual zoom/pan mechanism instead of physically
+  // re-cropping the image.
+  //
+  // Detection is a small model call (detectContentBox in lib/anthropic.js)
+  // rather than local pixel analysis — three rounds of pixel heuristics
+  // (row density, average brightness, contiguous dark-run length) each
+  // fixed one failure mode on a real photo and broke on the next. Telling
+  // ink apart from background clutter is a visual judgment call the model
+  // is already reliably good at elsewhere in this app; worth the extra
+  // small API round-trip per capture instead of continuing to chase pixel
+  // thresholds that don't generalize.
+  async function autoZoomToContent(frame){
     await new Promise((resolve) => {
       if (resultImg.complete && resultImg.naturalWidth){ resolve(); return; }
       resultImg.addEventListener('load', resolve, { once: true });
       resultImg.addEventListener('error', resolve, { once: true });
     });
-    const box = await computeInkBoundingBox(dataUrl);
+    let box = null;
+    try{
+      const response = await fetch('/api/detectContentBox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64: frame.base64,
+          mediaType: 'image/jpeg',
+          accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (response.ok && data) box = data.box || null;
+    } catch(err){ /* best-effort — falls back to no zoom */ }
     console.debug('[auto-zoom] detected box (% of image)', box);
     // Bail if a newer capture or a return to live view superseded this
-    // one while detection (async, off the main image) was still running.
-    if (imageWrap.classList.contains('hidden') || !imageData || imageData.dataUrl !== dataUrl) return;
+    // one while the request was still in flight.
+    if (imageWrap.classList.contains('hidden') || !imageData || imageData.dataUrl !== frame.dataUrl) return;
     // TEMP DEBUG — draws the detected region directly on the frozen photo
     // (in the same percent-of-image space the rest of the overlay uses)
     // so a screenshot shows exactly what was detected instead of raw
@@ -3663,7 +3543,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonCamFrame.classList.add('hidden');
     updateWorkSourceLock();
     updateAttachmentsUI();
-    autoZoomToContent(frame.dataUrl);
+    autoZoomToContent(frame);
   }
 
   // In "Teach me & train" mode the camera box only appears once a practice
