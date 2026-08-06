@@ -3547,10 +3547,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lastAutoZoomDebugBox = box;
     if (box) appendAutoZoomDebugRect();
     lessonCamZoom = 1; lessonPanX = 0; lessonPanY = 0;
+    // A real block of student work is never a tiny sliver of the frame —
+    // a detection that small is more likely a stray mark, shadow, or a
+    // photo taken between positions (e.g. mid-rotation) than actual
+    // content. Distrust it the same way a null box is distrusted, rather
+    // than blindly maxing out the zoom on whatever it landed on.
+    const MIN_PLAUSIBLE_CONTENT_PCT = 15;
     if (box){
       const boxW = resultImg.clientWidth, boxH = resultImg.clientHeight;
       const contentW = box.x1 - box.x0, contentH = box.y1 - box.y0;
-      if (boxW && boxH && contentW > 0 && contentH > 0){
+      if (contentW < MIN_PLAUSIBLE_CONTENT_PCT || contentH < MIN_PLAUSIBLE_CONTENT_PCT){
+        console.debug('[auto-zoom] skipped: detected box too small to be plausible', { contentW, contentH });
+        box = null;
+      } else if (boxW && boxH && contentW > 0 && contentH > 0){
         const zoom = Math.min(4, Math.max(1, Math.min(100 / contentW, 100 / contentH)));
         const cx = (box.x0 + box.x1) / 2, cy = (box.y0 + box.y1) / 2;
         lessonCamZoom = zoom;
