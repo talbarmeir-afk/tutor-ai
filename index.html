@@ -1153,16 +1153,17 @@
         </svg>
       </button>
     </div>
-    <!-- Teach/test-prep are open-ended (more practice problems keep coming
-         on every correct check) — only shown when there's another selected
-         lesson mode still queued up after this one, so a student not in a
-         multi-mode lesson never sees a button with nothing to advance to. -->
-    <button type="button" class="verdict-next-btn hidden" id="teachContinueLessonBtn">Continue lesson &#8594;</button>
     <div class="teach-thread" id="teachThread"></div>
     <form class="qa-form hidden" id="teachAskForm">
       <input type="text" id="teachAskInput" class="qa-input" placeholder="Ask about this explanation…" autocomplete="off">
       <button type="submit" class="qa-send" id="teachAskSend">Ask</button>
     </form>
+    <!-- Teach/test-prep are open-ended (more practice problems keep coming
+         on every correct check), so this is the student's "I'm done with
+         this segment" control. Last in the panel — the conversation thread
+         above keeps growing, and an earlier placement (right after the
+         first lesson's action icons) left it stranded mid-conversation. -->
+    <button type="button" class="verdict-next-btn hidden" id="teachContinueLessonBtn">Continue lesson &#8594;</button>
   </div>
 
   <!-- Shown when the sequencer reaches "homework" and no queue has been
