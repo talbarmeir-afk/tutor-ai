@@ -2892,23 +2892,33 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   }
 
   async function runHint(){
-    if (!imageData) return;
+    // A homework-queue problem is presented before the student has written
+    // anything — Hint should still work then, based on just the problem
+    // text, rather than silently doing nothing until a photo exists.
+    const noPhotoYet = !imageData;
+    const queuedProblemText = currentHomeworkProblemText();
+    if (noPhotoYet && !queuedProblemText) return;
     hideError(); hideResults();
     hintBtn.disabled = true;
     checkBtn.disabled = true;
     statusRow.classList.remove('hidden');
-    statusText.textContent = 'Reading your work so far and thinking of a good hint…';
+    statusText.textContent = noPhotoYet
+      ? 'Thinking of a good hint to get you started…'
+      : 'Reading your work so far and thinking of a good hint…';
     const controller = new AbortController();
     const abortTimer = setTimeout(() => controller.abort(), 90000);
     try{
       const response = await fetch('/api/hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        body: JSON.stringify(noPhotoYet ? {
+          problemText: queuedProblemText,
+          accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
+        } : {
           base64: imageData.base64,
           mediaType: 'image/jpeg',
           ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
-          ...(currentHomeworkProblemText() ? { problemText: currentHomeworkProblemText() } : {}),
+          ...(queuedProblemText ? { problemText: queuedProblemText } : {}),
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
         signal: controller.signal
@@ -2919,7 +2929,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         return;
       }
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
-      renderHint((data.hint || '').trim());
+      // No frozen photo to draw the usual mascot/bubble hint onto yet —
+      // surface it on the live camera's own overlay note instead.
+      if (noPhotoYet){
+        lessonCamNote.textContent = (data.hint || '').trim();
+        lessonCamNote.classList.remove('hidden');
+      } else {
+        renderHint((data.hint || '').trim());
+      }
     } catch(err){
       const detail = err && err.name === 'AbortError'
         ? ' (the request took too long and was stopped — try again)'
