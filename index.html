@@ -207,13 +207,17 @@
   }
   .attachment-add-slot:hover{ border-color:rgba(24,24,22,0.4); color:var(--chalk); }
   .attachment-add-icon{ font-size:20px; line-height:1; font-weight:700; }
-  /* Gentle "still there?" nudge — a normal-flow card, never overlaid on
-     the camera/photo, so it can never cover the student's work the way
-     the result bubble once did. Dismissible and non-blocking. */
+  /* Gentle "still there?" nudge — overlaid on the camera box itself (like
+     the teacher-bar result bubble) rather than living below the Check/Hint
+     buttons, so it's actually noticed by a distracted student instead of
+     sitting out of view underneath everything else. Positioned below the
+     rotate/zoom controls so it never overlaps their tap targets.
+     Dismissible and non-blocking (auto-hides once the student acts). */
   .stuck-nudge{
-    display:flex; align-items:center; gap:12px; margin-top:12px;
-    background:var(--paper); border:1px solid var(--paper-line); border-radius:14px;
-    padding:10px 14px; box-shadow:0 2px 10px rgba(24,24,22,0.08);
+    position:absolute; z-index:4; top:50px; left:12px; right:12px;
+    display:flex; align-items:center; gap:12px;
+    background:rgba(255,255,255,0.97); border:1px solid rgba(24,24,22,0.16); border-radius:14px;
+    padding:10px 14px; box-shadow:0 10px 26px rgba(0,0,0,0.28);
   }
   .stuck-nudge .ring-mascot{ width:44px; height:50px; flex-shrink:0; }
   .stuck-nudge p{ flex:1; margin:0; font-size:13.5px; color:var(--ink); }
@@ -1125,6 +1129,34 @@
         <button type="button" class="cam-zoom-step" id="lessonZoomInBtn" title="Zoom in" aria-label="Zoom in">&#43;</button>
       </div>
       <div class="lesson-cam-note hidden" id="lessonCamNote"></div>
+      <!-- Shown when the student has gone quiet (no writing, nothing checked)
+           for a while — a gentle nudge, not a blocker; dismissible and also
+           auto-hides once the student acts. Overlaid on the camera box
+           itself (like the teacher-bar result bubble) rather than living
+           below the Check/Hint buttons, so it's not easy to miss. -->
+      <div class="stuck-nudge hidden" id="stuckNudge" role="status">
+        <svg class="ring-mascot" id="stuckMascot" viewBox="0 0 140 160" aria-hidden="true" focusable="false">
+          <ellipse class="rm-foot" cx="55" cy="140" rx="11" ry="6"/>
+          <ellipse class="rm-foot" cx="85" cy="140" rx="11" ry="6"/>
+          <circle class="rm-ring" cx="70" cy="80" r="55" transform="rotate(-50 70 80)"/>
+          <circle class="rm-body" cx="70" cy="80" r="47"/>
+          <line class="rm-arm" x1="28" y1="80" x2="10" y2="94"/>
+          <circle class="rm-hand" cx="10" cy="94" r="4"/>
+          <line class="rm-arm" x1="112" y1="80" x2="130" y2="94"/>
+          <circle class="rm-hand" cx="130" cy="94" r="4"/>
+          <ellipse class="rm-blush" cx="53" cy="86" rx="7" ry="4"/>
+          <ellipse class="rm-blush" cx="87" cy="86" rx="7" ry="4"/>
+          <path class="rm-brow" d="M46,58 L56,63"/>
+          <path class="rm-brow" d="M94,58 L84,63"/>
+          <circle class="rm-eye" cx="57" cy="70" r="4.5"/>
+          <circle class="rm-eye" cx="83" cy="70" r="4.5"/>
+          <path class="rm-mouth" d="M58,90 Q70,94 82,90"/>
+          <path class="rm-mouth-happy" d="M55,88 Q70,108 85,88 Q70,100 55,88 Z"/>
+          <ellipse class="rm-mouth-talk" cx="70" cy="93" rx="9" ry="7"/>
+        </svg>
+        <p id="stuckNudgeText">Still there? Try "Give me a hint" if you're not sure what's next.</p>
+        <button type="button" class="stuck-nudge-close" id="stuckNudgeClose" aria-label="Dismiss">&times;</button>
+      </div>
     </div>
     <div class="lesson-cam-actions" id="lessonCamActions">
       <button class="ghost-btn" id="lessonHintBtn" type="button">Give me a hint</button>
@@ -1162,32 +1194,6 @@
       <button type="button" class="attachment-add-slot" id="addProblemSlotBtn">
         <span class="attachment-add-icon">+</span> Add problem photo
       </button>
-    </div>
-    <!-- Shown when the student has gone quiet (no writing, nothing checked)
-         for a while — a gentle nudge, not a blocker; dismissible and also
-         auto-hides once the student acts. -->
-    <div class="stuck-nudge hidden" id="stuckNudge" role="status">
-      <svg class="ring-mascot" id="stuckMascot" viewBox="0 0 140 160" aria-hidden="true" focusable="false">
-        <ellipse class="rm-foot" cx="55" cy="140" rx="11" ry="6"/>
-        <ellipse class="rm-foot" cx="85" cy="140" rx="11" ry="6"/>
-        <circle class="rm-ring" cx="70" cy="80" r="55" transform="rotate(-50 70 80)"/>
-        <circle class="rm-body" cx="70" cy="80" r="47"/>
-        <line class="rm-arm" x1="28" y1="80" x2="10" y2="94"/>
-        <circle class="rm-hand" cx="10" cy="94" r="4"/>
-        <line class="rm-arm" x1="112" y1="80" x2="130" y2="94"/>
-        <circle class="rm-hand" cx="130" cy="94" r="4"/>
-        <ellipse class="rm-blush" cx="53" cy="86" rx="7" ry="4"/>
-        <ellipse class="rm-blush" cx="87" cy="86" rx="7" ry="4"/>
-        <path class="rm-brow" d="M46,58 L56,63"/>
-        <path class="rm-brow" d="M94,58 L84,63"/>
-        <circle class="rm-eye" cx="57" cy="70" r="4.5"/>
-        <circle class="rm-eye" cx="83" cy="70" r="4.5"/>
-        <path class="rm-mouth" d="M58,90 Q70,94 82,90"/>
-        <path class="rm-mouth-happy" d="M55,88 Q70,108 85,88 Q70,100 55,88 Z"/>
-        <ellipse class="rm-mouth-talk" cx="70" cy="93" rx="9" ry="7"/>
-      </svg>
-      <p id="stuckNudgeText">Still there? Try "Give me a hint" if you're not sure what's next.</p>
-      <button type="button" class="stuck-nudge-close" id="stuckNudgeClose" aria-label="Dismiss">&times;</button>
     </div>
     <input type="file" id="lessonFileInput" accept="image/*" class="hidden">
   </div>
@@ -2992,10 +2998,29 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     } catch(e){ /* Web Audio unavailable — the visual nudge still shows */ }
   }
 
+  // Speaks the nudge text aloud via the browser's built-in speech synthesis
+  // — no audio asset to host, same as the chime. Runs a beat after the
+  // chime so the two don't overlap. Only ever triggered by the idle timer
+  // (itself gated behind the student's own "Start Lesson" click and camera
+  // permission grant), so there's already been a user gesture in this
+  // session by the time it fires — browsers that require one for audio
+  // don't block it here.
+  function speakNudge(text){
+    try{
+      if (!window.speechSynthesis || !text) return;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 0.95;
+      utter.pitch = 1.05;
+      window.speechSynthesis.speak(utter);
+    } catch(e){ /* Speech Synthesis unavailable — the visual+chime nudge still shows */ }
+  }
+
   function hideStuckNudge(){
     stuckNudge.classList.add('hidden');
     stuckMascot.classList.remove('is-talking');
     if (stuckAutoHideTimer){ clearTimeout(stuckAutoHideTimer); stuckAutoHideTimer = null; }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
   }
 
   function showStuckNudge(){
@@ -3003,6 +3028,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     stuckMascot.classList.remove('is-ok', 'is-mistake', 'is-celebrating');
     requestAnimationFrame(() => stuckMascot.classList.add('is-talking'));
     playChime();
+    setTimeout(() => speakNudge(stuckNudgeText.textContent), 350);
     if (stuckAutoHideTimer) clearTimeout(stuckAutoHideTimer);
     stuckAutoHideTimer = setTimeout(hideStuckNudge, STUCK_AUTO_HIDE_MS);
   }
