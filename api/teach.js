@@ -7,7 +7,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { subject, conversation } = req.body || {};
+    const { subject, conversation, mode } = req.body || {};
     if (Array.isArray(conversation) && conversation.length) {
       const lesson = await teachFollowup(conversation);
       res.status(200).json({ lesson });
@@ -17,7 +17,7 @@ module.exports = async (req, res) => {
       res.status(400).json({ error: 'Missing subject' });
       return;
     }
-    const lesson = await teachSubject(subject.trim().slice(0, 200));
+    const lesson = await teachSubject(subject.trim().slice(0, 200), mode === 'test_prep' ? 'test_prep' : null);
     res.status(200).json({ lesson });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong' });

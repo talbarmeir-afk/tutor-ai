@@ -1153,6 +1153,11 @@
         </svg>
       </button>
     </div>
+    <!-- Teach/test-prep are open-ended (more practice problems keep coming
+         on every correct check) — only shown when there's another selected
+         lesson mode still queued up after this one, so a student not in a
+         multi-mode lesson never sees a button with nothing to advance to. -->
+    <button type="button" class="verdict-next-btn hidden" id="teachContinueLessonBtn">Continue lesson &#8594;</button>
     <div class="teach-thread" id="teachThread"></div>
     <form class="qa-form hidden" id="teachAskForm">
       <input type="text" id="teachAskInput" class="qa-input" placeholder="Ask about this explanation…" autocomplete="off">
@@ -2462,6 +2467,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const teachPanelTitle = document.getElementById('teachPanelTitle');
   const teachPanelBody = document.getElementById('teachPanelBody');
   const teachActions = document.getElementById('teachActions');
+  const teachContinueLessonBtn = document.getElementById('teachContinueLessonBtn');
   const teachAgainBtn = document.getElementById('teachAgainBtn');
   const teachAskBtn = document.getElementById('teachAskBtn');
   const teachThread = document.getElementById('teachThread');
@@ -2469,6 +2475,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const teachAskInput = document.getElementById('teachAskInput');
   const teachAskSend = document.getElementById('teachAskSend');
   let teachConversation = [];
+
+  // Teach/test-prep are open-ended (maybeTeachNextProblem just keeps
+  // issuing harder problems on every correct check, with no natural
+  // "done" signal of its own) — this button is the only way to move on to
+  // the next selected lesson mode, and only makes sense to show once a
+  // problem has actually been delivered AND there's something left in
+  // lessonModeQueue to advance to.
+  function updateTeachContinueButton(){
+    const hasNext = lessonModeIndex < lessonModeQueue.length - 1;
+    const problemDelivered = !teachActions.classList.contains('hidden');
+    teachContinueLessonBtn.classList.toggle('hidden', !(hasNext && problemDelivered));
+  }
+  teachContinueLessonBtn.addEventListener('click', advanceLessonMode);
 
   const writeTimers = new WeakMap();
   function writeOut(el, text){
@@ -2492,8 +2511,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // test_prep reuses the exact same teach-row/teach-panel UI as teach —
     // see requestLesson()/teachSubject() for where the two diverge (label,
     // placeholder, seed prompt framing).
-    const teaching = workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep';
+    const testPrep = workSourceSelect.value === 'test_prep';
+    const teaching = workSourceSelect.value === 'teach' || testPrep;
     teachRow.classList.toggle('hidden', !teaching);
+    teachSubjectInput.placeholder = testPrep ? "What's the test on? e.g. fractions, quadratic equations" : 'Which math topic? e.g. fractions, quadratic equations';
     if (teaching){
       teachSubjectInput.focus();
       // Switching back mid-lesson restores the already-delivered lesson
@@ -2509,35 +2530,40 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   async function requestLesson(){
     const subject = teachSubjectInput.value.trim();
     if (!subject || teachBtn.disabled) return;
+    const testPrep = workSourceSelect.value === 'test_prep';
     teachBtn.disabled = true;
     teachBtn.textContent = 'Preparing…';
     teachPanel.classList.remove('hidden');
     teachActions.classList.add('hidden');
+    updateTeachContinueButton();
     updateLessonCamVisibility();
     teachAskForm.classList.add('hidden');
     teachThread.innerHTML = '';
     teachConversation = [];
-    teachPanelTitle.textContent = 'Claruno teaches: ' + subject;
-    teachPanelBody.textContent = 'Putting together a mini-lesson and a practice problem…';
+    teachPanelTitle.textContent = (testPrep ? 'Test prep: ' : 'Claruno teaches: ') + subject;
+    teachPanelBody.textContent = testPrep ? 'Putting together a review and a practice problem…' : 'Putting together a mini-lesson and a practice problem…';
     try{
       const response = await fetch('/api/teach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject })
+        body: JSON.stringify({ subject, mode: testPrep ? 'test_prep' : undefined })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       teachConversation = [
-        { role: 'user', content: `Teach me this math topic: "${subject}". Include one practice problem.` },
+        { role: 'user', content: testPrep
+          ? `I have a test coming up on: "${subject}". Help me review and practice, including one practice problem.`
+          : `Teach me this math topic: "${subject}". Include one practice problem.` },
         { role: 'assistant', content: data.lesson }
       ];
       writeOut(teachPanelBody, data.lesson);
       teachActions.classList.remove('hidden');
+      updateTeachContinueButton();
       // The practice problem has now been handed over — in a running lesson
       // this is the moment the camera box appears.
       updateLessonCamVisibility();
       // Mark the running lesson as a "New topic" lesson so Past Lessons can
-      // show what was taught in it.
+      // show what was taught/reviewed in it.
       if (lessonRunning && currentLessonId && window.mathTutorHistory && window.mathTutorHistory.recordTaughtSubject){
         window.mathTutorHistory.recordTaughtSubject(currentLessonId, subject);
       }

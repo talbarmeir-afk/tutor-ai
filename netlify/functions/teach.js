@@ -6,7 +6,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { subject, conversation } = JSON.parse(event.body || '{}');
+    const { subject, conversation, mode } = JSON.parse(event.body || '{}');
     if (Array.isArray(conversation) && conversation.length) {
       const lesson = await teachFollowup(conversation);
       return { statusCode: 200, body: JSON.stringify({ lesson }) };
@@ -14,7 +14,7 @@ exports.handler = async (event) => {
     if (!subject || typeof subject !== 'string' || !subject.trim()) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing subject' }) };
     }
-    const lesson = await teachSubject(subject.trim().slice(0, 200));
+    const lesson = await teachSubject(subject.trim().slice(0, 200), mode === 'test_prep' ? 'test_prep' : null);
     return { statusCode: 200, body: JSON.stringify({ lesson }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Something went wrong' }) };
