@@ -18,8 +18,8 @@ module.exports = async (req, res) => {
       res.status(429).json({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true });
       return;
     }
-    const box = await detectContentBox(base64, mediaType || 'image/jpeg');
-    res.status(200).json({ box });
+    const { box, rawItems, rawText } = await detectContentBox(base64, mediaType || 'image/jpeg');
+    res.status(200).json({ box, rawItems, rawText });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong' });
   }

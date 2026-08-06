@@ -15,8 +15,8 @@ exports.handler = async (event) => {
     if (!allowed) {
       return { statusCode: 429, body: JSON.stringify({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true }) };
     }
-    const box = await detectContentBox(base64, mediaType || 'image/jpeg');
-    return { statusCode: 200, body: JSON.stringify({ box }) };
+    const { box, rawItems, rawText } = await detectContentBox(base64, mediaType || 'image/jpeg');
+    return { statusCode: 200, body: JSON.stringify({ box, rawItems, rawText }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Something went wrong' }) };
   }

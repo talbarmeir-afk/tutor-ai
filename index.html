@@ -3516,7 +3516,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         }),
       });
       const data = await response.json().catch(() => null);
-      if (response.ok && data) box = data.box || null;
+      if (response.ok && data){
+        box = data.box || null;
+        // TEMP DEBUG — the raw per-line list the model actually reported,
+        // before padding/union. Remove once auto-zoom is confirmed solid.
+        console.debug('[auto-zoom] raw model items', data.rawItems, data.rawText);
+      }
     } catch(err){ /* best-effort — falls back to no zoom */ }
     // Vision models are reliably good at WHAT the content is, but reliably
     // imprecise about exact pixel-percent box edges — a model call fixed
