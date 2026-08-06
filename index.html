@@ -275,6 +275,25 @@
      updateAttachmentsUI, updateLessonCamVisibility, etc) — hiding it here
      is far lower-risk than touching every one of those call sites. */
   .work-source-select{ display:none; }
+  .homework-upload > p{ font-size:14px; color:var(--ink-muted); line-height:1.6; margin:0 0 14px; }
+  .homework-upload-thumbs{ display:flex; flex-wrap:wrap; gap:10px; }
+  .homework-upload-thumbs:not(:empty){ margin:0 0 14px; }
+  .homework-upload-thumb{
+    position:relative; width:72px; height:72px; border-radius:8px;
+    overflow:hidden; border:1px solid var(--paper-line); flex-shrink:0;
+  }
+  .homework-upload-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .homework-upload-thumb button{
+    position:absolute; top:2px; right:2px; width:18px; height:18px; line-height:16px;
+    border-radius:50%; border:none; background:rgba(16,15,12,0.72); color:#fff;
+    font-size:12px; cursor:pointer; padding:0;
+  }
+  .homework-upload-status{ font-size:13px; color:var(--ink-muted); margin:0 0 10px; }
+  .homework-problem-banner{
+    background:var(--bg-soft); border:1px solid rgba(24,24,22,0.14); border-radius:10px;
+    padding:10px 14px; margin:0 0 10px; font-size:13.5px; color:var(--ink); line-height:1.5;
+  }
+  .homework-problem-banner strong{ color:var(--chalk); }
   .teach-row{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
   .teach-input{
     flex:1; min-width:220px; font-family:'Karla', sans-serif; font-size:14px;
@@ -1141,12 +1160,30 @@
     </form>
   </div>
 
+  <!-- Shown when the sequencer reaches "homework" and no queue has been
+       built yet this lesson — gathers one or more photos of UNSOLVED
+       problems before the camera/check flow begins. See
+       updateLessonCamVisibility() for when this vs #lessonMode shows. -->
+  <div class="homework-upload hidden" id="homeworkUploadPanel">
+    <p>Upload photos of your homework — problems you haven't solved yet. One photo can include several problems.</p>
+    <div class="homework-upload-thumbs" id="homeworkUploadThumbs"></div>
+    <p class="homework-upload-status hidden" id="homeworkUploadStatus"></p>
+    <div class="lesson-cam-actions">
+      <button type="button" class="ghost-btn" id="homeworkUploadAddBtn">+ Add photos</button>
+      <button type="button" class="primary-btn" id="homeworkUploadStartBtn" disabled>Start homework</button>
+    </div>
+    <input type="file" id="homeworkUploadInput" accept="image/*" multiple class="hidden">
+  </div>
+
   <!-- Signed-in lesson mode: the camera turns on automatically when a
        lesson starts, and Check / Hint capture a frame that freezes in
        this same box with the feedback drawn on it. Uploading stays
        available but as a secondary, low-key path. Guests never see this
        — they keep the classic dropzone below. -->
   <div id="lessonMode" class="hidden">
+    <!-- Only shown while a homework queue is active — see
+         renderCurrentHomeworkProblem(). -->
+    <div class="homework-problem-banner hidden" id="homeworkProblemBanner"></div>
     <div class="lesson-cam-box" id="lessonCamBox">
       <div class="lesson-cam-frame" id="lessonCamFrame">
         <video id="lessonCamVideo" autoplay playsinline muted></video>
@@ -1850,6 +1887,13 @@
     lessonModeQueue = LESSON_MODE_ORDER.filter((mode) => checked.has(mode));
     if (!lessonModeQueue.length) lessonModeQueue = ['homework'];
     lessonModeIndex = 0;
+    // Reset from any previous lesson — otherwise a fully-worked-through
+    // queue would look "already set up" and silently skip the upload step.
+    homeworkQueue = [];
+    homeworkQueueIndex = 0;
+    homeworkUploadPhotos = [];
+    renderHomeworkUploadThumbs();
+    homeworkUploadStatus.classList.add('hidden');
     currentLessonId = crypto.randomUUID();
     lessonStartedAt = Date.now();
     lessonRunning = true;
@@ -2731,6 +2775,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           base64: griddedBase64,
           mediaType: 'image/jpeg',
           ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
+          ...(currentHomeworkProblemText() ? { problemText: currentHomeworkProblemText() } : {}),
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
         signal: controller.signal
@@ -2829,6 +2874,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           base64: imageData.base64,
           mediaType: 'image/jpeg',
           ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
+          ...(currentHomeworkProblemText() ? { problemText: currentHomeworkProblemText() } : {}),
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
         signal: controller.signal
@@ -2880,6 +2926,137 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const stuckMascot = document.getElementById('stuckMascot');
   const lessonCamActions = document.getElementById('lessonCamActions');
   const skipProblemBtn = document.getElementById('skipProblemBtn');
+  const homeworkUploadPanel = document.getElementById('homeworkUploadPanel');
+  const homeworkUploadThumbs = document.getElementById('homeworkUploadThumbs');
+  const homeworkUploadStatus = document.getElementById('homeworkUploadStatus');
+  const homeworkUploadAddBtn = document.getElementById('homeworkUploadAddBtn');
+  const homeworkUploadStartBtn = document.getElementById('homeworkUploadStartBtn');
+  const homeworkUploadInput = document.getElementById('homeworkUploadInput');
+  const homeworkProblemBanner = document.getElementById('homeworkProblemBanner');
+
+  // Homework-queue state: problems transcribed from photos taken at the
+  // start of the "homework" segment (see startHomeworkQueue), presented
+  // one at a time. Reset at the top of beginLesson() alongside
+  // lessonModeQueue — without that, a fully-worked-through queue from a
+  // previous lesson would silently look "already set up" and skip the
+  // upload step entirely for a new one.
+  let homeworkQueue = [];
+  let homeworkQueueIndex = 0;
+  let homeworkUploadPhotos = [];
+
+  function renderHomeworkUploadThumbs(){
+    homeworkUploadThumbs.innerHTML = '';
+    homeworkUploadPhotos.forEach((photo, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'homework-upload-thumb';
+      const img = document.createElement('img');
+      img.src = photo.dataUrl;
+      img.alt = `Homework photo ${i + 1}`;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.setAttribute('aria-label', 'Remove photo');
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        homeworkUploadPhotos.splice(i, 1);
+        renderHomeworkUploadThumbs();
+      });
+      thumb.appendChild(img);
+      thumb.appendChild(removeBtn);
+      homeworkUploadThumbs.appendChild(thumb);
+    });
+    homeworkUploadStartBtn.disabled = !homeworkUploadPhotos.length;
+  }
+
+  homeworkUploadAddBtn.addEventListener('click', () => homeworkUploadInput.click());
+
+  homeworkUploadInput.addEventListener('change', async () => {
+    const files = Array.from(homeworkUploadInput.files || []);
+    homeworkUploadInput.value = '';
+    for (const file of files){
+      if (!file.type.startsWith('image/')) continue;
+      try{
+        const photo = await resizeImage(file, 1600);
+        homeworkUploadPhotos.push(photo);
+      } catch(err){ /* skip a file that fails to read/decode */ }
+    }
+    renderHomeworkUploadThumbs();
+  });
+
+  async function startHomeworkQueue(){
+    if (!homeworkUploadPhotos.length || homeworkUploadStartBtn.disabled) return;
+    homeworkUploadStartBtn.disabled = true;
+    homeworkUploadAddBtn.disabled = true;
+    homeworkUploadStatus.textContent = 'Reading your homework…';
+    homeworkUploadStatus.classList.remove('hidden');
+    try{
+      const response = await fetch('/api/extractHomeworkProblems', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          images: homeworkUploadPhotos.map((p) => ({ base64: p.base64, mediaType: 'image/jpeg' })),
+          accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
+        }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data) throw new Error((data && data.error) || ('http-' + response.status));
+      const problems = Array.isArray(data.problems) ? data.problems : [];
+      if (!problems.length){
+        homeworkUploadStatus.textContent = "Couldn't find any problems in those photos — try clearer photos, or add more.";
+        return;
+      }
+      homeworkQueue = problems.map((problemText) => ({ id: crypto.randomUUID(), problemText, done: false, skipped: false }));
+      homeworkQueueIndex = 0;
+      homeworkUploadPhotos = [];
+      renderHomeworkUploadThumbs();
+      homeworkUploadStatus.classList.add('hidden');
+      updateLessonCamVisibility();
+      lessonShowLive();
+    } catch(err){
+      homeworkUploadStatus.textContent = "Couldn't read those photos — check your connection and try again.";
+    } finally {
+      homeworkUploadAddBtn.disabled = false;
+      homeworkUploadStartBtn.disabled = !homeworkUploadPhotos.length;
+    }
+  }
+  homeworkUploadStartBtn.addEventListener('click', startHomeworkQueue);
+
+  function renderCurrentHomeworkProblem(){
+    homeworkProblemBanner.innerHTML = '';
+    if (!homeworkQueue.length || homeworkQueueIndex >= homeworkQueue.length){
+      homeworkProblemBanner.classList.add('hidden');
+      return;
+    }
+    const entry = homeworkQueue[homeworkQueueIndex];
+    const strong = document.createElement('strong');
+    strong.textContent = `Problem ${homeworkQueueIndex + 1} of ${homeworkQueue.length}: `;
+    homeworkProblemBanner.appendChild(strong);
+    homeworkProblemBanner.appendChild(document.createTextNode(entry.problemText));
+    homeworkProblemBanner.classList.remove('hidden');
+  }
+
+  function currentHomeworkProblemText(){
+    return (homeworkQueue.length && homeworkQueueIndex < homeworkQueue.length)
+      ? homeworkQueue[homeworkQueueIndex].problemText
+      : null;
+  }
+
+  // Moves past the current queued problem — called once its check comes
+  // back correct (Next problem) or it's skipped. Stays on the homework
+  // segment for the next queued problem if any remain; otherwise hands off
+  // to advanceLessonMode() for whatever the student selected next, falling
+  // back to a plain live camera (today's pre-queue behavior) if homework
+  // was the only/last mode picked, rather than leaving the UI stuck.
+  function advanceHomeworkQueue(){
+    homeworkQueueIndex++;
+    hideResults(); hideError();
+    if (homeworkQueueIndex < homeworkQueue.length){
+      lessonShowLive();
+      return;
+    }
+    const hadNext = lessonModeIndex < lessonModeQueue.length - 1;
+    advanceLessonMode();
+    if (!hadNext) lessonShowLive();
+  }
   const problemCaptureActions = document.getElementById('problemCaptureActions');
   const problemCaptureCancelBtn = document.getElementById('problemCaptureCancelBtn');
   const problemCaptureSnapBtn = document.getElementById('problemCaptureSnapBtn');
@@ -3467,10 +3644,18 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // A correct homework check has nothing left to fix on the same paper —
   // this clears both attachments (a genuinely new problem, not a retake of
   // the old one) and drops straight back to live camera, ready for a photo.
+  // When a homework queue is active, "next problem" means advancing the
+  // queue (and potentially the whole lesson sequence) rather than just
+  // resetting to a blank live view for an unspecified next photo.
   lessonNextProblemBtn.addEventListener('click', () => {
     problemImageData = null;
-    lessonShowLive();
-    hideResults(); hideError();
+    if (homeworkQueue.length){
+      homeworkQueue[homeworkQueueIndex].done = true;
+      advanceHomeworkQueue();
+    } else {
+      lessonShowLive();
+      hideResults(); hideError();
+    }
   });
 
   // Same reset as Next problem, but reachable any time Hint/Check are —
@@ -3482,8 +3667,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   skipProblemBtn.addEventListener('click', () => {
     if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData);
     problemImageData = null;
-    lessonShowLive();
-    hideResults(); hideError();
+    if (homeworkQueue.length){
+      homeworkQueue[homeworkQueueIndex].skipped = true;
+      advanceHomeworkQueue();
+    } else {
+      lessonShowLive();
+      hideResults(); hideError();
+    }
   });
 
   function openAttachmentPreview(src){
@@ -3594,6 +3784,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     updateWorkSourceLock();
     updateAttachmentsUI();
+    renderCurrentHomeworkProblem();
     // No-ops on the very first call of a lesson (camera isn't started yet,
     // so videoWidth is still 0) — that initial check runs off the camera's
     // own loadedmetadata event instead. On every later call (retake, next
@@ -3698,7 +3889,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!lessonModeOn) return;
     const teaching = workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep';
     const problemDelivered = !teachActions.classList.contains('hidden');
-    lessonModeEl.classList.toggle('hidden', teaching && !problemDelivered);
+    const homeworkNeedsSetup = workSourceSelect.value === 'homework' && !homeworkQueue.length;
+    lessonModeEl.classList.toggle('hidden', (teaching && !problemDelivered) || homeworkNeedsSetup);
+    homeworkUploadPanel.classList.toggle('hidden', !homeworkNeedsSetup);
   }
 
   function enterLessonMode(){
