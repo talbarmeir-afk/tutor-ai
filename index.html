@@ -2250,17 +2250,34 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           const std = Math.sqrt(varSum / n);
           const thr = mean - Math.max(18, std * 1.1);
 
+          // Row-average density/brightness both turned out NOT to reliably
+          // tell ink apart from a background object (a laptop, a phone):
+          // both average over the row's FULL width, and a narrow dark
+          // object surrounded by a lot of bright desk space reads fine on
+          // that average even though the object itself is solid — measured
+          // live, picking up a laptop over the actual paper below it. What
+          // actually distinguishes them structurally is CONTIGUITY: a pen
+          // stroke is short and broken up (individual letters/digits), a
+          // solid object is one long unbroken dark run regardless of how
+          // much bright space surrounds it. So track each row's LONGEST
+          // contiguous dark run, not just its total dark pixel count.
           const rowCount = new Int32Array(h);
+          const rowMaxRun = new Int32Array(h);
           for (let yy = my0; yy < my1; yy++){
-            let c = 0;
-            for (let xx = mx0; xx < mx1; xx++) if (lum[yy * w + xx] < thr) c++;
+            let c = 0, run = 0, maxRun = 0;
+            for (let xx = mx0; xx < mx1; xx++){
+              if (lum[yy * w + xx] < thr){ c++; run++; if (run > maxRun) maxRun = run; }
+              else run = 0;
+            }
             rowCount[yy] = c;
+            rowMaxRun[yy] = maxRun;
           }
           const minRow = Math.max(2, Math.round((mx1 - mx0) * 0.004));
+          const maxRunLimit = Math.max(10, Math.round((mx1 - mx0) * 0.1));
           const bands = [];
           let start = -1;
           for (let yy = my0; yy <= my1; yy++){
-            const inked = yy < my1 && rowCount[yy] >= minRow;
+            const inked = yy < my1 && rowCount[yy] >= minRow && rowMaxRun[yy] <= maxRunLimit;
             if (inked && start < 0) start = yy;
             if (!inked && start >= 0){
               if (yy - start >= Math.max(3, h * 0.008)) bands.push({ y0: start, y1: yy });
@@ -2274,25 +2291,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
             if (bands[i].y0 - prev.y1 < h * 0.022) prev.y1 = bands[i].y1;
             else merged.push(bands[i]);
           }
-          // Density alone isn't enough here (unlike the single-line finder
-          // above): a busy background object's reflections/highlights can
-          // break its darkness up into a row-density that looks sparse,
-          // while a grid-paper page's printed gridlines can push real
-          // handwriting's own density up — measured live on a laptop/dock
-          // being picked up over the actual paper below it. Real paper is
-          // bright ON AVERAGE (mostly white background, sparse dark ink);
-          // a background object is darker on average even where its ink-
-          // like density looks low, so require both.
+          // Density kept as a light secondary check — the max-run filter
+          // above already excludes solid-object rows before a band can
+          // even form, so this mainly catches anything band-merging
+          // pulled together that shouldn't have been.
           const textLike = merged.filter((b) => {
-            let dark = 0, lumSum = 0, cnt = 0;
-            for (let yy = b.y0; yy < b.y1; yy++){
-              dark += rowCount[yy];
-              for (let xx = mx0; xx < mx1; xx++){ lumSum += lum[yy * w + xx]; cnt++; }
-            }
+            let dark = 0;
+            for (let yy = b.y0; yy < b.y1; yy++) dark += rowCount[yy];
             const area = (b.y1 - b.y0) * (mx1 - mx0);
-            const density = area > 0 ? dark / area : 1;
-            const avgLum = cnt > 0 ? lumSum / cnt : 0;
-            return density < 0.6 && avgLum > mean - std * 0.5;
+            return area > 0 && (dark / area) < 0.6;
           });
           if (!textLike.length){ resolve(null); return; }
 
