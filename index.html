@@ -1778,6 +1778,56 @@
     renderLessonModeProgress();
   }
 
+  // The picker card doubles as the mid-lesson "what next?" screen (see
+  // showMidLessonPicker) — same checkboxes, same Start button, different
+  // copy, and the click handler branches on this flag.
+  let lessonPickerMidLesson = false;
+
+  function setLessonPromptCopy(mid){
+    lessonPickerMidLesson = mid;
+    lessonStartPrompt.querySelector('h2').textContent = mid ? 'Nice work — what next?' : 'Ready for a lesson?';
+    lessonStartPrompt.querySelector('p').textContent = mid
+      ? "You've finished everything you picked, and there's still lesson time left. What do you want to do with it?"
+      : 'What do you want to do this lesson? Pick as many as you like — Claruno will work through them in order, starting a 45-minute lesson once you begin.';
+    startLessonBtn.textContent = mid ? 'Keep going' : 'Start Lesson';
+  }
+
+  // Shown when the student has worked through everything they selected but
+  // the 45 minutes aren't up — the lesson (timer, camera stream, id) stays
+  // fully alive; only the check UI gives way to the picker until they
+  // choose what to do with the remaining time.
+  function showMidLessonPicker(){
+    if (!lessonRunning) return;
+    setLessonPromptCopy(true);
+    checkCard.classList.add('hidden');
+    lessonModeProgress.classList.add('hidden');
+    lessonStartPrompt.classList.remove('hidden');
+  }
+
+  // Reads the picker's checkboxes into a fresh mode queue — shared by a
+  // brand-new lesson (beginLesson) and a mid-lesson "keep going". Also
+  // resets the homework-queue state: without that, a fully-worked-through
+  // queue would look "already set up" and silently skip the upload step.
+  function applyPickedModes(){
+    const checked = new Set(Array.from(lessonModePicker.querySelectorAll('input[name="lessonMode"]:checked')).map((el) => el.value));
+    lessonModeQueue = LESSON_MODE_ORDER.filter((mode) => checked.has(mode));
+    if (!lessonModeQueue.length) lessonModeQueue = ['homework'];
+    lessonModeIndex = 0;
+    resetHomeworkQueueState();
+    workSourceSelect.value = lessonModeQueue[0];
+    workSourceSelect.dispatchEvent(new Event('change'));
+    renderLessonModeProgress();
+  }
+
+  function continueLessonMidway(){
+    setLessonPromptCopy(false);
+    applyPickedModes();
+    showCheckUI();
+    lessonTimerEl.classList.remove('hidden');
+    lessonShowLive();
+    hideResults(); hideError();
+  }
+
   function activeLessonKey(userId){ return ACTIVE_LESSON_STORAGE_PREFIX + userId; }
 
   // Only an in-progress lesson is ever persisted — once ended there's
@@ -1847,6 +1897,7 @@
     hideAllLessonPanels();
     stopCamera();
     stopTakePhotoStream();
+    setLessonPromptCopy(false);
     lessonStartPrompt.classList.remove('hidden');
     switchTab('home');
   }
@@ -1896,20 +1947,11 @@
 
   function beginLesson(){
     if (!lessonUserId) return;
-    const checked = new Set(Array.from(lessonModePicker.querySelectorAll('input[name="lessonMode"]:checked')).map((el) => el.value));
-    lessonModeQueue = LESSON_MODE_ORDER.filter((mode) => checked.has(mode));
-    if (!lessonModeQueue.length) lessonModeQueue = ['homework'];
-    lessonModeIndex = 0;
-    // Reset from any previous lesson — otherwise a fully-worked-through
-    // queue would look "already set up" and silently skip the upload step.
-    homeworkQueue = [];
-    homeworkQueueIndex = 0;
-    homeworkUploadPhotos = [];
-    renderHomeworkUploadThumbs();
-    homeworkUploadStatus.classList.add('hidden');
+    setLessonPromptCopy(false);
     currentLessonId = crypto.randomUUID();
     lessonStartedAt = Date.now();
     lessonRunning = true;
+    applyPickedModes();
     saveActiveLesson();
     if (window.mathTutorHistory) window.mathTutorHistory.startLessonRecord(currentLessonId, lessonModeQueue);
     clearLessonInterval();
@@ -1917,14 +1959,15 @@
     renderLessonTimer();
     showCheckUI();
     lessonTimerEl.classList.remove('hidden');
-    workSourceSelect.value = lessonModeQueue[0];
-    workSourceSelect.dispatchEvent(new Event('change'));
     renderLessonModeProgress();
     enterLessonMode();
     if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
   }
 
-  startLessonBtn.addEventListener('click', beginLesson);
+  startLessonBtn.addEventListener('click', () => {
+    if (lessonRunning && lessonPickerMidLesson) continueLessonMidway();
+    else beginLesson();
+  });
   // "Start a new lesson" (shown once a lesson has ended) returns to the
   // mode picker rather than immediately reusing whatever the checkboxes
   // were last left at — the student should choose fresh each time.
@@ -2486,16 +2529,20 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   // Teach/test-prep are open-ended (maybeTeachNextProblem just keeps
   // issuing harder problems on every correct check, with no natural
-  // "done" signal of its own) — this button is the only way to move on to
-  // the next selected lesson mode, and only makes sense to show once a
-  // problem has actually been delivered AND there's something left in
-  // lessonModeQueue to advance to.
+  // "done" signal of its own) — this button is the only way to declare a
+  // segment finished. With another selected mode still queued it advances
+  // to that; on the last mode it brings back the mode picker instead, so
+  // remaining lesson time can be put toward something new. Only shown
+  // once a problem has actually been delivered, and only during a real
+  // lesson (guests/off-lesson teach usage has no sequence to advance).
   function updateTeachContinueButton(){
-    const hasNext = lessonModeIndex < lessonModeQueue.length - 1;
     const problemDelivered = !teachActions.classList.contains('hidden');
-    teachContinueLessonBtn.classList.toggle('hidden', !(hasNext && problemDelivered));
+    teachContinueLessonBtn.classList.toggle('hidden', !(lessonRunning && lessonModeQueue.length && problemDelivered));
   }
-  teachContinueLessonBtn.addEventListener('click', advanceLessonMode);
+  teachContinueLessonBtn.addEventListener('click', () => {
+    if (lessonModeIndex < lessonModeQueue.length - 1) advanceLessonMode();
+    else showMidLessonPicker();
+  });
 
   const writeTimers = new WeakMap();
   function writeOut(el, text){
@@ -3000,6 +3047,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   let homeworkUploadPhotos = [];
   let capturingHomeworkPhoto = false;
 
+  function resetHomeworkQueueState(){
+    homeworkQueue = [];
+    homeworkQueueIndex = 0;
+    homeworkUploadPhotos = [];
+    renderHomeworkUploadThumbs();
+    homeworkUploadStatus.classList.add('hidden');
+  }
+
   // Temporarily commandeers the same camera box used later for solving
   // (same pattern as startProblemPhotoCapture) so a homework photo can be
   // snapped directly rather than only uploaded from the device's gallery.
@@ -3135,9 +3190,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // Moves past the current queued problem — called once its check comes
   // back correct (Next problem) or it's skipped. Stays on the homework
   // segment for the next queued problem if any remain; otherwise hands off
-  // to advanceLessonMode() for whatever the student selected next, falling
-  // back to a plain live camera (today's pre-queue behavior) if homework
-  // was the only/last mode picked, rather than leaving the UI stuck.
+  // to advanceLessonMode() for whatever the student selected next — or,
+  // if homework was the only/last mode picked and lesson time remains,
+  // back to the mode picker so the rest of the lesson isn't wasted on a
+  // blank camera.
   function advanceHomeworkQueue(){
     homeworkQueueIndex++;
     hideResults(); hideError();
@@ -3147,7 +3203,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     const hadNext = lessonModeIndex < lessonModeQueue.length - 1;
     advanceLessonMode();
-    if (!hadNext) lessonShowLive();
+    if (!hadNext) showMidLessonPicker();
   }
   const problemCaptureActions = document.getElementById('problemCaptureActions');
   const problemCaptureCancelBtn = document.getElementById('problemCaptureCancelBtn');
