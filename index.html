@@ -297,6 +297,9 @@
   }
   .homework-upload-note:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
   .homework-upload-add-link{ display:block; margin:8px auto 0; }
+  .homework-download-link{ display:block; margin:0 0 10px; padding:2px 0; text-align:left; }
+  .lesson-note .homework-download-link{ margin:12px 0 0; }
+  .homework-download-link:disabled{ opacity:.5; cursor:wait; }
   .homework-problem-banner{
     background:var(--bg-soft); border:1px solid rgba(24,24,22,0.14); border-radius:10px;
     padding:10px 14px; margin:0 0 10px; font-size:13.5px; color:var(--ink); line-height:1.5;
@@ -1110,6 +1113,10 @@
     <div class="lesson-note-actions">
       <button class="primary-btn" id="startLessonBtn" type="button">Start Lesson</button>
     </div>
+    <!-- Only shown on the mid-lesson "what next?" version of this card,
+         once at least one homework problem has a clean solution photo
+         archived this lesson — see updateHomeworkDownloadUI(). -->
+    <button type="button" class="link-btn homework-download-link hidden" id="homeworkDownloadPickerBtn">Download my homework (PDF)</button>
   </div>
 
   <div class="lesson-note hidden" id="lessonEndedNote">
@@ -1203,6 +1210,10 @@
     <!-- Only shown while a homework queue is active — see
          renderCurrentHomeworkProblem(). -->
     <div class="homework-problem-banner hidden" id="homeworkProblemBanner"></div>
+    <!-- Shown once at least one queued problem has been finished this
+         lesson (clean solution photo archived) — the aggregated
+         question+handwriting PDF for submitting to a teacher. -->
+    <button type="button" class="link-btn homework-download-link hidden" id="homeworkDownloadBtn">Download my homework (PDF)</button>
     <div class="lesson-cam-box" id="lessonCamBox">
       <div class="lesson-cam-frame" id="lessonCamFrame">
         <video id="lessonCamVideo" autoplay playsinline muted></video>
@@ -1815,6 +1826,7 @@
     checkCard.classList.add('hidden');
     lessonModeProgress.classList.add('hidden');
     lessonStartPrompt.classList.remove('hidden');
+    updateHomeworkDownloadUI();
   }
 
   // Reads the picker's checkboxes into a fresh mode queue — shared by a
@@ -1961,6 +1973,10 @@
   function beginLesson(){
     if (!lessonUserId) return;
     setLessonPromptCopy(false);
+    // The homework-PDF archive spans a whole lesson (surviving mid-lesson
+    // "keep going" rounds, which reset the queue itself) — only a brand
+    // new lesson empties it.
+    lessonHomeworkArchive = [];
     currentLessonId = crypto.randomUUID();
     lessonStartedAt = Date.now();
     lessonRunning = true;
@@ -3060,6 +3076,21 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   let homeworkQueueIndex = 0;
   let homeworkUploadPhotos = [];
   let capturingHomeworkPhoto = false;
+  // Finished queued problems this LESSON — {problemText, solutionFrame},
+  // where solutionFrame is the clean full-capture-quality frame (the
+  // check's marks live only in the SVG overlay, never in the frame
+  // itself). Feeds the "Download my homework (PDF)" export; deliberately
+  // NOT reset with the queue (a mid-lesson "keep going" homework round
+  // appends to the same lesson's homework), only in beginLesson().
+  let lessonHomeworkArchive = [];
+  const homeworkDownloadBtn = document.getElementById('homeworkDownloadBtn');
+  const homeworkDownloadPickerBtn = document.getElementById('homeworkDownloadPickerBtn');
+
+  function updateHomeworkDownloadUI(){
+    const have = lessonHomeworkArchive.length > 0;
+    homeworkDownloadBtn.classList.toggle('hidden', !(have && workSourceSelect.value === 'homework'));
+    homeworkDownloadPickerBtn.classList.toggle('hidden', !(have && lessonPickerMidLesson));
+  }
 
   function resetHomeworkQueueState(){
     homeworkQueue = [];
@@ -3187,6 +3218,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     homeworkProblemBanner.innerHTML = '';
     if (!homeworkQueue.length || homeworkQueueIndex >= homeworkQueue.length){
       homeworkProblemBanner.classList.add('hidden');
+      updateHomeworkDownloadUI();
       return;
     }
     const entry = homeworkQueue[homeworkQueueIndex];
@@ -3195,6 +3227,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     homeworkProblemBanner.appendChild(strong);
     homeworkProblemBanner.appendChild(document.createTextNode(entry.problemText));
     homeworkProblemBanner.classList.remove('hidden');
+    updateHomeworkDownloadUI();
   }
 
   function currentHomeworkProblemText(){
@@ -3211,6 +3244,16 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // back to the mode picker so the rest of the lesson isn't wasted on a
   // blank camera.
   function advanceHomeworkQueue(){
+    // Archive the finished problem's clean frame + question BEFORE the
+    // advance clears imageData (lessonShowLive nulls it) — this is the
+    // only moment both still exist together. Skipped-with-no-photo has
+    // nothing of the student's to submit, so nothing is archived for it.
+    if (imageData && homeworkQueueIndex < homeworkQueue.length){
+      lessonHomeworkArchive.push({
+        problemText: homeworkQueue[homeworkQueueIndex].problemText,
+        solutionFrame: imageData,
+      });
+    }
     homeworkQueueIndex++;
     hideResults(); hideError();
     if (homeworkQueueIndex < homeworkQueue.length){
@@ -3220,7 +3263,108 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const hadNext = lessonModeIndex < lessonModeQueue.length - 1;
     advanceLessonMode();
     if (!hadNext) showMidLessonPicker();
+    updateHomeworkDownloadUI();
   }
+
+  // ---- "Download my homework" PDF export ----
+  // Aggregates every finished queued problem this lesson — question text,
+  // then the student's CLEAN handwriting photo (no Claruno marks) — into
+  // one PDF the student can hand in through whatever system their teacher
+  // uses. Each page is rendered to a canvas first and embedded as an
+  // image: canvas fillText uses system fonts, so the question text renders
+  // correctly in any script (jsPDF's own built-in fonts are Latin-only).
+  const HOMEWORK_PDF_PAGE_W = 1240, HOMEWORK_PDF_PAGE_H = 1754; // A4 @ ~150dpi
+
+  function loadImageEl(src){
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image-load-failed'));
+      img.src = src;
+    });
+  }
+
+  function wrapCanvasText(ctx, text, maxWidth){
+    const lines = [];
+    for (const paragraph of String(text).split(/\n+/)){
+      let line = '';
+      for (const word of paragraph.split(/\s+/).filter(Boolean)){
+        const attempt = line ? line + ' ' + word : word;
+        if (line && ctx.measureText(attempt).width > maxWidth){
+          lines.push(line);
+          line = word;
+        } else {
+          line = attempt;
+        }
+      }
+      if (line) lines.push(line);
+    }
+    return lines;
+  }
+
+  async function renderHomeworkPdfPage(entry, n, total){
+    const canvas = document.createElement('canvas');
+    canvas.width = HOMEWORK_PDF_PAGE_W; canvas.height = HOMEWORK_PDF_PAGE_H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const margin = 90;
+    const contentW = canvas.width - margin * 2;
+    // Hebrew/Arabic question text renders right-to-left, anchored right.
+    const rtl = /[֐-׿؀-ۿ]/.test(entry.problemText);
+    let y = margin;
+    ctx.fillStyle = '#8a8880';
+    ctx.font = '700 24px Nunito, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Problem ${n} of ${total}`, margin, y + 24);
+    y += 56;
+    ctx.fillStyle = '#181816';
+    ctx.font = '28px Karla, sans-serif';
+    if (rtl){ ctx.direction = 'rtl'; ctx.textAlign = 'right'; }
+    const textX = rtl ? canvas.width - margin : margin;
+    for (const line of wrapCanvasText(ctx, entry.problemText, contentW)){
+      ctx.fillText(line, textX, y + 28);
+      y += 40;
+    }
+    ctx.direction = 'ltr'; ctx.textAlign = 'left';
+    y += 30;
+    const img = await loadImageEl(entry.solutionFrame.dataUrl);
+    const maxH = canvas.height - margin - y;
+    const scale = Math.min(contentW / img.width, maxH / img.height);
+    const drawW = img.width * scale, drawH = img.height * scale;
+    ctx.drawImage(img, margin + (contentW - drawW) / 2, y, drawW, drawH);
+    return canvas;
+  }
+
+  async function downloadHomeworkPdf(){
+    if (!lessonHomeworkArchive.length) return;
+    const buttons = [homeworkDownloadBtn, homeworkDownloadPickerBtn];
+    const labels = buttons.map((b) => b.textContent);
+    buttons.forEach((b) => { b.disabled = true; b.textContent = 'Preparing your homework…'; });
+    try{
+      // Loaded on demand, first download only — a normal lesson never pays
+      // for the library. Same CDN the supabase client already comes from.
+      const { jsPDF } = await import('https://esm.sh/jspdf@3.0.3');
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const pageW = doc.internal.pageSize.getWidth();
+      const pageH = doc.internal.pageSize.getHeight();
+      for (let i = 0; i < lessonHomeworkArchive.length; i++){
+        const pageCanvas = await renderHomeworkPdfPage(lessonHomeworkArchive[i], i + 1, lessonHomeworkArchive.length);
+        if (i > 0) doc.addPage();
+        doc.addImage(pageCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, pageW, pageH);
+      }
+      const d = new Date();
+      const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      doc.save(`homework-${stamp}.pdf`);
+      buttons.forEach((b, i) => { b.disabled = false; b.textContent = labels[i]; });
+    } catch(err){
+      buttons.forEach((b) => { b.disabled = false; b.textContent = "Couldn't build the PDF — try again"; });
+      setTimeout(() => buttons.forEach((b, i) => { b.textContent = labels[i]; }), 4000);
+    }
+  }
+  homeworkDownloadBtn.addEventListener('click', downloadHomeworkPdf);
+  homeworkDownloadPickerBtn.addEventListener('click', downloadHomeworkPdf);
+
   const problemCaptureActions = document.getElementById('problemCaptureActions');
   const problemCaptureCancelBtn = document.getElementById('problemCaptureCancelBtn');
   const problemCaptureSnapBtn = document.getElementById('problemCaptureSnapBtn');
