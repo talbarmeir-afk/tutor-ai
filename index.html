@@ -289,6 +289,13 @@
     font-size:12px; cursor:pointer; padding:0;
   }
   .homework-upload-status{ font-size:13px; color:var(--ink-muted); margin:0 0 10px; }
+  .homework-upload-note{
+    display:block; width:100%; box-sizing:border-box; margin:0 0 14px;
+    font-family:'Karla', sans-serif; font-size:14px;
+    padding:10px 12px; border-radius:9px; border:1px solid rgba(24,24,22,0.18);
+    background:#fff; color:var(--ink);
+  }
+  .homework-upload-note:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
   .homework-problem-banner{
     background:var(--bg-soft); border:1px solid rgba(24,24,22,0.14); border-radius:10px;
     padding:10px 14px; margin:0 0 10px; font-size:13.5px; color:var(--ink); line-height:1.5;
@@ -1173,6 +1180,7 @@
   <div class="homework-upload hidden" id="homeworkUploadPanel">
     <p>Upload photos of your homework — problems you haven't solved yet. One photo can include several problems.</p>
     <div class="homework-upload-thumbs" id="homeworkUploadThumbs"></div>
+    <input type="text" id="homeworkUploadNote" class="homework-upload-note" placeholder="Optional note — e.g. only questions 2, 3, 6 and 7" autocomplete="off" maxlength="300">
     <p class="homework-upload-status hidden" id="homeworkUploadStatus"></p>
     <div class="lesson-cam-actions">
       <button type="button" class="ghost-btn" id="homeworkTakePhotoBtn">Take photo</button>
@@ -3031,6 +3039,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const homeworkUploadAddBtn = document.getElementById('homeworkUploadAddBtn');
   const homeworkUploadStartBtn = document.getElementById('homeworkUploadStartBtn');
   const homeworkUploadInput = document.getElementById('homeworkUploadInput');
+  const homeworkUploadNote = document.getElementById('homeworkUploadNote');
   const homeworkProblemBanner = document.getElementById('homeworkProblemBanner');
   const homeworkTakePhotoBtn = document.getElementById('homeworkTakePhotoBtn');
   const homeworkCaptureActions = document.getElementById('homeworkCaptureActions');
@@ -3052,6 +3061,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     homeworkQueue = [];
     homeworkQueueIndex = 0;
     homeworkUploadPhotos = [];
+    homeworkUploadNote.value = '';
     renderHomeworkUploadThumbs();
     homeworkUploadStatus.classList.add('hidden');
   }
@@ -3142,6 +3152,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           images: homeworkUploadPhotos.map((p) => ({ base64: p.base64, mediaType: 'image/jpeg' })),
+          ...(homeworkUploadNote.value.trim() ? { note: homeworkUploadNote.value.trim() } : {}),
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
       });
