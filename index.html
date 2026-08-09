@@ -168,6 +168,18 @@
     padding:8px 12px; border-radius:8px; text-align:center;
     pointer-events:none;
   }
+  .lesson-live-pip{
+    position:absolute; right:12px; bottom:12px; z-index:3;
+    width:min(200px, 34%); border-radius:10px; overflow:hidden;
+    border:2px solid rgba(255,255,255,0.85); box-shadow:0 6px 18px rgba(0,0,0,0.35);
+    background:#141310;
+  }
+  .lesson-live-pip img{ display:block; width:100%; }
+  .lesson-live-pip span{
+    display:block; font-family:'Karla', sans-serif; font-size:10.5px;
+    color:#F4F3EF; background:rgba(16,15,12,0.85); text-align:center;
+    padding:3px 6px;
+  }
   .lesson-cam-actions{ display:flex; justify-content:center; gap:10px; margin-top:14px; }
   /* Deliberately understated — this is an escape hatch for a problem the
      student wants to abandon, not a peer of Hint/Check, so it must never
@@ -1245,6 +1257,16 @@
         <button type="button" class="cam-zoom-step" id="lessonZoomInBtn" title="Zoom in" aria-label="Zoom in">&#43;</button>
       </div>
       <div class="lesson-cam-note hidden" id="lessonCamNote"></div>
+      <!-- Live picture-in-picture while a frozen result is showing — every
+           Check press captures a FRESH camera frame, so after a mistake
+           the student needs to see what the camera sees NOW (paper moved,
+           hand in shot) before re-checking. Drawn through the exact same
+           capture pipeline as Check itself (rotation/zoom/pan), so this
+           preview IS what the next Check will read. -->
+      <div class="lesson-live-pip hidden" id="lessonLivePip">
+        <img id="lessonLivePipImg" alt="Live camera preview of what the next Check will read">
+        <span>Live &mdash; next Check reads this</span>
+      </div>
       <!-- Shown when the student has gone quiet (no writing, nothing checked)
            for a while — a gentle nudge, not a blocker; dismissible and also
            auto-hides once the student acts. Overlaid on the camera box
@@ -3135,6 +3157,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     homeworkProblemBanner.classList.add('hidden');
     homeworkCaptureActions.classList.remove('hidden');
     updateLessonCamVisibility();
+    updateLessonLivePip();
   }
 
   function endHomeworkPhotoCapture(){
@@ -3143,6 +3166,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonCamActions.classList.remove('hidden');
     skipProblemBtn.classList.remove('hidden');
     updateLessonCamVisibility();
+    updateLessonLivePip();
   }
 
   homeworkTakePhotoBtn.addEventListener('click', startHomeworkPhotoCapture);
@@ -3939,6 +3963,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       lessonCamStream = null;
     }
     lessonCamVideo.srcObject = null;
+    updateLessonLivePip();
   }
 
   // The Homework / Teach-me mode can be switched at any point in the
@@ -3987,6 +4012,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     problemCaptureActions.classList.remove('hidden');
     updateAttachmentsUI();
     updateWorkSourceLock();
+    updateLessonLivePip();
   }
 
   function endProblemPhotoCapture(){
@@ -4000,6 +4026,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     updateAttachmentsUI();
     updateWorkSourceLock();
+    updateLessonLivePip();
   }
 
   addProblemSlotBtn.addEventListener('click', startProblemPhotoCapture);
@@ -4167,6 +4194,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     updateWorkSourceLock();
     updateAttachmentsUI();
     renderCurrentHomeworkProblem();
+    updateLessonLivePip();
     // No-ops on the very first call of a lesson (camera isn't started yet,
     // so videoWidth is still 0) — that initial check runs off the camera's
     // own loadedmetadata event instead. On every later call (retake, next
@@ -4261,7 +4289,41 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonCamFrame.classList.add('hidden');
     updateWorkSourceLock();
     updateAttachmentsUI();
+    updateLessonLivePip();
     autoZoomToContent(frame);
+  }
+
+  // ---- Live picture-in-picture on the frozen result ----
+  // Every Check press captures a FRESH camera frame (see lessonCapture) —
+  // but while a frozen result covers the box the student can't see the
+  // live camera at all, so re-checking after fixing their work happened
+  // blind (paper shifted, hand in shot, page out of frame). This small
+  // preview refreshes once a second through the exact same capture
+  // pipeline Check uses (rotation/zoom/pan included), so what it shows IS
+  // what the next Check will read.
+  const lessonLivePip = document.getElementById('lessonLivePip');
+  const lessonLivePipImg = document.getElementById('lessonLivePipImg');
+  let lessonPipTimer = null;
+
+  function drawLessonLivePip(){
+    if (!lessonCamStream || !lessonCamVideo.videoWidth) return;
+    try{
+      lessonLivePipImg.src = lessonCaptureFrame(lessonCamVideo, 320, lessonCamQuarter, lessonCamZoom, lessonPanX, lessonPanY).dataUrl;
+    } catch(err){ /* skip this tick — next one retries */ }
+  }
+
+  function updateLessonLivePip(){
+    const frozen = !imageWrap.classList.contains('hidden');
+    const show = lessonModeOn && frozen && !!lessonCamStream
+      && !capturingProblemPhoto && !capturingHomeworkPhoto;
+    lessonLivePip.classList.toggle('hidden', !show);
+    if (show && !lessonPipTimer){
+      drawLessonLivePip();
+      lessonPipTimer = setInterval(drawLessonLivePip, 1000);
+    } else if (!show && lessonPipTimer){
+      clearInterval(lessonPipTimer);
+      lessonPipTimer = null;
+    }
   }
 
   // In "Teach me & train" mode the camera box only appears once a practice
