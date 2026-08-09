@@ -4172,9 +4172,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!show) return;
     if (imageData) solutionThumb.src = imageData.dataUrl;
     const homework = workSourceSelect.value === 'homework';
+    // With a queued problem active its statement is already known as
+    // transcribed text — a printed-problem photo slot next to it is
+    // redundant noise. The slot is for the pre-queue flow, where the
+    // problem's source is a book/worksheet Claruno hasn't seen.
+    const queueProblem = !!currentHomeworkProblemText();
     const attached = !!problemImageData;
-    problemSlot.classList.toggle('hidden', !(homework && attached));
-    addProblemSlotBtn.classList.toggle('hidden', !(homework && !attached));
+    problemSlot.classList.toggle('hidden', !(homework && !queueProblem && attached));
+    addProblemSlotBtn.classList.toggle('hidden', !(homework && !queueProblem && !attached));
     if (attached) problemThumb.src = problemImageData.dataUrl;
   }
 
