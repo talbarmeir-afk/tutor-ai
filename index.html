@@ -335,6 +335,11 @@
   .homework-problem-edit-actions{ display:flex; gap:8px; }
   .homework-problem-edit-actions button{ font-size:12.5px; padding:6px 12px; }
   .teach-row{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
+  .teach-materials{ flex:1 1 100%; }
+  .teach-materials > p{ font-size:12.5px; color:var(--ink-muted); margin:2px 0 8px; }
+  .teach-materials-actions{ display:flex; align-items:center; gap:12px; }
+  .teach-materials-actions .ghost-btn{ font-size:12.5px; padding:6px 12px; }
+  .teach-materials-actions .link-btn{ padding:2px 0; }
   .teach-input{
     flex:1; min-width:220px; font-family:'Karla', sans-serif; font-size:14px;
     padding:10px 12px; border-radius:9px; border:1px solid rgba(24,24,22,0.18);
@@ -1178,6 +1183,19 @@
   <div class="teach-row hidden" id="teachRow">
     <input type="text" id="teachSubjectInput" class="teach-input" placeholder="Which math topic? e.g. fractions, quadratic equations" autocomplete="off">
     <button type="button" class="primary-btn" id="teachBtn">Teach me</button>
+    <!-- Optional: photos of what class actually taught (notes/book pages),
+         digested once server-side so the whole teaching session aligns
+         with them — same methods, notation, difficulty. Same take-photo-
+         first hierarchy as the homework upload. -->
+    <div class="teach-materials" id="teachMaterials">
+      <p>Optional: add photos of what was taught in class or from your book, and Claruno will teach it the same way.</p>
+      <div class="homework-upload-thumbs" id="teachMaterialThumbs"></div>
+      <div class="teach-materials-actions">
+        <button type="button" class="ghost-btn" id="teachMaterialTakeBtn">Take photo</button>
+        <button type="button" class="link-btn" id="teachMaterialUploadBtn">or upload existing photos</button>
+      </div>
+      <input type="file" id="teachMaterialInput" accept="image/*" multiple class="hidden">
+    </div>
   </div>
   <div class="teach-panel hidden" id="teachPanel">
     <h3 id="teachPanelTitle"></h3>
@@ -1314,6 +1332,13 @@
     <div class="lesson-cam-actions hidden" id="homeworkCaptureActions">
       <button class="ghost-btn" id="homeworkCaptureCancelBtn" type="button">Cancel</button>
       <button class="primary-btn" id="homeworkCaptureSnapBtn" type="button">Take photo</button>
+    </div>
+    <!-- Teach-materials Take-photo — commandeers this same camera box (the
+         box is otherwise hidden in teach mode until a problem is
+         delivered), same pattern as homeworkCaptureActions above. -->
+    <div class="lesson-cam-actions hidden" id="teachMaterialCaptureActions">
+      <button class="ghost-btn" id="teachMaterialCaptureCancelBtn" type="button">Cancel</button>
+      <button class="primary-btn" id="teachMaterialCaptureSnapBtn" type="button">Take photo</button>
     </div>
     <!-- One consistent pattern for both images once a work photo exists —
          a small thumbnail each, so the student can actually see what's
@@ -1878,6 +1903,7 @@
     if (!lessonModeQueue.length) lessonModeQueue = ['homework'];
     lessonModeIndex = 0;
     resetHomeworkQueueState();
+    resetTeachMaterials();
     workSourceSelect.value = lessonModeQueue[0];
     workSourceSelect.dispatchEvent(new Event('change'));
     renderLessonModeProgress();
@@ -2595,6 +2621,98 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const teachAskSend = document.getElementById('teachAskSend');
   let teachConversation = [];
 
+  // ---- Teach-with-materials ----
+  // Optional photos of what class actually taught (notes/book pages).
+  // Digested to text once server-side (extractTeachingMaterials) and
+  // embedded in the teach conversation's seed message, so the WHOLE
+  // session — follow-ups and next-problems included — stays aligned with
+  // the material at zero further image cost.
+  const teachMaterialThumbs = document.getElementById('teachMaterialThumbs');
+  const teachMaterialTakeBtn = document.getElementById('teachMaterialTakeBtn');
+  const teachMaterialUploadBtn = document.getElementById('teachMaterialUploadBtn');
+  const teachMaterialInput = document.getElementById('teachMaterialInput');
+  const teachMaterialCaptureActions = document.getElementById('teachMaterialCaptureActions');
+  const teachMaterialCaptureCancelBtn = document.getElementById('teachMaterialCaptureCancelBtn');
+  const teachMaterialCaptureSnapBtn = document.getElementById('teachMaterialCaptureSnapBtn');
+  let teachMaterialPhotos = [];
+  let capturingTeachMaterials = false;
+
+  function renderTeachMaterialThumbs(){
+    teachMaterialThumbs.innerHTML = '';
+    teachMaterialPhotos.forEach((photo, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'homework-upload-thumb';
+      const img = document.createElement('img');
+      img.src = photo.dataUrl;
+      img.alt = `Material photo ${i + 1}`;
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.setAttribute('aria-label', 'Remove photo');
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        teachMaterialPhotos.splice(i, 1);
+        renderTeachMaterialThumbs();
+      });
+      thumb.appendChild(img);
+      thumb.appendChild(removeBtn);
+      teachMaterialThumbs.appendChild(thumb);
+    });
+  }
+
+  teachMaterialUploadBtn.addEventListener('click', () => teachMaterialInput.click());
+  teachMaterialInput.addEventListener('change', async () => {
+    const files = Array.from(teachMaterialInput.files || []);
+    teachMaterialInput.value = '';
+    for (const file of files){
+      if (!file.type.startsWith('image/')) continue;
+      try{
+        teachMaterialPhotos.push(await resizeImage(file, 1600));
+      } catch(err){ /* skip a file that fails to read/decode */ }
+    }
+    renderTeachMaterialThumbs();
+  });
+
+  // Take-photo commandeers the lesson camera box (hidden in teach mode
+  // until a problem is delivered) — same pattern as the homework and
+  // printed-problem captures.
+  function startTeachMaterialCapture(){
+    if (!lessonCamStream || !lessonCamVideo.videoWidth){
+      lessonCamNote.textContent = 'Camera is off — start the camera to take a photo.';
+      lessonCamNote.classList.remove('hidden');
+      return;
+    }
+    capturingTeachMaterials = true;
+    imageWrap.classList.add('hidden');
+    lessonCamFrame.classList.remove('hidden');
+    lessonCamActions.classList.add('hidden');
+    skipProblemBtn.classList.add('hidden');
+    teachMaterialCaptureActions.classList.remove('hidden');
+    updateLessonCamVisibility();
+    updateLessonLivePip();
+  }
+
+  function endTeachMaterialCapture(){
+    capturingTeachMaterials = false;
+    teachMaterialCaptureActions.classList.add('hidden');
+    lessonCamActions.classList.remove('hidden');
+    skipProblemBtn.classList.remove('hidden');
+    updateLessonCamVisibility();
+    updateLessonLivePip();
+  }
+
+  teachMaterialTakeBtn.addEventListener('click', startTeachMaterialCapture);
+  teachMaterialCaptureCancelBtn.addEventListener('click', endTeachMaterialCapture);
+  teachMaterialCaptureSnapBtn.addEventListener('click', () => {
+    teachMaterialPhotos.push(lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom, lessonPanX, lessonPanY));
+    renderTeachMaterialThumbs();
+    endTeachMaterialCapture();
+  });
+
+  function resetTeachMaterials(){
+    teachMaterialPhotos = [];
+    renderTeachMaterialThumbs();
+  }
+
   // Teach/test-prep are open-ended (maybeTeachNextProblem just keeps
   // issuing harder problems on every correct check, with no natural
   // "done" signal of its own) — this button is the only way to declare a
@@ -2666,19 +2784,46 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachPanelTitle.textContent = (testPrep ? 'Test prep: ' : 'Claruno teaches: ') + subject;
     teachPanelBody.textContent = testPrep ? 'Putting together a review and a practice problem…' : 'Putting together a mini-lesson and a practice problem…';
     try{
+      // Materials first (when any): digest the pages once, then seed the
+      // whole conversation with the digest. Best-effort — a failed digest
+      // never blocks the lesson itself.
+      let materialsDigest = null;
+      if (teachMaterialPhotos.length){
+        teachPanelBody.textContent = 'Reading your class materials…';
+        try{
+          const mResponse = await fetch('/api/extractTeachingMaterials', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              images: teachMaterialPhotos.map((p) => ({ base64: p.base64, mediaType: 'image/jpeg' })),
+              accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
+            }),
+          });
+          const mData = await mResponse.json().catch(() => null);
+          if (mResponse.ok && mData && mData.digest) materialsDigest = mData.digest;
+        } catch(err){ /* teach proceeds without the digest */ }
+        teachPanelBody.textContent = testPrep ? 'Putting together a review and a practice problem…' : 'Putting together a mini-lesson and a practice problem…';
+      }
       const response = await fetch('/api/teach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, mode: testPrep ? 'test_prep' : undefined })
+        body: JSON.stringify({ subject, mode: testPrep ? 'test_prep' : undefined, ...(materialsDigest ? { materialsDigest } : {}) })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       teachConversation = [
-        { role: 'user', content: testPrep
+        { role: 'user', content: (testPrep
           ? `I have a test coming up on: "${subject}". Help me review and practice, including one practice problem.`
-          : `Teach me this math topic: "${subject}". Include one practice problem.` },
+          : `Teach me this math topic: "${subject}". Include one practice problem.`)
+          // The digest rides in the seed message so every follow-up (and
+          // each auto-requested next problem) stays aligned with the
+          // student's class material without re-sending any images.
+          + (materialsDigest ? ` Teach it the way my class material does — same methods, notation, and difficulty. My class material, summarized: ${materialsDigest}` : '') },
         { role: 'assistant', content: data.lesson }
       ];
+      // Consumed into the conversation — a later, different teach session
+      // shouldn't silently inherit these pages.
+      if (materialsDigest) resetTeachMaterials();
       writeOut(teachPanelBody, data.lesson);
       teachActions.classList.remove('hidden');
       updateTeachContinueButton();
@@ -4315,7 +4460,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   function updateLessonLivePip(){
     const frozen = !imageWrap.classList.contains('hidden');
     const show = lessonModeOn && frozen && !!lessonCamStream
-      && !capturingProblemPhoto && !capturingHomeworkPhoto;
+      && !capturingProblemPhoto && !capturingHomeworkPhoto && !capturingTeachMaterials;
     lessonLivePip.classList.toggle('hidden', !show);
     if (show && !lessonPipTimer){
       drawLessonLivePip();
@@ -4337,7 +4482,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // to snap a homework photo directly — the upload panel stays hidden
     // and the box shown for that duration regardless of queue state.
     const homeworkNeedsSetup = workSourceSelect.value === 'homework' && !homeworkQueue.length && !capturingHomeworkPhoto;
-    lessonModeEl.classList.toggle('hidden', (teaching && !problemDelivered) || homeworkNeedsSetup);
+    // capturingTeachMaterials likewise commandeers the camera box before a
+    // teach problem exists, to snap the student's class/book pages.
+    lessonModeEl.classList.toggle('hidden', (teaching && !problemDelivered && !capturingTeachMaterials) || homeworkNeedsSetup);
     homeworkUploadPanel.classList.toggle('hidden', !homeworkNeedsSetup);
   }
 
