@@ -3179,6 +3179,18 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   homeworkUploadAddBtn.addEventListener('click', () => homeworkUploadInput.click());
 
+  // Enter in the note field "attaches" the note and hands focus to Start
+  // homework — the note is read straight from this input when the queue
+  // starts, so attaching is really just confirming it; after photo + note
+  // the natural next action is starting, with adding more photos still
+  // available but not the focused default.
+  homeworkUploadNote.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (!homeworkUploadStartBtn.disabled) homeworkUploadStartBtn.focus();
+    else homeworkUploadNote.blur();
+  });
+
   homeworkUploadInput.addEventListener('change', async () => {
     const files = Array.from(homeworkUploadInput.files || []);
     homeworkUploadInput.value = '';
