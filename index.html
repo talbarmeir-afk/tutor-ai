@@ -301,10 +301,27 @@
   .lesson-note .homework-download-link{ margin:12px 0 0; }
   .homework-download-link:disabled{ opacity:.5; cursor:wait; }
   .homework-problem-banner{
+    display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap;
     background:var(--bg-soft); border:1px solid rgba(24,24,22,0.14); border-radius:10px;
     padding:10px 14px; margin:0 0 10px; font-size:13.5px; color:var(--ink); line-height:1.5;
   }
   .homework-problem-banner strong{ color:var(--chalk); }
+  .homework-problem-text{ flex:1 1 auto; min-width:200px; }
+  .homework-problem-edit-btn{
+    flex-shrink:0; background:none; border:none; cursor:pointer;
+    font-family:'Karla', sans-serif; font-size:12px; color:var(--ink-muted);
+    text-decoration:underline; text-underline-offset:2px; padding:2px 4px;
+  }
+  .homework-problem-edit-btn:hover{ color:var(--chalk); }
+  .homework-problem-edit-input{
+    flex:1 1 100%; box-sizing:border-box; font-family:'Karla', sans-serif;
+    font-size:13.5px; line-height:1.5; padding:8px 10px; border-radius:8px;
+    border:1px solid rgba(24,24,22,0.25); background:#fff; color:var(--ink);
+    resize:vertical;
+  }
+  .homework-problem-edit-input:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
+  .homework-problem-edit-actions{ display:flex; gap:8px; }
+  .homework-problem-edit-actions button{ font-size:12.5px; padding:6px 12px; }
   .teach-row{ display:flex; gap:8px; flex-wrap:wrap; margin:0 0 14px; }
   .teach-input{
     flex:1; min-width:220px; font-family:'Karla', sans-serif; font-size:14px;
@@ -3222,12 +3239,57 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       return;
     }
     const entry = homeworkQueue[homeworkQueueIndex];
+    const textWrap = document.createElement('span');
+    textWrap.className = 'homework-problem-text';
     const strong = document.createElement('strong');
     strong.textContent = `Problem ${homeworkQueueIndex + 1} of ${homeworkQueue.length}: `;
-    homeworkProblemBanner.appendChild(strong);
-    homeworkProblemBanner.appendChild(document.createTextNode(entry.problemText));
+    textWrap.appendChild(strong);
+    textWrap.appendChild(document.createTextNode(entry.problemText));
+    // Handwritten problems get misread sometimes — the student can fix
+    // the transcription, and the corrected text immediately drives
+    // checks, hints, and the homework PDF (they all read the queue entry).
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'homework-problem-edit-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.title = 'Fix the problem text if Claruno misread it';
+    editBtn.setAttribute('aria-label', 'Edit the problem text');
+    editBtn.addEventListener('click', startHomeworkProblemEdit);
+    homeworkProblemBanner.appendChild(textWrap);
+    homeworkProblemBanner.appendChild(editBtn);
     homeworkProblemBanner.classList.remove('hidden');
     updateHomeworkDownloadUI();
+  }
+
+  function startHomeworkProblemEdit(){
+    if (!homeworkQueue.length || homeworkQueueIndex >= homeworkQueue.length) return;
+    const entry = homeworkQueue[homeworkQueueIndex];
+    homeworkProblemBanner.innerHTML = '';
+    const input = document.createElement('textarea');
+    input.className = 'homework-problem-edit-input';
+    input.rows = 2;
+    input.value = entry.problemText;
+    const actions = document.createElement('div');
+    actions.className = 'homework-problem-edit-actions';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'primary-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', () => {
+      const fixed = input.value.trim();
+      if (fixed) entry.problemText = fixed;
+      renderCurrentHomeworkProblem();
+    });
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'ghost-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', renderCurrentHomeworkProblem);
+    actions.appendChild(cancelBtn);
+    actions.appendChild(saveBtn);
+    homeworkProblemBanner.appendChild(input);
+    homeworkProblemBanner.appendChild(actions);
+    input.focus();
   }
 
   function currentHomeworkProblemText(){
