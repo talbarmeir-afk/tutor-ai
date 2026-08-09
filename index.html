@@ -296,6 +296,7 @@
     background:#fff; color:var(--ink);
   }
   .homework-upload-note:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
+  .homework-upload-add-link{ display:block; margin:8px auto 0; }
   .homework-problem-banner{
     background:var(--bg-soft); border:1px solid rgba(24,24,22,0.14); border-radius:10px;
     padding:10px 14px; margin:0 0 10px; font-size:13.5px; color:var(--ink); line-height:1.5;
@@ -1183,10 +1184,13 @@
     <input type="text" id="homeworkUploadNote" class="homework-upload-note" placeholder="Optional note — e.g. only questions 2, 3, 6 and 7" autocomplete="off" maxlength="300">
     <p class="homework-upload-status hidden" id="homeworkUploadStatus"></p>
     <div class="lesson-cam-actions">
-      <button type="button" class="ghost-btn" id="homeworkTakePhotoBtn">Take photo</button>
-      <button type="button" class="ghost-btn" id="homeworkUploadAddBtn">+ Add photos</button>
+      <button type="button" class="primary-btn" id="homeworkTakePhotoBtn">Take photo</button>
       <button type="button" class="primary-btn" id="homeworkUploadStartBtn" disabled>Start homework</button>
     </div>
+    <!-- Deliberately understated, like the Skip link — snapping with the
+         camera is the primary path; uploading existing files is the
+         fallback for photos taken earlier on a phone. -->
+    <button type="button" class="link-btn homework-upload-add-link" id="homeworkUploadAddBtn">or upload existing photos</button>
     <input type="file" id="homeworkUploadInput" accept="image/*" multiple class="hidden">
   </div>
 
