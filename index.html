@@ -2766,6 +2766,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     updateLessonCamVisibility();
     updateAttachmentsUI();
+    // The homework banner is mode-aware (renderCurrentHomeworkProblem) —
+    // refresh it on every mode switch so it can't linger over teach or
+    // reappear stale when homework comes back around.
+    renderCurrentHomeworkProblem();
   });
 
   async function requestLesson(){
@@ -3414,7 +3418,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   function renderCurrentHomeworkProblem(){
     homeworkProblemBanner.innerHTML = '';
-    if (!homeworkQueue.length || homeworkQueueIndex >= homeworkQueue.length){
+    // Mode-aware, not just queue-aware: once the sequencer hands off to
+    // teach/test-prep, a leftover "Problem 4 of 4" banner above the teach
+    // practice problem is stale noise even though the queue state itself
+    // still exists (for the homework PDF).
+    if (workSourceSelect.value !== 'homework' || !homeworkQueue.length || homeworkQueueIndex >= homeworkQueue.length){
       homeworkProblemBanner.classList.add('hidden');
       updateHomeworkDownloadUI();
       return;
@@ -3506,6 +3514,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const hadNext = lessonModeIndex < lessonModeQueue.length - 1;
     advanceLessonMode();
     if (!hadNext) showMidLessonPicker();
+    // The mid-queue branch refreshes the banner via lessonShowLive — this
+    // exhausted branch has to do it itself, or "Problem N of N" lingers
+    // over the next segment's UI.
+    renderCurrentHomeworkProblem();
     updateHomeworkDownloadUI();
   }
 
