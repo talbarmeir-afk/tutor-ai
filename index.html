@@ -1173,7 +1173,7 @@
 
   <div class="check-card" id="checkCard">
   <div class="check-card-head">
-    <h2 class="check-card-title">Check my scribbled work</h2>
+    <h2 class="check-card-title" id="checkCardTitle">Check my scribbled work</h2>
     <select id="workSourceSelect" class="work-source-select" aria-label="What do you want to work on?">
       <option value="homework" selected>My homework</option>
       <option value="teach">Teach me &amp; train on a subject</option>
@@ -2608,6 +2608,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // question about the explanation — both continue the same conversation
   // through /api/teach. Solutions are checked via the normal photo flow.
   const workSourceSelect = document.getElementById('workSourceSelect');
+  const checkCardTitle = document.getElementById('checkCardTitle');
   const teachRow = document.getElementById('teachRow');
   const teachSubjectInput = document.getElementById('teachSubjectInput');
   const teachBtn = document.getElementById('teachBtn');
@@ -2760,6 +2761,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // placeholder, seed prompt framing).
     const testPrep = workSourceSelect.value === 'test_prep';
     const teaching = workSourceSelect.value === 'teach' || testPrep;
+    // The card is titled after the segment currently underway — the same
+    // labels the student picked from at lesson start. (Guests / pre-lesson
+    // keep the initial "Check my scribbled work": no change event has
+    // fired for them, the sequencer is what drives this select.)
+    checkCardTitle.textContent = testPrep
+      ? 'Prep for a test'
+      : (teaching ? 'Learn & practice a new subject' : "Homework — check problems I've done");
     teachRow.classList.toggle('hidden', !teaching);
     teachSubjectInput.placeholder = testPrep ? "What's the test on? e.g. fractions, quadratic equations" : 'Which math topic? e.g. fractions, quadratic equations';
     testWhenInput.classList.toggle('hidden', !testPrep);
