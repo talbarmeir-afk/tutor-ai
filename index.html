@@ -2755,19 +2755,30 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     writeTimers.set(el, timer);
   }
 
+  // The card is titled after the lesson segment currently underway — the
+  // same labels the student picked from at lesson start. Outside a lesson
+  // (guests, pre-lesson) it stays the classic "Check my scribbled work".
+  // One function called from every path that changes what's underway:
+  // mode switches, entering a lesson (covers resuming after a reload,
+  // which never fires a mode change), and exiting one.
+  function updateCheckCardTitle(){
+    if (!lessonModeOn){
+      checkCardTitle.textContent = 'Check my scribbled work';
+      return;
+    }
+    const v = workSourceSelect.value;
+    checkCardTitle.textContent = v === 'test_prep'
+      ? 'Prep for a test'
+      : (v === 'teach' ? 'Learn & practice a new subject' : "Homework — check problems I've done");
+  }
+
   workSourceSelect.addEventListener('change', () => {
     // test_prep reuses the exact same teach-row/teach-panel UI as teach —
     // see requestLesson()/teachSubject() for where the two diverge (label,
     // placeholder, seed prompt framing).
     const testPrep = workSourceSelect.value === 'test_prep';
     const teaching = workSourceSelect.value === 'teach' || testPrep;
-    // The card is titled after the segment currently underway — the same
-    // labels the student picked from at lesson start. (Guests / pre-lesson
-    // keep the initial "Check my scribbled work": no change event has
-    // fired for them, the sequencer is what drives this select.)
-    checkCardTitle.textContent = testPrep
-      ? 'Prep for a test'
-      : (teaching ? 'Learn & practice a new subject' : "Homework — check problems I've done");
+    updateCheckCardTitle();
     teachRow.classList.toggle('hidden', !teaching);
     teachSubjectInput.placeholder = testPrep ? "What's the test on? e.g. fractions, quadratic equations" : 'Which math topic? e.g. fractions, quadratic equations';
     testWhenInput.classList.toggle('hidden', !testPrep);
@@ -4544,6 +4555,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (lessonModeOn) return;
     lessonModeOn = true;
     document.body.classList.add('lesson-cam-on');
+    // After the flag flip — beginLesson's mode-change dispatch runs before
+    // this, while lessonModeOn is still false, so the title set there was
+    // the pre-lesson default.
+    updateCheckCardTitle();
     updateLessonCamVisibility();
     uploadModeEl.classList.add('hidden');
     watchModeEl.classList.add('hidden');
@@ -4564,6 +4579,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!lessonModeOn) return;
     lessonModeOn = false;
     document.body.classList.remove('lesson-cam-on');
+    updateCheckCardTitle();
     stopStuckWatch();
     stopLessonCam();
     lessonModeEl.classList.add('hidden');
