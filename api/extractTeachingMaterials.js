@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { images, accessToken } = req.body || {};
+    const { images, kind, accessToken } = req.body || {};
     if (!Array.isArray(images) || !images.length || images.some((img) => !img || !img.base64)) {
       res.status(400).json({ error: 'Missing image data' });
       return;
@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
       res.status(429).json({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true });
       return;
     }
-    const digest = await extractTeachingMaterials(images);
+    const digest = await extractTeachingMaterials(images, kind === 'past_tests' ? 'past_tests' : null);
     res.status(200).json({ digest });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong' });

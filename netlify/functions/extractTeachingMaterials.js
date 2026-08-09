@@ -7,7 +7,7 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { images, accessToken } = JSON.parse(event.body || '{}');
+    const { images, kind, accessToken } = JSON.parse(event.body || '{}');
     if (!Array.isArray(images) || !images.length || images.some((img) => !img || !img.base64)) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Missing image data' }) };
     }
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     if (!allowed) {
       return { statusCode: 429, body: JSON.stringify({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true }) };
     }
-    const digest = await extractTeachingMaterials(images);
+    const digest = await extractTeachingMaterials(images, kind === 'past_tests' ? 'past_tests' : null);
     return { statusCode: 200, body: JSON.stringify({ digest }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Something went wrong' }) };

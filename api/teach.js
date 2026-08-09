@@ -7,7 +7,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const { subject, conversation, mode, materialsDigest } = req.body || {};
+    const { subject, conversation, mode, materialsDigest, testWhen } = req.body || {};
     if (Array.isArray(conversation) && conversation.length) {
       const lesson = await teachFollowup(conversation);
       res.status(200).json({ lesson });
@@ -18,7 +18,8 @@ module.exports = async (req, res) => {
       return;
     }
     const digest = typeof materialsDigest === 'string' && materialsDigest.trim() ? materialsDigest.trim().slice(0, 4000) : null;
-    const lesson = await teachSubject(subject.trim().slice(0, 200), mode === 'test_prep' ? 'test_prep' : null, digest);
+    const when = typeof testWhen === 'string' && testWhen.trim() ? testWhen.trim().slice(0, 100) : null;
+    const lesson = await teachSubject(subject.trim().slice(0, 200), mode === 'test_prep' ? 'test_prep' : null, digest, when);
     res.status(200).json({ lesson });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong' });
