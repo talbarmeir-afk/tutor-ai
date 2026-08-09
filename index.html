@@ -3091,7 +3091,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       // or otherwise, and don't hand a "correct" result to teach mode's
       // auto-next-problem logic.
       if (!parsed.unreadable){
-        if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId, problemImageData);
+        if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId, problemImageData, currentHomeworkProblemText());
         maybeTeachNextProblem(parsed);
       }
     } catch(err){
@@ -3579,26 +3579,39 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return canvas;
   }
 
+  // Core builder, shared between the in-lesson download and Past Lessons
+  // (via window.mathTutorHomeworkPdf — the history code lives in the
+  // module script). entries: [{ problemText, solutionFrame: { dataUrl } }];
+  // stamp: date string for the filename. Throws on failure — callers own
+  // their button/link feedback.
+  async function buildHomeworkPdf(entries, stamp){
+    // Loaded on demand, first download only — a normal lesson never pays
+    // for the library. Same CDN the supabase client already comes from.
+    const { jsPDF } = await import('https://esm.sh/jspdf@3.0.3');
+    const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    for (let i = 0; i < entries.length; i++){
+      const pageCanvas = await renderHomeworkPdfPage(entries[i], i + 1, entries.length);
+      if (i > 0) doc.addPage();
+      doc.addImage(pageCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, pageW, pageH);
+    }
+    doc.save(`homework-${stamp}.pdf`);
+  }
+  window.mathTutorHomeworkPdf = buildHomeworkPdf;
+
+  function todayStamp(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
   async function downloadHomeworkPdf(){
     if (!lessonHomeworkArchive.length) return;
     const buttons = [homeworkDownloadBtn, homeworkDownloadPickerBtn];
     const labels = buttons.map((b) => b.textContent);
     buttons.forEach((b) => { b.disabled = true; b.textContent = 'Preparing your homework…'; });
     try{
-      // Loaded on demand, first download only — a normal lesson never pays
-      // for the library. Same CDN the supabase client already comes from.
-      const { jsPDF } = await import('https://esm.sh/jspdf@3.0.3');
-      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
-      for (let i = 0; i < lessonHomeworkArchive.length; i++){
-        const pageCanvas = await renderHomeworkPdfPage(lessonHomeworkArchive[i], i + 1, lessonHomeworkArchive.length);
-        if (i > 0) doc.addPage();
-        doc.addImage(pageCanvas.toDataURL('image/jpeg', 0.9), 'JPEG', 0, 0, pageW, pageH);
-      }
-      const d = new Date();
-      const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      doc.save(`homework-${stamp}.pdf`);
+      await buildHomeworkPdf(lessonHomeworkArchive, todayStamp());
       buttons.forEach((b, i) => { b.disabled = false; b.textContent = labels[i]; });
     } catch(err){
       buttons.forEach((b) => { b.disabled = false; b.textContent = "Couldn't build the PDF — try again"; });
@@ -4219,7 +4232,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // history if a solution photo actually exists yet — skipping straight
   // from the live camera, before ever taking one, has nothing to show.
   skipProblemBtn.addEventListener('click', () => {
-    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData);
+    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData, currentHomeworkProblemText());
     problemImageData = null;
     if (homeworkQueue.length){
       homeworkQueue[homeworkQueueIndex].skipped = true;
@@ -4663,7 +4676,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonNextProblemBtn.classList.remove('hidden');
     lessonCamActions.classList.add('hidden');
     skipProblemBtn.classList.add('hidden');
-    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData);
+    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData, currentHomeworkProblemText());
   }
 
   async function submitQuestion(question){
@@ -5627,6 +5640,48 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       lessonHeader.textContent = headerParts.join(' · ');
       lessonEl.appendChild(lessonHeader);
 
+      // Homework export from history: one page per problem, its LAST
+      // check's photo (steps are sorted ascending within a group), oldest
+      // problem first. Prefers the clean no-marks image + the queued
+      // problem text (both stored since the clean_thumbnail/problem_text
+      // migration); rows saved before it fall back to the marked-up
+      // thumbnail and the model-generated title. When any queue-tagged
+      // rows exist, the export is restricted to them so a mixed
+      // homework+teach lesson doesn't sweep practice problems in.
+      const lastPerProblem = problemGroups.map((steps) => steps[steps.length - 1]).slice().reverse();
+      const queueRows = lastPerProblem.filter((e) => e.problem_text);
+      const isHomeworkLesson = !(meta && meta.taught_subjects);
+      const exportRows = queueRows.length ? queueRows : (isHomeworkLesson ? lastPerProblem : []);
+      const pdfEntries = exportRows
+        .filter((e) => e.clean_thumbnail || e.thumbnail)
+        .map((e) => ({
+          problemText: e.problem_text || e.problem_title || '',
+          solutionFrame: { dataUrl: e.clean_thumbnail || e.thumbnail },
+        }));
+      if (pdfEntries.length && window.mathTutorHomeworkPdf){
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button';
+        dlBtn.className = 'link-btn homework-download-link';
+        dlBtn.textContent = 'Download homework (PDF)';
+        dlBtn.addEventListener('click', async () => {
+          const label = 'Download homework (PDF)';
+          dlBtn.disabled = true;
+          dlBtn.textContent = 'Preparing your homework…';
+          try{
+            const d = new Date(lessonEntries[0].created_at);
+            const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            await window.mathTutorHomeworkPdf(pdfEntries, stamp);
+            dlBtn.disabled = false;
+            dlBtn.textContent = label;
+          } catch(err){
+            dlBtn.disabled = false;
+            dlBtn.textContent = "Couldn't build the PDF — try again";
+            setTimeout(() => { dlBtn.textContent = label; }, 4000);
+          }
+        });
+        lessonEl.appendChild(dlBtn);
+      }
+
       const groupsEl = document.createElement('div');
       groupsEl.className = 'history-lesson-groups';
 
@@ -5769,7 +5824,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  async function saveEntry(parsed, frame, mode, problemId, lessonId, problemFrame){
+  async function saveEntry(parsed, frame, mode, problemId, lessonId, problemFrame, problemText){
     if (!supabaseClient || !currentSession || !frame) return;
     try{
       // 480px balances being genuinely viewable when expanded against
@@ -5779,6 +5834,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // shows exactly what the student saw, not a blank re-upload.
       const thumbnail = await bakeAnnotatedThumbnail(frame.dataUrl, 480);
       const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480) : null;
+      // A second, CLEAN copy (no marks baked in), a bit larger — this is
+      // what the homework-PDF export from Past Lessons uses, since the
+      // student submits their own handwriting, not Claruno's feedback.
+      const cleanThumbnail = await makeThumbnail(frame.dataUrl, 800);
       const { data, error } = await supabaseClient.from('history_entries').insert({
         user_id: currentSession.user.id,
         problem_id: problemId,
@@ -5792,6 +5851,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         fix: parsed.fix || '',
         thumbnail,
         problem_thumbnail: problemThumbnail,
+        clean_thumbnail: cleanThumbnail,
+        problem_text: problemText || null,
       }).select('id').single();
       if (error) throw error;
       // Any follow-up Q&A (detail explanation, free-form questions) on
@@ -5811,11 +5872,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // problem didn't get a genuine attempt. Kept distinct from saveEntry
   // rather than overloading it with an empty "parsed" shape, since the
   // two have almost nothing in common beyond both producing a row.
-  async function saveSkipped(frame, mode, problemId, lessonId, problemFrame){
+  async function saveSkipped(frame, mode, problemId, lessonId, problemFrame, problemText){
     if (!supabaseClient || !currentSession || !frame) return;
     try{
       const thumbnail = await makeThumbnail(frame.dataUrl, 480);
       const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480) : null;
+      const cleanThumbnail = await makeThumbnail(frame.dataUrl, 800);
       const { error } = await supabaseClient.from('history_entries').insert({
         user_id: currentSession.user.id,
         problem_id: problemId,
@@ -5830,6 +5892,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         fix: '',
         thumbnail,
         problem_thumbnail: problemThumbnail,
+        clean_thumbnail: cleanThumbnail,
+        problem_text: problemText || null,
       });
       if (error) throw error;
       lastHistoryEntryId = null;
