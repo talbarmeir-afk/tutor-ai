@@ -1182,13 +1182,16 @@
   </div>
   <div class="teach-row hidden" id="teachRow">
     <input type="text" id="teachSubjectInput" class="teach-input" placeholder="Which math topic? e.g. fractions, quadratic equations" autocomplete="off">
+    <!-- Test-prep only: when the test is (free text — "Tuesday", "in 4
+         days") drives the review's pacing. -->
+    <input type="text" id="testWhenInput" class="teach-input hidden" placeholder="When is it? e.g. Tuesday, or in 4 days" autocomplete="off" maxlength="100">
     <button type="button" class="primary-btn" id="teachBtn">Teach me</button>
     <!-- Optional: photos of what class actually taught (notes/book pages),
          digested once server-side so the whole teaching session aligns
          with them — same methods, notation, difficulty. Same take-photo-
          first hierarchy as the homework upload. -->
     <div class="teach-materials" id="teachMaterials">
-      <p>Optional: add photos of what was taught in class or from your book, and Claruno will teach it the same way.</p>
+      <p id="teachMaterialsIntro">Optional: add photos of what was taught in class or from your book, and Claruno will teach it the same way.</p>
       <div class="homework-upload-thumbs" id="teachMaterialThumbs"></div>
       <div class="teach-materials-actions">
         <button type="button" class="ghost-btn" id="teachMaterialTakeBtn">Take photo</button>
@@ -2627,6 +2630,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // embedded in the teach conversation's seed message, so the WHOLE
   // session — follow-ups and next-problems included — stays aligned with
   // the material at zero further image cost.
+  const testWhenInput = document.getElementById('testWhenInput');
+  const teachMaterialsIntro = document.getElementById('teachMaterialsIntro');
   const teachMaterialThumbs = document.getElementById('teachMaterialThumbs');
   const teachMaterialTakeBtn = document.getElementById('teachMaterialTakeBtn');
   const teachMaterialUploadBtn = document.getElementById('teachMaterialUploadBtn');
@@ -2710,6 +2715,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   function resetTeachMaterials(){
     teachMaterialPhotos = [];
+    testWhenInput.value = '';
     renderTeachMaterialThumbs();
   }
 
@@ -2756,6 +2762,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const teaching = workSourceSelect.value === 'teach' || testPrep;
     teachRow.classList.toggle('hidden', !teaching);
     teachSubjectInput.placeholder = testPrep ? "What's the test on? e.g. fractions, quadratic equations" : 'Which math topic? e.g. fractions, quadratic equations';
+    testWhenInput.classList.toggle('hidden', !testPrep);
+    teachMaterialsIntro.textContent = testPrep
+      ? 'Optional: add photos of past tests or example questions — Claruno will prep you with problems like them.'
+      : 'Optional: add photos of what was taught in class or from your book, and Claruno will teach it the same way.';
     if (teaching){
       teachSubjectInput.focus();
       // Switching back mid-lesson restores the already-delivered lesson
@@ -2792,14 +2802,16 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       // whole conversation with the digest. Best-effort — a failed digest
       // never blocks the lesson itself.
       let materialsDigest = null;
+      const testWhen = testPrep ? testWhenInput.value.trim().slice(0, 100) : '';
       if (teachMaterialPhotos.length){
-        teachPanelBody.textContent = 'Reading your class materials…';
+        teachPanelBody.textContent = testPrep ? 'Reading your past tests…' : 'Reading your class materials…';
         try{
           const mResponse = await fetch('/api/extractTeachingMaterials', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               images: teachMaterialPhotos.map((p) => ({ base64: p.base64, mediaType: 'image/jpeg' })),
+              kind: testPrep ? 'past_tests' : 'materials',
               accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
             }),
           });
@@ -2811,18 +2823,20 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const response = await fetch('/api/teach', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subject, mode: testPrep ? 'test_prep' : undefined, ...(materialsDigest ? { materialsDigest } : {}) })
+        body: JSON.stringify({ subject, mode: testPrep ? 'test_prep' : undefined, ...(materialsDigest ? { materialsDigest } : {}), ...(testWhen ? { testWhen } : {}) })
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       teachConversation = [
         { role: 'user', content: (testPrep
-          ? `I have a test coming up on: "${subject}". Help me review and practice, including one practice problem.`
+          ? `I have a test coming up on: "${subject}"${testWhen ? ` (the test is: ${testWhen})` : ''}. Help me review and practice, including one practice problem.`
           : `Teach me this math topic: "${subject}". Include one practice problem.`)
-          // The digest rides in the seed message so every follow-up (and
-          // each auto-requested next problem) stays aligned with the
-          // student's class material without re-sending any images.
-          + (materialsDigest ? ` Teach it the way my class material does — same methods, notation, and difficulty. My class material, summarized: ${materialsDigest}` : '') },
+          // The digest (and test date) ride in the seed message so every
+          // follow-up (and each auto-requested next problem) stays aligned
+          // without re-sending any images.
+          + (materialsDigest ? (testPrep
+            ? ` Make practice problems feel like my past tests, summarized here: ${materialsDigest}`
+            : ` Teach it the way my class material does — same methods, notation, and difficulty. My class material, summarized: ${materialsDigest}`) : '') },
         { role: 'assistant', content: data.lesson }
       ];
       // Consumed into the conversation — a later, different teach session
