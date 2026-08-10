@@ -369,6 +369,17 @@
     background-image:repeating-linear-gradient(to bottom, transparent, transparent 31px, rgba(24,24,22,0.09) 31px, rgba(24,24,22,0.09) 32px);
   }
   .teach-panel .verdict-actions{ margin-top:10px; }
+  /* Text left, illustration right — the lesson no longer drags down a
+     narrow left column while the rest of the panel sits empty. On narrow
+     screens the figure wraps below the text. */
+  .teach-lesson-row{ display:flex; align-items:flex-start; gap:26px; flex-wrap:wrap; }
+  .teach-lesson-row .teach-script{ flex:1 1 320px; min-width:0; }
+  .teach-figure{ flex:0 1 400px; max-width:100%; }
+  .teach-figure img, .teach-thread-figure{
+    display:block; width:100%; box-sizing:border-box; background:#fff;
+    border:1px solid rgba(24,24,22,0.12); border-radius:10px; padding:10px;
+  }
+  .teach-thread-figure{ max-width:400px; margin-top:8px; }
   .teach-thread{ display:flex; flex-direction:column; gap:10px; margin-top:10px; }
   .teach-thread .q{ font-family:'Karla', sans-serif; font-size:12.5px; font-weight:600; color:rgba(24,24,22,0.6); margin:0 0 2px; }
   .teach-thread .teach-script{ font-size:16px; }
@@ -1223,7 +1234,15 @@
   </div>
   <div class="teach-panel hidden" id="teachPanel">
     <h3 id="teachPanelTitle"></h3>
-    <p class="teach-script" id="teachPanelBody"></p>
+    <!-- Text on the left, illustration on the right — the figure arrives
+         as model-written SVG rendered through an <img> data URI, which
+         cannot execute scripts, so it's safe to display as-is. -->
+    <div class="teach-lesson-row">
+      <p class="teach-script" id="teachPanelBody"></p>
+      <div class="teach-figure hidden" id="teachFigure">
+        <img id="teachFigureImg" alt="Illustration for this lesson">
+      </div>
+    </div>
     <div class="verdict-actions hidden" id="teachActions">
       <button type="button" class="verdict-icon-btn" id="teachAgainBtn" title="Explain it differently" aria-label="Explain it differently">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2644,7 +2663,26 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const teachAskForm = document.getElementById('teachAskForm');
   const teachAskInput = document.getElementById('teachAskInput');
   const teachAskSend = document.getElementById('teachAskSend');
+  const teachFigure = document.getElementById('teachFigure');
+  const teachFigureImg = document.getElementById('teachFigureImg');
   let teachConversation = [];
+
+  // Teach replies may end with one model-drawn SVG illustration between
+  // <<<FIGURE>>> markers (see TEACH_SYSTEM). Split it out: the text renders
+  // as handwriting like before, the SVG displays through an <img> data URI
+  // — an <img> never executes scripts, so model-written markup is safe to
+  // show without sanitizing. The conversation keeps only the text (no
+  // point re-sending SVG code back with every follow-up).
+  function extractTeachFigure(raw){
+    const m = String(raw).match(/<<<FIGURE>>>([\s\S]*?)<<<END FIGURE>>>/);
+    if (!m) return { text: String(raw).trim(), svg: null };
+    const svg = m[1].trim();
+    const text = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim();
+    return { text, svg: svg.startsWith('<svg') ? svg : null };
+  }
+  function teachFigureSrc(svg){
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
 
   // ---- Teach-with-materials ----
   // Optional photos of what class actually taught (notes/book pages).
@@ -2835,6 +2873,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachAskForm.classList.add('hidden');
     teachThread.innerHTML = '';
     teachConversation = [];
+    teachFigure.classList.add('hidden');
+    teachFigureImg.removeAttribute('src');
     teachPanelTitle.textContent = (testPrep ? 'Test prep: ' : 'Claruno teaches: ') + subject;
     teachPanelBody.textContent = testPrep ? 'Putting together a review and a practice problem…' : 'Putting together a mini-lesson and a practice problem…';
     try{
@@ -2877,12 +2917,17 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           + (materialsDigest ? (testPrep
             ? ` Make practice problems feel like my past tests, summarized here: ${materialsDigest}`
             : ` Teach it the way my class material does — same methods, notation, and difficulty. My class material, summarized: ${materialsDigest}`) : '') },
-        { role: 'assistant', content: data.lesson }
+        { role: 'assistant', content: extractTeachFigure(data.lesson).text }
       ];
       // Consumed into the conversation — a later, different teach session
       // shouldn't silently inherit these pages.
       if (materialsDigest) resetTeachMaterials();
-      writeOut(teachPanelBody, data.lesson);
+      const lessonParts = extractTeachFigure(data.lesson);
+      writeOut(teachPanelBody, lessonParts.text);
+      if (lessonParts.svg){
+        teachFigureImg.src = teachFigureSrc(lessonParts.svg);
+        teachFigure.classList.remove('hidden');
+      }
       teachActions.classList.remove('hidden');
       updateTeachContinueButton();
       // The practice problem has now been handed over — in a running lesson
@@ -2928,9 +2973,17 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
-      teachConversation.push({ role: 'assistant', content: data.lesson });
+      const answerParts = extractTeachFigure(data.lesson);
+      teachConversation.push({ role: 'assistant', content: answerParts.text });
       a.className = 'teach-script';
-      writeOut(a, data.lesson);
+      writeOut(a, answerParts.text);
+      if (answerParts.svg){
+        const figureEl = document.createElement('img');
+        figureEl.className = 'teach-thread-figure';
+        figureEl.alt = 'Illustration';
+        figureEl.src = teachFigureSrc(answerParts.svg);
+        item.appendChild(figureEl);
+      }
     } catch(err){
       a.textContent = "Sorry, that didn't go through. Try again.";
       a.className = 'is-pending';
