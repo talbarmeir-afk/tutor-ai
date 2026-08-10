@@ -327,6 +327,10 @@
     text-decoration:underline; text-underline-offset:2px; padding:2px 4px;
   }
   .homework-problem-edit-btn:hover{ color:var(--chalk); }
+  .homework-problem-figure{
+    width:72px; height:72px; object-fit:cover; flex-shrink:0;
+    border:1px solid rgba(24,24,22,0.2); border-radius:8px; cursor:zoom-in;
+  }
   .homework-problem-edit-input{
     flex:1 1 100%; box-sizing:border-box; font-family:'Karla', sans-serif;
     font-size:17px; line-height:1.5; padding:8px 10px; border-radius:8px;
@@ -3122,7 +3126,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         body: JSON.stringify({
           base64: griddedBase64,
           mediaType: 'image/jpeg',
-          ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
+          ...((problemImageData || currentHomeworkFigurePhoto()) ? { problemBase64: (problemImageData || currentHomeworkFigurePhoto()).base64, problemMediaType: 'image/jpeg' } : {}),
           ...(currentHomeworkProblemText() ? { problemText: currentHomeworkProblemText() } : {}),
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
@@ -3145,7 +3149,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       // or otherwise, and don't hand a "correct" result to teach mode's
       // auto-next-problem logic.
       if (!parsed.unreadable){
-        if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId, problemImageData, currentHomeworkProblemText());
+        if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId, problemImageData || currentHomeworkFigurePhoto(), currentHomeworkProblemText());
         maybeTeachNextProblem(parsed);
       }
     } catch(err){
@@ -3231,7 +3235,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         } : {
           base64: imageData.base64,
           mediaType: 'image/jpeg',
-          ...(problemImageData ? { problemBase64: problemImageData.base64, problemMediaType: 'image/jpeg' } : {}),
+          ...((problemImageData || currentHomeworkFigurePhoto()) ? { problemBase64: (problemImageData || currentHomeworkFigurePhoto()).base64, problemMediaType: 'image/jpeg' } : {}),
           ...(queuedProblemText ? { problemText: queuedProblemText } : {}),
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
@@ -3450,7 +3454,21 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         homeworkUploadStatus.textContent = "Couldn't find any problems in those photos — try clearer photos, or add more.";
         return;
       }
-      homeworkQueue = problems.map((problemText) => ({ id: crypto.randomUUID(), problemText, done: false, skipped: false }));
+      // Server entries are {text, photoIndex, hasFigure} (older shape:
+      // bare strings). Figure problems keep a reference to their whole
+      // source page — shown beside the problem text and attached to
+      // checks/hints, since transcribed text can't carry a sketch.
+      const sourcePhotos = homeworkUploadPhotos.slice();
+      homeworkQueue = problems.map((p) => {
+        const isObj = p && typeof p === 'object';
+        return {
+          id: crypto.randomUUID(),
+          problemText: isObj ? p.text : p,
+          sourcePhoto: (isObj && p.hasFigure && sourcePhotos[(p.photoIndex || 1) - 1]) || null,
+          done: false,
+          skipped: false,
+        };
+      }).filter((e) => e.problemText);
       homeworkQueueIndex = 0;
       homeworkUploadPhotos = [];
       renderHomeworkUploadThumbs();
@@ -3495,6 +3513,18 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     editBtn.setAttribute('aria-label', 'Edit the problem text');
     editBtn.addEventListener('click', startHomeworkProblemEdit);
     homeworkProblemBanner.appendChild(textWrap);
+    // A problem with a figure shows its source page beside the text —
+    // transcription can't carry a sketch, and the page (not a model-made
+    // crop) is the honest version of it. Click opens it full size.
+    if (entry.sourcePhoto){
+      const fig = document.createElement('img');
+      fig.className = 'homework-problem-figure';
+      fig.src = entry.sourcePhoto.dataUrl;
+      fig.alt = "This problem's figure is on the homework page — click to view it full size";
+      fig.title = 'This problem has a figure — click to see the page';
+      fig.addEventListener('click', () => openAttachmentPreview(entry.sourcePhoto.dataUrl));
+      homeworkProblemBanner.appendChild(fig);
+    }
     homeworkProblemBanner.appendChild(editBtn);
     homeworkProblemBanner.classList.remove('hidden');
     updateHomeworkDownloadUI();
@@ -3534,6 +3564,16 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   function currentHomeworkProblemText(){
     return (homeworkQueue.length && homeworkQueueIndex < homeworkQueue.length)
       ? homeworkQueue[homeworkQueueIndex].problemText
+      : null;
+  }
+
+  // The current queued problem's source-page photo, when it has a figure
+  // — attached to checks/hints in place of a manual problem photo (the
+  // manual slot is hidden in queue mode anyway), so grading actually sees
+  // the sketch the problem refers to.
+  function currentHomeworkFigurePhoto(){
+    return (homeworkQueue.length && homeworkQueueIndex < homeworkQueue.length)
+      ? (homeworkQueue[homeworkQueueIndex].sourcePhoto || null)
       : null;
   }
 
@@ -4299,7 +4339,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // history if a solution photo actually exists yet — skipping straight
   // from the live camera, before ever taking one, has nothing to show.
   skipProblemBtn.addEventListener('click', () => {
-    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData, currentHomeworkProblemText());
+    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData || currentHomeworkFigurePhoto(), currentHomeworkProblemText());
     problemImageData = null;
     if (homeworkQueue.length){
       homeworkQueue[homeworkQueueIndex].skipped = true;
@@ -4748,7 +4788,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonNextProblemBtn.classList.remove('hidden');
     lessonCamActions.classList.add('hidden');
     skipProblemBtn.classList.add('hidden');
-    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData, currentHomeworkProblemText());
+    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData || currentHomeworkFigurePhoto(), currentHomeworkProblemText());
   }
 
   async function submitQuestion(question){
