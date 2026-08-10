@@ -824,6 +824,7 @@
   }
   .lesson-mode-progress strong{ color:var(--ink); font-weight:700; }
 
+  .history-collapse-controls{ display:flex; gap:16px; margin:0 0 14px; }
   .history-lesson + .history-lesson{ padding-top:18px; border-top:1px solid var(--paper-line); }
   /* A real headline (and a collapse toggle), not a muted caption — with
      several lessons on the page this is the line the eye scans by. */
@@ -5675,7 +5676,35 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       return;
     }
 
-    groupByLesson(entries).forEach((lessonEntries) => {
+    const lessons = groupByLesson(entries);
+
+    // Only worth showing once there are several lessons to manage.
+    if (lessons.length > 1){
+      const controls = document.createElement('div');
+      controls.className = 'history-collapse-controls';
+      const setAll = (collapsed) => {
+        historyList.querySelectorAll('.history-lesson').forEach((el) => {
+          el.classList.toggle('is-collapsed', collapsed);
+          const header = el.querySelector('.history-lesson-header');
+          if (header) header.setAttribute('aria-expanded', String(!collapsed));
+        });
+      };
+      const collapseAllBtn = document.createElement('button');
+      collapseAllBtn.type = 'button';
+      collapseAllBtn.className = 'link-btn';
+      collapseAllBtn.textContent = 'Collapse all';
+      collapseAllBtn.addEventListener('click', () => setAll(true));
+      const expandAllBtn = document.createElement('button');
+      expandAllBtn.type = 'button';
+      expandAllBtn.className = 'link-btn';
+      expandAllBtn.textContent = 'Expand all';
+      expandAllBtn.addEventListener('click', () => setAll(false));
+      controls.appendChild(collapseAllBtn);
+      controls.appendChild(expandAllBtn);
+      historyList.appendChild(controls);
+    }
+
+    lessons.forEach((lessonEntries) => {
       const problemGroups = groupByProblem(lessonEntries);
 
       const lessonEl = document.createElement('div');
