@@ -1148,7 +1148,7 @@
     <div class="lesson-mode-picker" id="lessonModePicker">
       <label class="lesson-mode-option">
         <input type="checkbox" name="lessonMode" value="homework" checked>
-        <span>Homework — check problems I've done</span>
+        <span>Homework — let's do it!</span>
       </label>
       <label class="lesson-mode-option">
         <input type="checkbox" name="lessonMode" value="teach">
@@ -2784,7 +2784,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const v = workSourceSelect.value;
     checkCardTitle.textContent = v === 'test_prep'
       ? 'Prep for a test'
-      : (v === 'teach' ? 'Learn & practice a new subject' : "Homework — check problems I've done");
+      : (v === 'teach' ? 'Learn & practice a new subject' : "Homework — let's do it!");
   }
 
   workSourceSelect.addEventListener('change', () => {
