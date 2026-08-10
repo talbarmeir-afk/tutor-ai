@@ -3247,6 +3247,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         return;
       }
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      // The hint call verified the work is already complete and correct —
+      // a student hinting on finished work really meant to check it, so
+      // run the real Check on the same frozen frame: full verdict bubble,
+      // history entry, Next-problem flow, everything.
+      if (data.solvedCorrectly && imageData){
+        statusText.textContent = 'Your work looks complete — checking it properly…';
+        await runCheck();
+        return;
+      }
       // No frozen photo to draw the usual mascot/bubble hint onto yet —
       // surface it on the live camera's own overlay note instead.
       if (noPhotoYet){

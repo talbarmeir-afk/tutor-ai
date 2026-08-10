@@ -20,13 +20,13 @@ module.exports = async (req, res) => {
       res.status(429).json({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true });
       return;
     }
-    let hint;
     if (base64) {
       const problemImage = problemBase64 ? { base64: problemBase64, mediaType: problemMediaType || 'image/jpeg' } : null;
-      hint = await hintFromImage(base64, mediaType || 'image/jpeg', problemImage, problemText || null);
-    } else {
-      hint = await hintFromProblemText(problemText);
+      const { text, solved } = await hintFromImage(base64, mediaType || 'image/jpeg', problemImage, problemText || null);
+      res.status(200).json({ hint: text, solvedCorrectly: solved });
+      return;
     }
+    const hint = await hintFromProblemText(problemText);
     res.status(200).json({ hint });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong' });

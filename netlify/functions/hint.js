@@ -17,13 +17,12 @@ exports.handler = async (event) => {
     if (!allowed) {
       return { statusCode: 429, body: JSON.stringify({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true }) };
     }
-    let hint;
     if (base64) {
       const problemImage = problemBase64 ? { base64: problemBase64, mediaType: problemMediaType || 'image/jpeg' } : null;
-      hint = await hintFromImage(base64, mediaType || 'image/jpeg', problemImage, problemText || null);
-    } else {
-      hint = await hintFromProblemText(problemText);
+      const { text, solved } = await hintFromImage(base64, mediaType || 'image/jpeg', problemImage, problemText || null);
+      return { statusCode: 200, body: JSON.stringify({ hint: text, solvedCorrectly: solved }) };
     }
+    const hint = await hintFromProblemText(problemText);
     return { statusCode: 200, body: JSON.stringify({ hint }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Something went wrong' }) };
