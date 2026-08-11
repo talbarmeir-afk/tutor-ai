@@ -329,6 +329,9 @@
     padding:9px 12px; border-radius:7px; cursor:pointer;
   }
   .split-btn-menu button:hover{ background:var(--bg-soft); }
+  .split-btn-menu button small{
+    display:block; font-size:11px; color:var(--ink-muted); margin-top:2px;
+  }
   .homework-download-link{ display:block; margin:0 0 10px; padding:2px 0; text-align:left; }
   .lesson-note .homework-download-link{ margin:12px 0 0; }
   .homework-download-link:disabled{ opacity:.5; cursor:wait; }
@@ -1249,11 +1252,11 @@
           <button type="button" class="ghost-btn split-btn-main" id="teachMaterialTakeBtn">Take photo</button>
           <button type="button" class="ghost-btn split-btn-caret" id="teachMaterialCaretBtn" aria-haspopup="menu" aria-expanded="false" aria-label="More ways to add material photos">&#9662;</button>
           <div class="split-btn-menu hidden" id="teachMaterialMenu">
-            <button type="button" id="teachMaterialUploadBtn">Upload existing photos&hellip;</button>
+            <button type="button" id="teachMaterialUploadBtn">Upload existing photos or a PDF&hellip;<small>JPG, PNG, WebP, GIF or PDF</small></button>
           </div>
         </div>
       </div>
-      <input type="file" id="teachMaterialInput" accept="image/*" multiple class="hidden">
+      <input type="file" id="teachMaterialInput" accept="image/*,application/pdf" multiple class="hidden">
     </div>
   </div>
   <div class="teach-panel hidden" id="teachPanel">
@@ -1311,12 +1314,12 @@
         <button type="button" class="primary-btn split-btn-main" id="homeworkTakePhotoBtn">Take photo of the homework you got</button>
         <button type="button" class="primary-btn split-btn-caret" id="homeworkSourceCaretBtn" aria-haspopup="menu" aria-expanded="false" aria-label="More ways to add homework photos">&#9662;</button>
         <div class="split-btn-menu hidden" id="homeworkSourceMenu">
-          <button type="button" id="homeworkUploadAddBtn">Upload existing photos&hellip;</button>
+          <button type="button" id="homeworkUploadAddBtn">Upload existing photos or a PDF&hellip;<small>JPG, PNG, WebP, GIF or PDF</small></button>
         </div>
       </div>
       <button type="button" class="primary-btn" id="homeworkUploadStartBtn" disabled>Start solving your homework</button>
     </div>
-    <input type="file" id="homeworkUploadInput" accept="image/*" multiple class="hidden">
+    <input type="file" id="homeworkUploadInput" accept="image/*,application/pdf" multiple class="hidden">
   </div>
 
   <!-- Signed-in lesson mode: the camera turns on automatically when a
@@ -2902,9 +2905,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const files = Array.from(teachMaterialInput.files || []);
     teachMaterialInput.value = '';
     for (const file of files){
-      if (!file.type.startsWith('image/')) continue;
       try{
-        teachMaterialPhotos.push(await resizeImage(file, 1600));
+        if (isPdfFile(file)){
+          teachMaterialPhotos.push(...await pdfToFrames(file, 10));
+        } else if (file.type.startsWith('image/')){
+          teachMaterialPhotos.push(await resizeImage(file, 1600));
+        }
       } catch(err){ /* skip a file that fails to read/decode */ }
     }
     renderTeachMaterialThumbs();
@@ -3638,6 +3644,54 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!homeworkUploadStartBtn.disabled) homeworkUploadStartBtn.focus();
   });
 
+  // ---- PDF upload support ----
+  // Teacher handouts and phone "scans" are overwhelmingly PDFs — each page
+  // renders client-side to a JPEG frame ({dataUrl, base64}, 1600px long
+  // side @0.92), byte-identical in shape to what the camera produces, so
+  // everything downstream treats PDF pages as photos. pdf.js loads on
+  // demand from a CDN the first time a PDF is actually picked.
+  let pdfjsLibPromise = null;
+  function loadPdfJs(){
+    if (!pdfjsLibPromise){
+      pdfjsLibPromise = import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs').then((lib) => {
+        lib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+        return lib;
+      });
+    }
+    return pdfjsLibPromise;
+  }
+
+  function isPdfFile(file){
+    return file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  }
+
+  // Capped pages: every frame goes to the extraction model call, so an
+  // accidental 80-page book upload must not become 80 images in one
+  // request.
+  async function pdfToFrames(file, maxPages){
+    const pdfjs = await loadPdfJs();
+    const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
+    const frames = [];
+    const pages = Math.min(doc.numPages, maxPages || 10);
+    for (let n = 1; n <= pages; n++){
+      const page = await doc.getPage(n);
+      const base = page.getViewport({ scale: 1 });
+      const scale = Math.min(3, 1600 / Math.max(base.width, base.height));
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+      frames.push({ dataUrl, base64: dataUrl.split(',')[1] });
+    }
+    try{ doc.destroy(); } catch(err){ /* already torn down */ }
+    return frames;
+  }
+
   function renderHomeworkUploadThumbs(){
     homeworkUploadThumbs.innerHTML = '';
     homeworkUploadPhotos.forEach((photo, i) => {
@@ -3680,10 +3734,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const files = Array.from(homeworkUploadInput.files || []);
     homeworkUploadInput.value = '';
     for (const file of files){
-      if (!file.type.startsWith('image/')) continue;
       try{
-        const photo = await resizeImage(file, 1600);
-        homeworkUploadPhotos.push(photo);
+        if (isPdfFile(file)){
+          homeworkUploadPhotos.push(...await pdfToFrames(file, 10));
+        } else if (file.type.startsWith('image/')){
+          homeworkUploadPhotos.push(await resizeImage(file, 1600));
+        }
       } catch(err){ /* skip a file that fails to read/decode */ }
     }
     renderHomeworkUploadThumbs();
