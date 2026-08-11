@@ -308,7 +308,27 @@
     background:#fff; color:var(--ink);
   }
   .homework-upload-note:focus-visible{ outline:2px solid var(--chalk-yellow); outline-offset:1px; }
-  .homework-upload-add-link{ display:block; margin:8px auto 0; }
+  /* Split button: Take photo as the one visible action, with a small
+     caret opening a menu holding the secondary "upload existing photos"
+     path — chosen per use, never a sticky mode, so the button is always
+     back on Take photo for the next student. */
+  .split-btn{ position:relative; display:inline-flex; }
+  .split-btn .split-btn-main{ border-top-right-radius:0; border-bottom-right-radius:0; }
+  .split-btn .split-btn-caret{
+    border-top-left-radius:0; border-bottom-left-radius:0;
+    padding-left:10px; padding-right:10px; margin-left:1px;
+  }
+  .split-btn-menu{
+    position:absolute; top:calc(100% + 6px); right:0; z-index:6;
+    background:var(--paper); border:1px solid var(--paper-line); border-radius:10px;
+    box-shadow:0 8px 22px rgba(0,0,0,0.16); padding:4px; min-width:220px;
+  }
+  .split-btn-menu button{
+    display:block; width:100%; text-align:left; background:none; border:none;
+    font-family:'Karla', sans-serif; font-size:13.5px; color:var(--ink);
+    padding:9px 12px; border-radius:7px; cursor:pointer;
+  }
+  .split-btn-menu button:hover{ background:var(--bg-soft); }
   .homework-download-link{ display:block; margin:0 0 10px; padding:2px 0; text-align:left; }
   .lesson-note .homework-download-link{ margin:12px 0 0; }
   .homework-download-link:disabled{ opacity:.5; cursor:wait; }
@@ -345,7 +365,6 @@
   .teach-materials > p{ font-size:12.5px; color:var(--ink-muted); margin:2px 0 8px; }
   .teach-materials-actions{ display:flex; align-items:center; gap:12px; }
   .teach-materials-actions .ghost-btn{ font-size:12.5px; padding:6px 12px; }
-  .teach-materials-actions .link-btn{ padding:2px 0; }
   .teach-input{
     flex:1; min-width:220px; font-family:'Karla', sans-serif; font-size:14px;
     padding:10px 12px; border-radius:9px; border:1px solid rgba(24,24,22,0.18);
@@ -1226,8 +1245,13 @@
       <p id="teachMaterialsIntro">Optional: add photos of what was taught in class or from your book, and Claruno will teach it the same way.</p>
       <div class="homework-upload-thumbs" id="teachMaterialThumbs"></div>
       <div class="teach-materials-actions">
-        <button type="button" class="ghost-btn" id="teachMaterialTakeBtn">Take photo</button>
-        <button type="button" class="link-btn" id="teachMaterialUploadBtn">or upload existing photos</button>
+        <div class="split-btn">
+          <button type="button" class="ghost-btn split-btn-main" id="teachMaterialTakeBtn">Take photo</button>
+          <button type="button" class="ghost-btn split-btn-caret" id="teachMaterialCaretBtn" aria-haspopup="menu" aria-expanded="false" aria-label="More ways to add material photos">&#9662;</button>
+          <div class="split-btn-menu hidden" id="teachMaterialMenu">
+            <button type="button" id="teachMaterialUploadBtn">Upload existing photos&hellip;</button>
+          </div>
+        </div>
       </div>
       <input type="file" id="teachMaterialInput" accept="image/*" multiple class="hidden">
     </div>
@@ -1281,13 +1305,17 @@
     <input type="text" id="homeworkUploadNote" class="homework-upload-note" placeholder="Optional note — e.g. only questions 2, 3, 6 and 7" autocomplete="off" maxlength="300">
     <p class="homework-upload-status hidden" id="homeworkUploadStatus"></p>
     <div class="lesson-cam-actions">
-      <button type="button" class="primary-btn" id="homeworkTakePhotoBtn">Take photo of the homework you got</button>
+      <!-- Take photo is THE action; uploading existing files hides behind
+           the caret menu, chosen per use and never sticky. -->
+      <div class="split-btn">
+        <button type="button" class="primary-btn split-btn-main" id="homeworkTakePhotoBtn">Take photo of the homework you got</button>
+        <button type="button" class="primary-btn split-btn-caret" id="homeworkSourceCaretBtn" aria-haspopup="menu" aria-expanded="false" aria-label="More ways to add homework photos">&#9662;</button>
+        <div class="split-btn-menu hidden" id="homeworkSourceMenu">
+          <button type="button" id="homeworkUploadAddBtn">Upload existing photos&hellip;</button>
+        </div>
+      </div>
       <button type="button" class="primary-btn" id="homeworkUploadStartBtn" disabled>Start solving your homework</button>
     </div>
-    <!-- Deliberately understated, like the Skip link — snapping with the
-         camera is the primary path; uploading existing files is the
-         fallback for photos taken earlier on a phone. -->
-    <button type="button" class="link-btn homework-upload-add-link" id="homeworkUploadAddBtn">or upload existing photos</button>
     <input type="file" id="homeworkUploadInput" accept="image/*" multiple class="hidden">
   </div>
 
@@ -2848,6 +2876,28 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   }
 
   teachMaterialUploadBtn.addEventListener('click', () => teachMaterialInput.click());
+
+  // Split-button caret menus (Take photo ▾ → "Upload existing photos…").
+  // Picking the upload item fires its own handler and the menu closes —
+  // nothing sticks, so the visible action is always Take photo again.
+  function wireSplitMenu(caretBtn, menuEl){
+    caretBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = !menuEl.classList.toggle('hidden');
+      caretBtn.setAttribute('aria-expanded', String(open));
+    });
+    menuEl.addEventListener('click', () => {
+      menuEl.classList.add('hidden');
+      caretBtn.setAttribute('aria-expanded', 'false');
+    });
+    document.addEventListener('click', (e) => {
+      if (!menuEl.classList.contains('hidden') && !menuEl.contains(e.target) && e.target !== caretBtn){
+        menuEl.classList.add('hidden');
+        caretBtn.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+  wireSplitMenu(document.getElementById('teachMaterialCaretBtn'), document.getElementById('teachMaterialMenu'));
   teachMaterialInput.addEventListener('change', async () => {
     const files = Array.from(teachMaterialInput.files || []);
     teachMaterialInput.value = '';
@@ -3609,6 +3659,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   }
 
   homeworkUploadAddBtn.addEventListener('click', () => homeworkUploadInput.click());
+  wireSplitMenu(document.getElementById('homeworkSourceCaretBtn'), document.getElementById('homeworkSourceMenu'));
 
   // Enter in the note field "attaches" the note and hands focus to Start
   // homework — the note is read straight from this input when the queue
