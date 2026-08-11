@@ -354,6 +354,8 @@
     width:72px; height:72px; object-fit:cover; flex-shrink:0;
     border:1px solid rgba(24,24,22,0.2); border-radius:8px; cursor:zoom-in;
   }
+  /* Drawn sketches (SVG) must not be edge-cropped like photos are. */
+  .homework-problem-figure.is-sketch{ object-fit:contain; background:#fff; }
   .homework-problem-edit-input{
     flex:1 1 100%; box-sizing:border-box; font-family:'Karla', sans-serif;
     font-size:17px; line-height:1.5; padding:8px 10px; border-radius:8px;
@@ -2030,6 +2032,7 @@
         labels: teachThreadLabels,
         title: teachPanelTitle.textContent,
         problem: currentTeachProblemText,
+        problemSvg: currentTeachProblemSvg,
         figureSvg: lastTeachFigureSvg,
       } : null,
     };
@@ -2063,6 +2066,7 @@
       teachConversation = t.conversation;
       teachThreadLabels = Array.isArray(t.labels) ? t.labels : [];
       currentTeachProblemText = typeof t.problem === 'string' ? t.problem : null;
+      currentTeachProblemSvg = typeof t.problemSvg === 'string' ? t.problemSvg : null;
       teachPanelTitle.textContent = t.title || '';
       teachPanelBody.textContent = teachConversation[1].content || '';
       if (t.figureSvg){
@@ -2802,6 +2806,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // against (without this, checks judged the photo as standalone math and
   // passed correct work for some entirely different problem).
   let currentTeachProblemText = null;
+  // The problem's own figure (a labeled triangle, graph, number line…)
+  // when the reply came with one — shown in the pinned banner beside the
+  // problem text, not in the conversation thread.
+  let currentTeachProblemSvg = null;
 
   function extractTeachProblem(text){
     const idx = String(text).lastIndexOf('Problem:');
@@ -3085,6 +3093,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachThreadLabels = [];
     lastTeachFigureSvg = null;
     currentTeachProblemText = null;
+    currentTeachProblemSvg = null;
     updateTeachReadyButton();
     renderCurrentHomeworkProblem();
     teachFigure.classList.add('hidden');
@@ -3883,6 +3892,18 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       wrap.appendChild(strongEl);
       wrap.appendChild(document.createTextNode(currentTeachProblemText));
       homeworkProblemBanner.appendChild(wrap);
+      // The problem's own sketch (labeled triangle, graph…) sits beside
+      // the text; click opens it full size.
+      if (currentTeachProblemSvg){
+        const fig = document.createElement('img');
+        fig.className = 'homework-problem-figure is-sketch';
+        const figSrc = teachFigureSrc(currentTeachProblemSvg);
+        fig.src = figSrc;
+        fig.alt = "The problem's sketch — click to view it full size";
+        fig.title = 'Click to see the sketch full size';
+        fig.addEventListener('click', () => openAttachmentPreview(figSrc));
+        homeworkProblemBanner.appendChild(fig);
+      }
       homeworkProblemBanner.classList.remove('hidden');
       return;
     }
@@ -5220,7 +5241,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const parts = extractTeachFigure(data.lesson);
       const problem = extractTeachProblem(parts.text);
-      if (problem) currentTeachProblemText = problem;
+      if (problem){
+        currentTeachProblemText = problem;
+        // A figure arriving WITH a problem depicts the problem's setup —
+        // it belongs in the banner beside the problem text. (Previously a
+        // problem-only reply's figure was silently dropped when the empty
+        // thread item got removed.)
+        currentTeachProblemSvg = parts.svg || null;
+      }
       teachConversation.push({ role: 'assistant', content: parts.text });
       teachThreadLabels.push(threadLabel);
       saveActiveLesson();
@@ -5231,7 +5259,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       } else {
         item.remove();
       }
-      if (parts.svg && item.isConnected){
+      if (parts.svg && !problem && item.isConnected){
         const figureEl = document.createElement('img');
         figureEl.className = 'teach-thread-figure';
         figureEl.alt = 'Illustration';
@@ -5252,14 +5280,18 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
   }
 
+  // Shared tail for both problem requests: whenever the problem has any
+  // visual setup, a sketch of the GIVENS comes with it.
+  const TEACH_PROBLEM_FIGURE_ASK = ' If the problem involves a shape, graph, or anything visual — a triangle with given sides or angles, a number line, a function graph — include the figure block showing the problem\'s setup with the GIVEN data labeled on it, and never anything that reveals the answer.';
+
   teachReadyBtn.addEventListener('click', () => requestTeachProblem(
-    'I understand the material — now give me exactly ONE practice problem to solve by hand on paper, labelled "Problem:", matched to what you just taught. Do not include the answer, and add at most one short encouraging sentence besides the problem itself.',
+    'I understand the material — now give me exactly ONE practice problem to solve by hand on paper, labelled "Problem:", matched to what you just taught. Do not include the answer, and add at most one short encouraging sentence besides the problem itself.' + TEACH_PROBLEM_FIGURE_ASK,
     'Practice problem'
   ));
 
   function requestNextTeachProblem(){
     requestTeachProblem(
-      'I solved that problem on paper and Claruno checked it — it was correct. Briefly note anything worth remembering, then give me the NEXT practice problem on the same topic, a touch harder. ONE problem only, labelled "Problem:". Do not include the answer.',
+      'I solved that problem on paper and Claruno checked it — it was correct. Briefly note anything worth remembering, then give me the NEXT practice problem on the same topic, a touch harder. ONE problem only, labelled "Problem:". Do not include the answer.' + TEACH_PROBLEM_FIGURE_ASK,
       'Next problem'
     );
   }
