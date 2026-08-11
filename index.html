@@ -1287,21 +1287,22 @@
         </svg>
       </button>
     </div>
-    <!-- The understanding checkpoint: the lesson arrives WITHOUT a
-         problem, questions get settled first, and this button requests
-         the first practice problem — which then lives in the pinned
-         banner above the camera, never buried by later Q&A. -->
-    <button type="button" class="verdict-next-btn hidden" id="teachReadyBtn">I'm ready &mdash; give me a practice problem</button>
     <div class="teach-thread" id="teachThread"></div>
     <form class="qa-form hidden" id="teachAskForm">
       <input type="text" id="teachAskInput" class="qa-input" placeholder="Ask about this explanation…" autocomplete="off">
       <button type="submit" class="qa-send" id="teachAskSend">Ask</button>
     </form>
+    <!-- Both closing actions live BELOW the growing conversation thread —
+         anything placed above it gets stranded mid-conversation as
+         follow-up explanations append (bit both these buttons once).
+         The understanding checkpoint: the lesson arrives WITHOUT a
+         problem, questions get settled first, and this button requests
+         the first practice problem — which then lives in the pinned
+         banner above the camera, never buried by later Q&A. -->
+    <button type="button" class="verdict-next-btn hidden" id="teachReadyBtn">I'm ready &mdash; give me a practice problem</button>
     <!-- Teach/test-prep are open-ended (more practice problems keep coming
          on every correct check), so this is the student's "I'm done with
-         this segment" control. Last in the panel — the conversation thread
-         above keeps growing, and an earlier placement (right after the
-         first lesson's action icons) left it stranded mid-conversation. -->
+         this segment" control. -->
     <button type="button" class="verdict-next-btn hidden" id="teachContinueLessonBtn">Continue lesson &#8594;</button>
   </div>
 
