@@ -2666,6 +2666,21 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const teachFigure = document.getElementById('teachFigure');
   const teachFigureImg = document.getElementById('teachFigureImg');
   let teachConversation = [];
+  // The practice problem Claruno most recently handed the student in
+  // teach/test-prep mode — every teach reply that assigns one labels it
+  // "Problem:", so the latest such block is what Check/Hint must grade
+  // against (without this, checks judged the photo as standalone math and
+  // passed correct work for some entirely different problem).
+  let currentTeachProblemText = null;
+
+  function extractTeachProblem(text){
+    const idx = String(text).lastIndexOf('Problem:');
+    if (idx === -1) return null;
+    const after = String(text).slice(idx + 'Problem:'.length);
+    const cut = after.search(/\n\s*\n/);
+    const problem = (cut === -1 ? after : after.slice(0, cut)).trim();
+    return problem || null;
+  }
 
   // Teach replies may end with one model-drawn SVG illustration between
   // <<<FIGURE>>> markers (see TEACH_SYSTEM). Split it out: the text renders
@@ -2889,6 +2904,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachAskForm.classList.add('hidden');
     teachThread.innerHTML = '';
     teachConversation = [];
+    currentTeachProblemText = null;
     teachFigure.classList.add('hidden');
     teachFigureImg.removeAttribute('src');
     teachPanelTitle.textContent = (testPrep ? 'Test prep: ' : 'Claruno teaches: ') + subject;
@@ -2939,6 +2955,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       // shouldn't silently inherit these pages.
       if (materialsDigest) resetTeachMaterials();
       const lessonParts = extractTeachFigure(data.lesson);
+      currentTeachProblemText = extractTeachProblem(lessonParts.text);
       writeOut(teachPanelBody, lessonParts.text);
       if (lessonParts.svg){
         teachFigureImg.src = teachFigureSrc(lessonParts.svg);
@@ -2990,6 +3007,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       const answerParts = extractTeachFigure(data.lesson);
+      // Next-problem replies assign a fresh "Problem:" — track it so the
+      // next Check grades against it. Explain-differently/Q&A replies
+      // without one leave the current problem in place.
+      const newProblem = extractTeachProblem(answerParts.text);
+      if (newProblem) currentTeachProblemText = newProblem;
       teachConversation.push({ role: 'assistant', content: answerParts.text });
       a.className = 'teach-script';
       writeOut(a, answerParts.text);
@@ -3196,7 +3218,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
           base64: griddedBase64,
           mediaType: 'image/jpeg',
           ...((problemImageData || currentHomeworkFigurePhoto()) ? { problemBase64: (problemImageData || currentHomeworkFigurePhoto()).base64, problemMediaType: 'image/jpeg' } : {}),
-          ...(currentHomeworkProblemText() ? { problemText: currentHomeworkProblemText() } : {}),
+          ...(currentAssignedProblemText() ? { problemText: currentAssignedProblemText() } : {}),
           accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
         }),
         signal: controller.signal
@@ -3283,7 +3305,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // anything — Hint should still work then, based on just the problem
     // text, rather than silently doing nothing until a photo exists.
     const noPhotoYet = !imageData;
-    const queuedProblemText = currentHomeworkProblemText();
+    const queuedProblemText = currentAssignedProblemText();
     if (noPhotoYet && !queuedProblemText) return;
     hideError(); hideResults();
     hintBtn.disabled = true;
@@ -3643,6 +3665,18 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return (homeworkQueue.length && homeworkQueueIndex < homeworkQueue.length)
       ? homeworkQueue[homeworkQueueIndex].problemText
       : null;
+  }
+
+  // Whatever problem the student is CURRENTLY assigned, whichever engine
+  // assigned it — the homework queue's transcribed problem, or the latest
+  // teach/test-prep practice problem. This is what Check and Hint grade
+  // against; history's problem_text stays homework-only (see saveEntry
+  // call sites) so practice problems never leak into the homework PDF.
+  function currentAssignedProblemText(){
+    const homeworkText = currentHomeworkProblemText();
+    if (homeworkText) return homeworkText;
+    if ((workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep') && currentTeachProblemText) return currentTeachProblemText;
+    return null;
   }
 
   // The current queued problem's source-page photo, when it has a figure
