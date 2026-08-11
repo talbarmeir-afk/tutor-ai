@@ -4934,7 +4934,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       hideResults(); hideError();
       return;
     }
-    if (homeworkQueue.length){
+    if (workSourceSelect.value === 'homework' && homeworkQueue.length && homeworkQueueIndex < homeworkQueue.length){
       homeworkQueue[homeworkQueueIndex].done = true;
       advanceHomeworkQueue();
     } else {
@@ -4956,7 +4956,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       if (window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData || null, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
     }
     problemImageData = null;
-    if (homeworkQueue.length){
+    // Teach/test-prep: a skip means the problem was too hard — swap it
+    // for a same-level-or-easier one through the teach conversation.
+    // (Also why the homework branch below checks the segment: teach mode
+    // can carry a leftover finished homework queue, and indexing past
+    // its end used to throw and make Skip do nothing.)
+    if ((workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep') && currentTeachProblemText){
+      skipProblemBtn.disabled = true;
+      requestEasierTeachProblem().finally(() => { skipProblemBtn.disabled = false; });
+      lessonShowLive();
+      hideResults(); hideError();
+      return;
+    }
+    if (workSourceSelect.value === 'homework' && homeworkQueue.length && homeworkQueueIndex < homeworkQueue.length){
       homeworkQueue[homeworkQueueIndex].skipped = true;
       advanceHomeworkQueue();
     } else {
@@ -5429,9 +5441,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   ));
 
   function requestNextTeachProblem(){
-    requestTeachProblem(
+    return requestTeachProblem(
       'I solved that problem on paper and Claruno checked it — it was correct. Briefly note anything worth remembering, then give me the NEXT practice problem on the same topic, a touch harder. ONE problem only, labelled "Problem:". Do not include the answer.' + TEACH_PROBLEM_FIGURE_ASK,
       'Next problem'
+    );
+  }
+
+  // Skipping a practice problem is a struggle signal, not a success —
+  // the replacement steps sideways or DOWN in difficulty, like a
+  // teacher would, never up.
+  function requestEasierTeachProblem(){
+    return requestTeachProblem(
+      "I couldn't solve that problem — let's skip it. Give me a DIFFERENT practice problem on the same topic at the same level or slightly easier (never harder), so I can build up to it. If there's a common stumbling block in problems like the one I skipped, mention it in one short sentence first. ONE problem only, labelled \"Problem:\". Do not include the answer." + TEACH_PROBLEM_FIGURE_ASK,
+      'Easier problem'
     );
   }
 
