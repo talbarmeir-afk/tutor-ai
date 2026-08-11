@@ -458,3 +458,9 @@ Both serve the site at a local URL with `/api/*` wired up to the functions.
 See the deployment walkthrough your assistant gave you, or in short:
 push this repo to GitHub, import it in Vercel or Netlify, and set
 `ANTHROPIC_API_KEY` as an environment variable in the project's dashboard.
+
+Optional: `ELEVENLABS_API_KEY` enables natural-sounding voice narration
+(the stuck-student nudge) via ElevenLabs text-to-speech through
+`/api/speak`; without it the app falls back to the browser's built-in
+voice automatically. `ELEVENLABS_VOICE_ID` overrides the default voice
+("Rachel").
