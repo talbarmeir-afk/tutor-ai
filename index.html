@@ -3712,7 +3712,19 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       thumb.appendChild(removeBtn);
       homeworkUploadThumbs.appendChild(thumb);
     });
-    homeworkUploadStartBtn.disabled = !homeworkUploadPhotos.length;
+    const havePhotos = homeworkUploadPhotos.length > 0;
+    homeworkUploadStartBtn.disabled = !havePhotos;
+    // Visual emphasis follows the flow: before any photo, Take photo is
+    // THE action (solid red); once photos exist, Start-solving takes over
+    // as the single prominent button and Take photo (plus its caret)
+    // drops to the outlined secondary style — still fully clickable for
+    // adding more pages.
+    const caretBtn = document.getElementById('homeworkSourceCaretBtn');
+    [homeworkTakePhotoBtn, caretBtn].forEach((btn) => {
+      if (!btn) return;
+      btn.classList.toggle('primary-btn', !havePhotos);
+      btn.classList.toggle('ghost-btn', havePhotos);
+    });
   }
 
   homeworkUploadAddBtn.addEventListener('click', () => homeworkUploadInput.click());
