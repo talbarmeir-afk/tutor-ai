@@ -2678,7 +2678,23 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!m) return { text: String(raw).trim(), svg: null };
     const svg = m[1].trim();
     const text = (raw.slice(0, m.index) + raw.slice(m.index + m[0].length)).trim();
-    return { text, svg: svg.startsWith('<svg') ? svg : null };
+    return { text, svg: svg.startsWith('<svg') ? normalizeTeachSvg(svg) : null };
+  }
+
+  // An <img> only renders SVG that's valid standalone XML — which
+  // model-written SVG often isn't: inline-HTML habits omit the xmlns
+  // (mandatory in an <img>, the exact cause of a broken-image icon where
+  // the figure should be) and leave bare & characters that kill the XML
+  // parse. Repair both, then verify it actually parses — a hidden figure
+  // beats a broken icon.
+  function normalizeTeachSvg(svg){
+    let s = svg.replace(/&(?![a-zA-Z]+;|#\d+;|#x[0-9a-fA-F]+;)/g, '&amp;');
+    if (!/<svg[^>]*\sxmlns=/.test(s)) s = s.replace(/<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    try{
+      const doc = new DOMParser().parseFromString(s, 'image/svg+xml');
+      if (doc.querySelector('parsererror')) return null;
+    } catch(err){ return null; }
+    return s;
   }
   function teachFigureSrc(svg){
     return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
