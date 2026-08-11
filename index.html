@@ -1450,6 +1450,13 @@
     <input type="file" id="lessonFileInput" accept="image/*" class="hidden">
   </div>
 
+  <!-- The student controls moving between lesson segments in EVERY mode —
+       teach/test-prep have their Continue button in the teach panel; this
+       is homework's, shown during a running lesson whether the queue is
+       mid-way (leftover problems just stay unsolved) or the upload step
+       is still showing (skip the segment entirely). -->
+  <button type="button" class="verdict-next-btn hidden" id="homeworkContinueLessonBtn">Continue lesson &#8594;</button>
+
   <div id="uploadMode">
     <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
       <div class="dropzone-sample-clip">
@@ -3063,6 +3070,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     updateLessonCamVisibility();
     updateAttachmentsUI();
+    updateHomeworkContinueButton();
     // The homework banner is mode-aware (renderCurrentHomeworkProblem) —
     // refresh it on every mode switch so it can't linger over teach or
     // reappear stale when homework comes back around.
@@ -3626,7 +3634,20 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const homeworkUploadInput = document.getElementById('homeworkUploadInput');
   const homeworkUploadNote = document.getElementById('homeworkUploadNote');
   const homeworkProblemBanner = document.getElementById('homeworkProblemBanner');
+  const homeworkContinueLessonBtn = document.getElementById('homeworkContinueLessonBtn');
   const homeworkTakePhotoBtn = document.getElementById('homeworkTakePhotoBtn');
+
+  // Homework's segment-exit control, mirroring the teach panel's Continue
+  // button: visible throughout a running lesson's homework segment (both
+  // the upload step and mid-queue solving — leftover problems just stay
+  // unsolved), advancing to the next selected mode or back to the picker.
+  function updateHomeworkContinueButton(){
+    homeworkContinueLessonBtn.classList.toggle('hidden', !(lessonRunning && lessonModeOn && workSourceSelect.value === 'homework'));
+  }
+  homeworkContinueLessonBtn.addEventListener('click', () => {
+    if (lessonModeIndex < lessonModeQueue.length - 1) advanceLessonMode();
+    else showMidLessonPicker();
+  });
   const homeworkCaptureActions = document.getElementById('homeworkCaptureActions');
   const homeworkCaptureCancelBtn = document.getElementById('homeworkCaptureCancelBtn');
   const homeworkCaptureSnapBtn = document.getElementById('homeworkCaptureSnapBtn');
@@ -5108,6 +5129,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // this, while lessonModeOn is still false, so the title set there was
     // the pre-lesson default.
     updateCheckCardTitle();
+    updateHomeworkContinueButton();
     updateLessonCamVisibility();
     uploadModeEl.classList.add('hidden');
     watchModeEl.classList.add('hidden');
@@ -5129,6 +5151,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonModeOn = false;
     document.body.classList.remove('lesson-cam-on');
     updateCheckCardTitle();
+    updateHomeworkContinueButton();
     stopStuckWatch();
     stopLessonCam();
     lessonModeEl.classList.add('hidden');
