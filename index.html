@@ -1907,6 +1907,7 @@
     workSourceSelect.value = lessonModeQueue[lessonModeIndex];
     workSourceSelect.dispatchEvent(new Event('change'));
     renderLessonModeProgress();
+    saveActiveLesson();
   }
 
   // The picker card doubles as the mid-lesson "what next?" screen (see
@@ -1950,6 +1951,7 @@
     workSourceSelect.value = lessonModeQueue[0];
     workSourceSelect.dispatchEvent(new Event('change'));
     renderLessonModeProgress();
+    saveActiveLesson();
   }
 
   function continueLessonMidway(){
@@ -1973,9 +1975,88 @@
     return null;
   }
 
+  // Persists the whole mid-lesson position, not just the id/clock — a
+  // refresh must land the student exactly where they were (same mode,
+  // same queued problem, same teach conversation), not dump them back at
+  // homework's defaults. Deliberately text-only: figure page photos and
+  // the homework-PDF archive are image-heavy and stay session-only.
+  function buildLessonState(){
+    return {
+      mode: workSourceSelect.value,
+      modeQueue: lessonModeQueue,
+      modeIndex: lessonModeIndex,
+      homework: {
+        index: homeworkQueueIndex,
+        queue: homeworkQueue.map((e) => ({ text: e.problemText, done: !!e.done, skipped: !!e.skipped })),
+      },
+      teach: teachConversation.length >= 2 ? {
+        conversation: teachConversation,
+        labels: teachThreadLabels,
+        title: teachPanelTitle.textContent,
+        problem: currentTeachProblemText,
+        figureSvg: lastTeachFigureSvg,
+      } : null,
+    };
+  }
+
   function saveActiveLesson(){
-    if (!lessonUserId) return;
-    localStorage.setItem(activeLessonKey(lessonUserId), JSON.stringify({ id: currentLessonId, startedAt: lessonStartedAt }));
+    if (!lessonUserId || !lessonRunning) return;
+    try{
+      localStorage.setItem(activeLessonKey(lessonUserId), JSON.stringify({ id: currentLessonId, startedAt: lessonStartedAt, state: buildLessonState() }));
+    } catch(err){
+      // Quota or serialization trouble — at minimum keep the lesson
+      // resumable at all, even if position within it is lost.
+      try{ localStorage.setItem(activeLessonKey(lessonUserId), JSON.stringify({ id: currentLessonId, startedAt: lessonStartedAt })); } catch(e2){ /* give up quietly */ }
+    }
+  }
+
+  function restoreLessonState(state){
+    if (!state) return;
+    if (Array.isArray(state.modeQueue) && state.modeQueue.length){
+      lessonModeQueue = state.modeQueue.filter((m) => LESSON_MODE_ORDER.includes(m));
+      lessonModeIndex = Math.min(Math.max(0, Number(state.modeIndex) || 0), Math.max(0, lessonModeQueue.length - 1));
+    }
+    if (state.homework && Array.isArray(state.homework.queue) && state.homework.queue.length){
+      homeworkQueue = state.homework.queue
+        .filter((e) => e && typeof e.text === 'string' && e.text)
+        .map((e) => ({ id: crypto.randomUUID(), problemText: e.text, done: !!e.done, skipped: !!e.skipped, sourcePhoto: null }));
+      homeworkQueueIndex = Math.min(Math.max(0, Number(state.homework.index) || 0), homeworkQueue.length);
+    }
+    const t = state.teach;
+    if (t && Array.isArray(t.conversation) && t.conversation.length >= 2){
+      teachConversation = t.conversation;
+      teachThreadLabels = Array.isArray(t.labels) ? t.labels : [];
+      currentTeachProblemText = typeof t.problem === 'string' ? t.problem : null;
+      teachPanelTitle.textContent = t.title || '';
+      teachPanelBody.textContent = teachConversation[1].content || '';
+      if (t.figureSvg){
+        const svg = normalizeTeachSvg(t.figureSvg);
+        if (svg){
+          teachFigureImg.src = teachFigureSrc(svg);
+          teachFigure.classList.remove('hidden');
+        }
+      }
+      // Rebuild the follow-up thread from the stored conversation pairs.
+      for (let i = 2; i + 1 < teachConversation.length; i += 2){
+        const item = document.createElement('div');
+        const q = document.createElement('p');
+        q.className = 'q';
+        q.textContent = teachThreadLabels[(i - 2) / 2] || 'Question';
+        const a = document.createElement('p');
+        a.className = 'teach-script';
+        a.textContent = teachConversation[i + 1].content || '';
+        item.appendChild(q);
+        item.appendChild(a);
+        teachThread.appendChild(item);
+      }
+      teachPanel.classList.remove('hidden');
+      teachActions.classList.remove('hidden');
+      updateTeachContinueButton();
+    }
+    const mode = ['homework', 'teach', 'test_prep'].includes(state.mode) ? state.mode : 'homework';
+    workSourceSelect.value = mode;
+    workSourceSelect.dispatchEvent(new Event('change'));
+    renderLessonModeProgress();
   }
 
   function clearActiveLesson(){
@@ -2201,6 +2282,9 @@
         renderLessonTimer();
         showCheckUI();
         lessonTimerEl.classList.remove('hidden');
+        // Before enterLessonMode: its lessonShowLive/updateLessonCamVisibility
+        // read the restored mode and queues to draw the right segment.
+        restoreLessonState(stored.state);
         enterLessonMode();
         if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
       }
@@ -2666,6 +2750,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const teachFigure = document.getElementById('teachFigure');
   const teachFigureImg = document.getElementById('teachFigureImg');
   let teachConversation = [];
+  // The thread's display labels ("Next problem", "Explain it differently",
+  // or the student's typed question), parallel to conversation pairs —
+  // stored so a refreshed page can rebuild the thread readably (the
+  // stored user content for e.g. a next-problem request is a long canned
+  // prompt, useless as a label).
+  let teachThreadLabels = [];
+  // The seed lesson's illustration SVG, kept for refresh-restore.
+  let lastTeachFigureSvg = null;
   // The practice problem Claruno most recently handed the student in
   // teach/test-prep mode — every teach reply that assigns one labels it
   // "Problem:", so the latest such block is what Check/Hint must grade
@@ -2904,6 +2996,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachAskForm.classList.add('hidden');
     teachThread.innerHTML = '';
     teachConversation = [];
+    teachThreadLabels = [];
+    lastTeachFigureSvg = null;
     currentTeachProblemText = null;
     teachFigure.classList.add('hidden');
     teachFigureImg.removeAttribute('src');
@@ -2956,11 +3050,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       if (materialsDigest) resetTeachMaterials();
       const lessonParts = extractTeachFigure(data.lesson);
       currentTeachProblemText = extractTeachProblem(lessonParts.text);
+      lastTeachFigureSvg = lessonParts.svg;
       writeOut(teachPanelBody, lessonParts.text);
       if (lessonParts.svg){
         teachFigureImg.src = teachFigureSrc(lessonParts.svg);
         teachFigure.classList.remove('hidden');
       }
+      saveActiveLesson();
       teachActions.classList.remove('hidden');
       updateTeachContinueButton();
       // The practice problem has now been handed over — in a running lesson
@@ -3013,6 +3109,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const newProblem = extractTeachProblem(answerParts.text);
       if (newProblem) currentTeachProblemText = newProblem;
       teachConversation.push({ role: 'assistant', content: answerParts.text });
+      teachThreadLabels.push(label);
+      saveActiveLesson();
       a.className = 'teach-script';
       writeOut(a, answerParts.text);
       if (answerParts.svg){
@@ -3579,6 +3677,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       homeworkUploadPhotos = [];
       renderHomeworkUploadThumbs();
       homeworkUploadStatus.classList.add('hidden');
+      saveActiveLesson();
       updateLessonCamVisibility();
       lessonShowLive();
     } catch(err){
@@ -3654,6 +3753,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const fixed = input.value.trim();
       if (fixed) entry.problemText = fixed;
       renderCurrentHomeworkProblem();
+      saveActiveLesson();
     });
     const cancelBtn = document.createElement('button');
     cancelBtn.type = 'button';
@@ -3727,6 +3827,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // over the next segment's UI.
     renderCurrentHomeworkProblem();
     updateHomeworkDownloadUI();
+    saveActiveLesson();
   }
 
   // ---- "Download my homework" PDF export ----
