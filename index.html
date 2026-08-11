@@ -791,6 +791,18 @@
   }
   .verdict-next-btn:hover{ background:#26893f; }
   .verdict-next-btn:focus-visible{ outline:2px solid #2FA04C; outline-offset:2px; }
+  /* The "leave this segment" control, in every module — deliberately a
+     quiet text link next to the big green action buttons: moving on is
+     always available but never the visually suggested next step. */
+  .lesson-plan-link{
+    display:block; margin:10px auto 0; padding:2px 4px;
+    font-family:'Karla', sans-serif; font-weight:600; font-size:12px;
+    background:none; border:none; color:rgba(24,24,22,0.5);
+    text-decoration:underline; text-underline-offset:2px; cursor:pointer;
+    transition:color .15s ease;
+  }
+  .lesson-plan-link:hover{ color:#181816; }
+  .lesson-plan-link:focus-visible{ outline:2px solid rgba(24,24,22,0.4); outline-offset:2px; border-radius:4px; }
 
   .reset-row{ margin-top:22px; text-align:right; }
   button.ghost-btn{
@@ -1302,8 +1314,9 @@
     <button type="button" class="verdict-next-btn hidden" id="teachReadyBtn">I'm ready &mdash; give me a practice problem</button>
     <!-- Teach/test-prep are open-ended (more practice problems keep coming
          on every correct check), so this is the student's "I'm done with
-         this segment" control. -->
-    <button type="button" class="verdict-next-btn hidden" id="teachContinueLessonBtn">Continue lesson &#8594;</button>
+         this segment" control — a quiet link, so the big green "I'm
+         ready" button stays the one obvious action. -->
+    <button type="button" class="lesson-plan-link hidden" id="teachContinueLessonBtn">Done with this part &mdash; back to the lesson plan</button>
   </div>
 
   <!-- Shown when the sequencer reaches "homework" and no queue has been
@@ -1455,7 +1468,7 @@
        is homework's, shown during a running lesson whether the queue is
        mid-way (leftover problems just stay unsolved) or the upload step
        is still showing (skip the segment entirely). -->
-  <button type="button" class="verdict-next-btn hidden" id="homeworkContinueLessonBtn">Continue lesson &#8594;</button>
+  <button type="button" class="lesson-plan-link hidden" id="homeworkContinueLessonBtn">Done with this part &mdash; back to the lesson plan</button>
 
   <div id="uploadMode">
     <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
