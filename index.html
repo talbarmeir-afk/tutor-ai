@@ -3037,6 +3037,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // refresh it on every mode switch so it can't linger over teach or
     // reappear stale when homework comes back around.
     renderCurrentHomeworkProblem();
+    // Fresh camera box per segment: the previous segment's frozen photo,
+    // verdict/hint bubble, and its Q&A must not sit under the next
+    // segment's UI (the mid-queue advance resets via lessonShowLive, but
+    // segment handoffs used to skip it).
+    if (lessonModeOn){
+      problemImageData = null;
+      lessonShowLive();
+      hideResults(); hideError();
+    }
   });
 
   async function requestLesson(){
