@@ -1949,6 +1949,10 @@
   // forced end.
   function advanceLessonMode(){
     if (lessonModeIndex >= lessonModeQueue.length - 1) return;
+    // Leaving a teach/test-prep segment with an unchecked practice
+    // problem still current — give it its history row before the mode
+    // (which the row's tagging reads) switches away.
+    logUnattemptedTeachProblem();
     lessonModeIndex++;
     workSourceSelect.value = lessonModeQueue[lessonModeIndex];
     workSourceSelect.dispatchEvent(new Event('change'));
@@ -1976,6 +1980,7 @@
   // choose what to do with the remaining time.
   function showMidLessonPicker(){
     if (!lessonRunning) return;
+    logUnattemptedTeachProblem();
     setLessonPromptCopy(true);
     checkCard.classList.add('hidden');
     lessonModeProgress.classList.add('hidden');
@@ -2029,6 +2034,10 @@
   function buildLessonState(){
     return {
       mode: workSourceSelect.value,
+      // History-group identity of the current assigned problem — without
+      // it, checks after a refresh would land in a fresh group and the
+      // same problem would count twice in Past Lessons.
+      problemId: currentProblemId,
       modeQueue: lessonModeQueue,
       modeIndex: lessonModeIndex,
       homework: {
@@ -2041,6 +2050,7 @@
         title: teachPanelTitle.textContent,
         problem: currentTeachProblemText,
         problemSvg: currentTeachProblemSvg,
+        problemLogged: currentTeachProblemLogged,
         figureSvg: lastTeachFigureSvg,
       } : null,
     };
@@ -2059,6 +2069,7 @@
 
   function restoreLessonState(state){
     if (!state) return;
+    if (typeof state.problemId === 'string' && state.problemId) currentProblemId = state.problemId;
     if (Array.isArray(state.modeQueue) && state.modeQueue.length){
       lessonModeQueue = state.modeQueue.filter((m) => LESSON_MODE_ORDER.includes(m));
       lessonModeIndex = Math.min(Math.max(0, Number(state.modeIndex) || 0), Math.max(0, lessonModeQueue.length - 1));
@@ -2075,6 +2086,11 @@
       teachThreadLabels = Array.isArray(t.labels) ? t.labels : [];
       currentTeachProblemText = typeof t.problem === 'string' ? t.problem : null;
       currentTeachProblemSvg = typeof t.problemSvg === 'string' ? t.problemSvg : null;
+      // States saved before the flag existed default to "already logged"
+      // — their problemId wasn't persisted either, so a surprise
+      // "not checked" row would land in a group of its own and double-
+      // count a problem that may well have been checked.
+      currentTeachProblemLogged = t.problemLogged === undefined ? true : !!t.problemLogged;
       teachPanelTitle.textContent = t.title || '';
       teachPanelBody.textContent = teachConversation[1].content || '';
       if (t.figureSvg){
@@ -2184,6 +2200,9 @@
   // `lessons` table, so history shows how long a lesson actually ran, not
   // just whether it hit the full 45 minutes.
   function finalizeActiveLesson(){
+    // Whatever practice problem was current when the lesson ended gets
+    // its row too — checked or not, it was part of the lesson.
+    logUnattemptedTeachProblem();
     const durationSeconds = Math.round((Date.now() - lessonStartedAt) / 1000);
     const endedLessonId = currentLessonId;
     lessonRunning = false;
@@ -2818,6 +2837,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // when the reply came with one — shown in the pinned banner beside the
   // problem text, not in the conversation thread.
   let currentTeachProblemSvg = null;
+  // Whether the CURRENT practice problem has produced at least one
+  // history row. A problem the student moves past without ever checking
+  // gets a photo-less "not checked" row when it's replaced or the
+  // segment/lesson ends — otherwise Past Lessons under-counts what the
+  // lesson actually covered.
+  let currentTeachProblemLogged = false;
 
   function extractTeachProblem(text){
     const idx = String(text).lastIndexOf('Problem:');
@@ -3101,8 +3126,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachConversation = [];
     teachThreadLabels = [];
     lastTeachFigureSvg = null;
+    logUnattemptedTeachProblem(); // belt and braces — normally already logged by the segment-switch hooks
     currentTeachProblemText = null;
     currentTeachProblemSvg = null;
+    currentTeachProblemLogged = false;
     updateTeachReadyButton();
     renderCurrentHomeworkProblem();
     teachFigure.classList.add('hidden');
@@ -3464,7 +3491,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       // or otherwise. (Teach's next problem is no longer auto-requested
       // here — the student asks for it via the Next problem button.)
       if (!parsed.unreadable){
-        if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, 'upload', currentProblemId, currentLessonId, problemImageData || currentHomeworkFigurePhoto(), currentHomeworkProblemText());
+        if (currentTeachProblemText && historyEntryMode() !== 'upload') currentTeachProblemLogged = true;
+        if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
       }
     } catch(err){
       // Keep the friendly copy but surface the underlying error too —
@@ -3881,6 +3909,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         };
       }).filter((e) => e.problemText);
       homeworkQueueIndex = 0;
+      // First assignment of the queue gets its own history group id (the
+      // per-photo rotation is off while a problem is assigned).
+      currentProblemId = crypto.randomUUID();
       homeworkUploadPhotos = [];
       renderHomeworkUploadThumbs();
       homeworkUploadStatus.classList.add('hidden');
@@ -4006,6 +4037,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   }
 
   function currentHomeworkProblemText(){
+    // Gated on the homework segment being ACTIVE: leaving homework early
+    // (Continue lesson with queue problems left) must not leak the
+    // leftover queue problem into teach/test-prep grading or history.
+    if (workSourceSelect.value !== 'homework') return null;
     return (homeworkQueue.length && homeworkQueueIndex < homeworkQueue.length)
       ? homeworkQueue[homeworkQueueIndex].problemText
       : null;
@@ -4014,8 +4049,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // Whatever problem the student is CURRENTLY assigned, whichever engine
   // assigned it — the homework queue's transcribed problem, or the latest
   // teach/test-prep practice problem. This is what Check and Hint grade
-  // against; history's problem_text stays homework-only (see saveEntry
-  // call sites) so practice problems never leak into the homework PDF.
+  // against, and what history rows store as problem_text; the homework
+  // PDF export tells practice problems apart from queue problems by the
+  // row's mode tag (historyEntryMode), not by problem_text presence.
   function currentAssignedProblemText(){
     const homeworkText = currentHomeworkProblemText();
     if (homeworkText) return homeworkText;
@@ -4023,11 +4059,48 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return null;
   }
 
+  // How a history row is tagged: homework-queue and free-form checks keep
+  // the legacy 'upload'; checks of a teach/test-prep practice problem are
+  // tagged with their segment, so Past Lessons can exclude practice
+  // problems from the homework PDF export.
+  function historyEntryMode(){
+    const seg = workSourceSelect.value;
+    return ((seg === 'teach' || seg === 'test_prep') && currentTeachProblemText) ? seg : 'upload';
+  }
+
+  // The assigned problem's image for a history row: the queued problem's
+  // source-page photo when it has a figure, else the practice problem's
+  // sketch. The sketch SVG gets explicit pixel dimensions injected —
+  // with only a viewBox it has no intrinsic size inside an <img> in some
+  // browsers, which would make the canvas thumbnail come out blank.
+  function currentProblemHistoryFrame(){
+    const photo = problemImageData || currentHomeworkFigurePhoto();
+    if (photo) return photo;
+    if (historyEntryMode() !== 'upload' && currentTeachProblemSvg){
+      let svg = currentTeachProblemSvg;
+      if (!/<svg[^>]*\swidth=/.test(svg)) svg = svg.replace('<svg', '<svg width="400" height="300"');
+      return { dataUrl: teachFigureSrc(svg) };
+    }
+    return null;
+  }
+
+  // The photo-less row for a practice problem that never got a check —
+  // called wherever the problem stops being current (replaced by the
+  // next one, segment advance, mid-lesson picker, lesson end). No-op
+  // when there's no problem or it already has a row.
+  function logUnattemptedTeachProblem(){
+    if (!currentTeachProblemText || currentTeachProblemLogged) return;
+    if (historyEntryMode() === 'upload') return;
+    currentTeachProblemLogged = true;
+    if (window.mathTutorHistory) window.mathTutorHistory.saveSkipped(null, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
+  }
+
   // The current queued problem's source-page photo, when it has a figure
   // — attached to checks/hints in place of a manual problem photo (the
   // manual slot is hidden in queue mode anyway), so grading actually sees
   // the sketch the problem refers to.
   function currentHomeworkFigurePhoto(){
+    if (workSourceSelect.value !== 'homework') return null; // same gate as currentHomeworkProblemText
     return (homeworkQueue.length && homeworkQueueIndex < homeworkQueue.length)
       ? (homeworkQueue[homeworkQueueIndex].sourcePhoto || null)
       : null;
@@ -4052,6 +4125,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       });
     }
     homeworkQueueIndex++;
+    // New assignment → new history group (lessonFreezeFrame no longer
+    // rotates the id per photo while a problem is assigned).
+    currentProblemId = crypto.randomUUID();
     hideResults(); hideError();
     if (homeworkQueueIndex < homeworkQueue.length){
       lessonShowLive();
@@ -4847,11 +4923,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // Same reset as Next problem, but reachable any time Hint/Check are —
   // stuck, uninterested, or just wants to move on, no correct check
   // required first. Deliberately low-key styling so it never reads as an
-  // equally-weighted third option next to Hint/Check. Only logged to
-  // history if a solution photo actually exists yet — skipping straight
-  // from the live camera, before ever taking one, has nothing to show.
+  // equally-weighted third option next to Hint/Check. Always logged to
+  // history when there's anything to log — with the solution photo when
+  // one exists, else as a photo-less row carrying just the assigned
+  // problem, so skipped problems still count in Past Lessons.
   skipProblemBtn.addEventListener('click', () => {
-    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData || currentHomeworkFigurePhoto(), currentHomeworkProblemText());
+    if (imageData || currentAssignedProblemText()){
+      if (currentTeachProblemText && historyEntryMode() !== 'upload') currentTeachProblemLogged = true;
+      if (window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData || null, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
+    }
     problemImageData = null;
     if (homeworkQueue.length){
       homeworkQueue[homeworkQueueIndex].skipped = true;
@@ -5056,7 +5136,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   function lessonFreezeFrame(frame){
     imageData = frame;
-    currentProblemId = crypto.randomUUID();
+    // Problem identity follows the ASSIGNMENT, not the photo: while a
+    // queued homework problem or a teach practice problem is active,
+    // every photo/check of it belongs to the same history group, so the
+    // id only rotates when the assignment does (queue advance, new
+    // practice problem). Free-form checking with no assigned problem
+    // keeps the old one-photo-one-problem behavior.
+    if (!currentAssignedProblemText()) currentProblemId = crypto.randomUUID();
     resultImg.onload = null;
     resultImg.src = frame.dataUrl;
     annGroup.innerHTML = '';
@@ -5266,6 +5352,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const parts = extractTeachFigure(data.lesson);
       const problem = extractTeachProblem(parts.text);
       if (problem){
+        // The outgoing practice problem (if any) stops being current here
+        // — record it if it never got a check, then start a fresh history
+        // group for the new assignment.
+        logUnattemptedTeachProblem();
+        currentProblemId = crypto.randomUUID();
+        currentTeachProblemLogged = false;
         currentTeachProblemText = problem;
         // A figure arriving WITH a problem depicts the problem's setup —
         // it belongs in the banner beside the problem text. (Previously a
@@ -5381,7 +5473,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonNextProblemBtn.classList.remove('hidden');
     lessonCamActions.classList.add('hidden');
     skipProblemBtn.classList.add('hidden');
-    if (imageData && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData, 'upload', currentProblemId, currentLessonId, problemImageData || currentHomeworkFigurePhoto(), currentHomeworkProblemText());
+    if ((imageData || currentAssignedProblemText()) && window.mathTutorHistory) window.mathTutorHistory.saveSkipped(imageData || null, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
   }
 
   async function submitQuestion(question){
@@ -6130,11 +6222,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const thumbs = document.createElement('div');
     thumbs.className = 'history-thumbs';
 
-    const img = document.createElement('img');
-    img.src = entry.thumbnail || '';
-    img.alt = 'Click to view full size';
-    img.addEventListener('click', () => openLightbox(entry.thumbnail));
-    thumbs.appendChild(img);
+    // Photo-less rows exist (a problem presented/skipped before any photo
+    // was taken) — they show only the problem thumbnail, if any.
+    if (entry.thumbnail){
+      const img = document.createElement('img');
+      img.src = entry.thumbnail;
+      img.alt = 'Click to view full size';
+      img.addEventListener('click', () => openLightbox(entry.thumbnail));
+      thumbs.appendChild(img);
+    }
 
     if (entry.problem_thumbnail){
       const problemImg = document.createElement('img');
@@ -6159,7 +6255,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
     const verdictEl = document.createElement('div');
     verdictEl.className = 'history-verdict ' + (entry.skipped ? 'is-skipped' : entry.has_mistake ? 'is-mistake' : 'is-ok');
-    verdictEl.textContent = entry.skipped ? 'Skipped' : entry.has_mistake ? 'Mistake found' : 'Looks correct';
+    // A practice problem with no photo wasn't skipped by choice so much
+    // as never submitted — "Not checked" reads truer than "Skipped".
+    const isPractice = entry.mode === 'teach' || entry.mode === 'test_prep';
+    verdictEl.textContent = entry.skipped ? (isPractice && !entry.thumbnail ? 'Not checked' : 'Skipped') : entry.has_mistake ? 'Mistake found' : 'Looks correct';
     info.appendChild(verdictEl);
 
     if (entry.has_mistake && entry.line_quote){
@@ -6235,7 +6334,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     const group = document.createElement('div');
     group.className = 'history-group';
 
-    const title = steps.find((s) => s.problem_title)?.problem_title;
+    // Prefer the actual assigned problem's text (queue transcription or
+    // practice problem) over the model-generated title from the photo.
+    const title = steps.find((s) => s.problem_text)?.problem_text || steps.find((s) => s.problem_title)?.problem_title;
     if (title){
       const titleEl = document.createElement('div');
       titleEl.className = 'history-group-title';
@@ -6395,11 +6496,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // problem first. Prefers the clean no-marks image + the queued
       // problem text (both stored since the clean_thumbnail/problem_text
       // migration); rows saved before it fall back to the marked-up
-      // thumbnail and the model-generated title. When any queue-tagged
-      // rows exist, the export is restricted to them so a mixed
-      // homework+teach lesson doesn't sweep practice problems in.
+      // thumbnail and the model-generated title. Teach/test-prep rows
+      // carry problem_text too now, so the homework filter goes by the
+      // row's mode tag — practice problems never enter the homework PDF.
       const lastPerProblem = problemGroups.map((steps) => steps[steps.length - 1]).slice().reverse();
-      const queueRows = lastPerProblem.filter((e) => e.problem_text);
+      const queueRows = lastPerProblem.filter((e) => e.problem_text && e.mode !== 'teach' && e.mode !== 'test_prep');
       const isHomeworkLesson = !(meta && meta.taught_subjects);
       const exportRows = queueRows.length ? queueRows : (isHomeworkLesson ? lastPerProblem : []);
       const pdfEntries = exportRows
@@ -6495,7 +6596,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         }
         const canvas = document.createElement('canvas');
         canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const ctx = canvas.getContext('2d');
+        // JPEG has no alpha — transparent sources (the SVG problem
+        // sketches) must land on white, not black.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
         resolve(canvas.toDataURL('image/jpeg', 0.72));
       };
       img.src = dataUrl;
@@ -6583,7 +6689,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       // (checkmark or circled mistake) is baked in so the saved photo
       // shows exactly what the student saw, not a blank re-upload.
       const thumbnail = await bakeAnnotatedThumbnail(frame.dataUrl, 480);
-      const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480) : null;
+      // Best-effort — a problem image that won't rasterize (e.g. a
+      // malformed practice-problem sketch SVG) must not cost the row.
+      const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480).catch(() => null) : null;
       // A second, CLEAN copy (no marks baked in), a bit larger — this is
       // what the homework-PDF export from Past Lessons uses, since the
       // student submits their own handwriting, not Claruno's feedback.
@@ -6623,11 +6731,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   // rather than overloading it with an empty "parsed" shape, since the
   // two have almost nothing in common beyond both producing a row.
   async function saveSkipped(frame, mode, problemId, lessonId, problemFrame, problemText){
-    if (!supabaseClient || !currentSession || !frame) return;
+    if (!supabaseClient || !currentSession) return;
+    // frame may be null — a problem the student moved past without ever
+    // photographing still gets a row (the assigned problem itself), so
+    // Past Lessons counts everything the lesson covered. An all-empty
+    // call has nothing worth a row, though.
+    if (!frame && !problemText && !problemFrame) return;
     try{
-      const thumbnail = await makeThumbnail(frame.dataUrl, 480);
-      const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480) : null;
-      const cleanThumbnail = await makeThumbnail(frame.dataUrl, 800);
+      const thumbnail = frame ? await makeThumbnail(frame.dataUrl, 480) : null;
+      const problemThumbnail = problemFrame ? await makeThumbnail(problemFrame.dataUrl, 480).catch(() => null) : null;
+      const cleanThumbnail = frame ? await makeThumbnail(frame.dataUrl, 800) : null;
       const { error } = await supabaseClient.from('history_entries').insert({
         user_id: currentSession.user.id,
         problem_id: problemId,
