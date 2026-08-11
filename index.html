@@ -4347,7 +4347,23 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // permission grant), so there's already been a user gesture in this
   // session by the time it fires — browsers that require one for audio
   // don't block it here.
-  function speakNudge(text){
+  // Natural narration via /api/speak (ElevenLabs server-side) with the
+  // browser's built-in voice as automatic fallback whenever the endpoint
+  // has no key configured or fails. Synthesized audio is cached per text
+  // for the session — the nudge line repeats, no point paying for it (or
+  // waiting on it) twice.
+  const speechAudioCache = new Map();
+  let nudgeAudioEl = null;
+
+  function stopNudgeSpeech(){
+    if (nudgeAudioEl){
+      try{ nudgeAudioEl.pause(); } catch(e){ /* already stopped */ }
+      nudgeAudioEl = null;
+    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+  }
+
+  function speakNudgeFallback(text){
     try{
       if (!window.speechSynthesis || !text) return;
       window.speechSynthesis.cancel();
@@ -4358,11 +4374,41 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     } catch(e){ /* Speech Synthesis unavailable — the visual+chime nudge still shows */ }
   }
 
+  async function speakNudge(text){
+    if (!text) return;
+    stopNudgeSpeech();
+    try{
+      let url = speechAudioCache.get(text);
+      if (!url){
+        const response = await fetch('/api/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            accessToken: window.mathTutorAuth ? window.mathTutorAuth.getAccessToken() : null,
+          }),
+        });
+        const data = await response.json().catch(() => null);
+        if (response.ok && data && data.audio){
+          const bytes = Uint8Array.from(atob(data.audio), (c) => c.charCodeAt(0));
+          url = URL.createObjectURL(new Blob([bytes], { type: 'audio/mpeg' }));
+          speechAudioCache.set(text, url);
+        }
+      }
+      if (url){
+        nudgeAudioEl = new Audio(url);
+        nudgeAudioEl.play().catch(() => speakNudgeFallback(text));
+        return;
+      }
+    } catch(err){ /* fall through to the browser voice */ }
+    speakNudgeFallback(text);
+  }
+
   function hideStuckNudge(){
     stuckNudge.classList.add('hidden');
     stuckMascot.classList.remove('is-talking');
     if (stuckAutoHideTimer){ clearTimeout(stuckAutoHideTimer); stuckAutoHideTimer = null; }
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    stopNudgeSpeech();
   }
 
   function showStuckNudge(){
