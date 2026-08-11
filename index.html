@@ -6350,13 +6350,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       const lessonHeader = document.createElement('button');
       lessonHeader.type = 'button';
       lessonHeader.className = 'history-lesson-header';
-      const lessonWhen = new Date(lessonEntries[0].created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
       const problemLabel = problemGroups.length === 1 ? '1 problem' : `${problemGroups.length} problems`;
       const lessonKey = lessonEntries[0].lesson_id;
       // Real duration when the lesson ended cleanly; "in progress" for the
       // active one; otherwise (tab closed mid-lesson, no end record ever
       // written) an estimate from lesson start to the last check.
       const meta = lessonMeta && lessonKey ? lessonMeta.get(lessonKey) : null;
+      // Date AND start time — the lessons table's started_at is the true
+      // lesson start; rows saved before that table existed fall back to
+      // the first check's timestamp (entries are sorted oldest-first).
+      const lessonStart = new Date((meta && meta.started_at) || lessonEntries[0].created_at);
+      const lessonWhen = lessonStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+        + ', ' + lessonStart.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
       let durationLabel = null;
       if (meta && meta.duration_seconds != null){
         durationLabel = formatDurationLabel(meta.duration_seconds);
