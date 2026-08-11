@@ -3394,6 +3394,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   async function runCheck(){
     if (!imageData) return;
+    // If the lesson ends (45-min clock) or the student moves on while this
+    // request is in flight, imageData gets cleared/replaced — rendering
+    // the late response onto that state crashed on null.dataUrl and threw
+    // a red error box onto the "Lesson ended" screen. Snapshot the frame
+    // now and silently drop the response if it's stale by the time it
+    // arrives.
+    const frameAtRequest = imageData;
     hideError(); hideResults();
     checkBtn.disabled = true;
     statusRow.classList.remove('hidden');
@@ -3424,11 +3431,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         return;
       }
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      // Stale response — lesson ended or the student moved to another
+      // photo/problem while this was in flight. Drop it quietly.
+      if (imageData !== frameAtRequest) return;
       const parsed = parseModelJson(data.text);
       if (parsed.has_mistake){
         statusText.textContent = 'Pinpointing the exact spot…';
         await refineMistakeLocation(parsed, imageData.dataUrl);
       }
+      if (imageData !== frameAtRequest) return;
       renderResult(parsed);
       // An unreadable photo (empty, cut off, too blurry) never had a
       // genuine check happen — don't record it as a check at all, correct
@@ -3501,6 +3512,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const noPhotoYet = !imageData;
     const queuedProblemText = currentAssignedProblemText();
     if (noPhotoYet && !queuedProblemText) return;
+    // Same stale-response guard as runCheck: if the lesson ends or the
+    // student moves on mid-request, drop the late reply instead of
+    // rendering onto cleared state (which crashed on null.dataUrl and put
+    // an error box on the "Lesson ended" screen).
+    const frameAtRequest = imageData;
+    const wasLessonMode = lessonModeOn;
     hideError(); hideResults();
     hintBtn.disabled = true;
     checkBtn.disabled = true;
@@ -3532,6 +3549,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         return;
       }
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      // Stale — lesson ended or the state this hint was for is gone.
+      if (imageData !== frameAtRequest || (wasLessonMode && !lessonModeOn)) return;
       // The hint call verified the work is already complete and correct —
       // a student hinting on finished work really meant to check it, so
       // run the real Check on the same frozen frame: full verdict bubble,
