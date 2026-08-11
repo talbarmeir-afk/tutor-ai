@@ -18,8 +18,8 @@ module.exports = async (req, res) => {
       res.status(429).json({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true });
       return;
     }
-    const audio = await synthesizeSpeech(text.trim().slice(0, 600));
-    res.status(200).json({ audio });
+    const { audio, model } = await synthesizeSpeech(text.trim().slice(0, 600));
+    res.status(200).json({ audio, model });
   } catch (err) {
     res.status(500).json({ error: err.message || 'Something went wrong' });
   }

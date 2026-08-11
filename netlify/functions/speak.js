@@ -15,8 +15,8 @@ exports.handler = async (event) => {
     if (!allowed) {
       return { statusCode: 429, body: JSON.stringify({ error: GUEST_LIMIT_MESSAGE, guestLimitReached: true }) };
     }
-    const audio = await synthesizeSpeech(text.trim().slice(0, 600));
-    return { statusCode: 200, body: JSON.stringify({ audio }) };
+    const { audio, model } = await synthesizeSpeech(text.trim().slice(0, 600));
+    return { statusCode: 200, body: JSON.stringify({ audio, model }) };
   } catch (err) {
     return { statusCode: 500, body: JSON.stringify({ error: err.message || 'Something went wrong' }) };
   }
