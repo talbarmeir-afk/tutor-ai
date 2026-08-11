@@ -1285,6 +1285,11 @@
         </svg>
       </button>
     </div>
+    <!-- The understanding checkpoint: the lesson arrives WITHOUT a
+         problem, questions get settled first, and this button requests
+         the first practice problem — which then lives in the pinned
+         banner above the camera, never buried by later Q&A. -->
+    <button type="button" class="verdict-next-btn hidden" id="teachReadyBtn">I'm ready &mdash; give me a practice problem</button>
     <div class="teach-thread" id="teachThread"></div>
     <form class="qa-form hidden" id="teachAskForm">
       <input type="text" id="teachAskInput" class="qa-input" placeholder="Ask about this explanation…" autocomplete="off">
@@ -2083,6 +2088,7 @@
       teachPanel.classList.remove('hidden');
       teachActions.classList.remove('hidden');
       updateTeachContinueButton();
+      updateTeachReadyButton();
     }
     const mode = ['homework', 'teach', 'test_prep'].includes(state.mode) ? state.mode : 'homework';
     workSourceSelect.value = mode;
@@ -2772,6 +2778,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const teachPanelBody = document.getElementById('teachPanelBody');
   const teachActions = document.getElementById('teachActions');
   const teachContinueLessonBtn = document.getElementById('teachContinueLessonBtn');
+  const teachReadyBtn = document.getElementById('teachReadyBtn');
   const teachAgainBtn = document.getElementById('teachAgainBtn');
   const teachAskBtn = document.getElementById('teachAskBtn');
   const teachThread = document.getElementById('teachThread');
@@ -2803,6 +2810,20 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const cut = after.search(/\n\s*\n/);
     const problem = (cut === -1 ? after : after.slice(0, cut)).trim();
     return problem || null;
+  }
+
+  // Removes the "Problem:" block from a reply's DISPLAYED text — the
+  // problem lives in the pinned banner above the camera, so showing it in
+  // the conversation too would just re-create the buried-problem layout
+  // this flow exists to fix. The conversation history keeps the full text.
+  function stripTeachProblem(text){
+    const s = String(text);
+    const idx = s.lastIndexOf('Problem:');
+    if (idx === -1) return s.trim();
+    const after = s.slice(idx);
+    const cut = after.search(/\n\s*\n/);
+    const rest = cut === -1 ? '' : after.slice(cut);
+    return (s.slice(0, idx) + rest).trim();
   }
 
   // Teach replies may end with one model-drawn SVG illustration between
@@ -3064,6 +3085,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachThreadLabels = [];
     lastTeachFigureSvg = null;
     currentTeachProblemText = null;
+    updateTeachReadyButton();
+    renderCurrentHomeworkProblem();
     teachFigure.classList.add('hidden');
     teachFigureImg.removeAttribute('src');
     teachPanelTitle.textContent = (testPrep ? 'Test prep: ' : 'Claruno teaches: ') + subject;
@@ -3100,10 +3123,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       if (!response.ok) throw new Error(data.error || ('http-' + response.status));
       teachConversation = [
         { role: 'user', content: (testPrep
-          ? `I have a test coming up on: "${subject}"${testWhen ? ` (the test is: ${testWhen})` : ''}. Help me review and practice, including one practice problem.`
-          : `Teach me this math topic: "${subject}". Include one practice problem.`)
+          ? `I have a test coming up on: "${subject}"${testWhen ? ` (the test is: ${testWhen})` : ''}. Help me review — I'll ask for practice problems when I'm ready.`
+          : `Teach me this math topic: "${subject}". I'll ask for a practice problem once I understand it.`)
           // The digest (and test date) ride in the seed message so every
-          // follow-up (and each auto-requested next problem) stays aligned
+          // follow-up (and each requested practice problem) stays aligned
           // without re-sending any images.
           + (materialsDigest ? (testPrep
             ? ` Make practice problems feel like my past tests, summarized here: ${materialsDigest}`
@@ -3124,8 +3147,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       saveActiveLesson();
       teachActions.classList.remove('hidden');
       updateTeachContinueButton();
-      // The practice problem has now been handed over — in a running lesson
-      // this is the moment the camera box appears.
+      // The lesson arrives without a problem — the ready button is now the
+      // student's path to one; the camera box waits until it's assigned.
+      updateTeachReadyButton();
+      renderCurrentHomeworkProblem();
       updateLessonCamVisibility();
       // Mark the running lesson as a "New topic" lesson so Past Lessons can
       // show what was taught/reviewed in it.
@@ -3823,6 +3848,25 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   function renderCurrentHomeworkProblem(){
     homeworkProblemBanner.innerHTML = '';
+    // Teach/test-prep pin their current practice problem in this same
+    // banner — one consistent "what am I solving right now" spot above the
+    // camera, never buried by the teach conversation.
+    if (workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep'){
+      updateHomeworkDownloadUI();
+      if (!currentTeachProblemText){
+        homeworkProblemBanner.classList.add('hidden');
+        return;
+      }
+      const strongEl = document.createElement('strong');
+      strongEl.textContent = 'Practice problem: ';
+      const wrap = document.createElement('span');
+      wrap.className = 'homework-problem-text';
+      wrap.appendChild(strongEl);
+      wrap.appendChild(document.createTextNode(currentTeachProblemText));
+      homeworkProblemBanner.appendChild(wrap);
+      homeworkProblemBanner.classList.remove('hidden');
+      return;
+    }
     // Mode-aware, not just queue-aware: once the sequencer hands off to
     // teach/test-prep, a leftover "Problem 4 of 4" banner above the teach
     // practice problem is stale noise even though the queue state itself
@@ -4952,12 +4996,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   }
 
   // In "Teach me & train" mode the camera box only appears once a practice
-  // problem has actually been handed to the student (teachActions unhides
-  // exactly then) — before that there's nothing to photograph yet.
+  // problem has actually been assigned (the lesson itself now arrives
+  // without one — the student asks questions first and requests the
+  // problem when ready) — before that there's nothing to photograph yet.
   function updateLessonCamVisibility(){
     if (!lessonModeOn) return;
     const teaching = workSourceSelect.value === 'teach' || workSourceSelect.value === 'test_prep';
-    const problemDelivered = !teachActions.classList.contains('hidden');
+    const problemDelivered = !!currentTeachProblemText;
     // capturingHomeworkPhoto temporarily commandeers this same camera box
     // to snap a homework photo directly — the upload panel stays hidden
     // and the box shown for that duration regardless of queue state.
@@ -5074,13 +5119,84 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // CLICKS Next problem after a correct check — it used to fire
   // automatically the moment a check passed, which read as problems being
   // machine-gunned one after another with no say in the pace.
+  // Shows the "I'm ready" checkpoint only while a lesson is delivered but
+  // no practice problem has been assigned yet — after that, new problems
+  // come via the post-check Next problem button.
+  function updateTeachReadyButton(){
+    teachReadyBtn.classList.toggle('hidden', !(teachConversation.length >= 2 && !currentTeachProblemText));
+  }
+
+  // Requests a practice problem (first via the I'm-ready button, later
+  // ones via Next problem) through the same teach conversation. The
+  // problem itself lands in the pinned banner above the camera — never in
+  // the conversation thread, so Q&A can't bury it; any recap/encouragement
+  // around it still shows as a thread item.
+  async function requestTeachProblem(cannedMessage, threadLabel){
+    if (!teachConversation.length || teachReadyBtn.disabled) return;
+    teachReadyBtn.disabled = true;
+    const item = document.createElement('div');
+    const q = document.createElement('p');
+    q.className = 'q';
+    q.textContent = threadLabel;
+    const a = document.createElement('p');
+    a.className = 'is-pending';
+    a.textContent = 'writing…';
+    item.appendChild(q);
+    item.appendChild(a);
+    teachThread.appendChild(item);
+    teachConversation.push({ role: 'user', content: cannedMessage });
+    try{
+      const response = await fetch('/api/teach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conversation: teachConversation })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || ('http-' + response.status));
+      const parts = extractTeachFigure(data.lesson);
+      const problem = extractTeachProblem(parts.text);
+      if (problem) currentTeachProblemText = problem;
+      teachConversation.push({ role: 'assistant', content: parts.text });
+      teachThreadLabels.push(threadLabel);
+      saveActiveLesson();
+      const remainder = problem ? stripTeachProblem(parts.text) : parts.text;
+      if (remainder){
+        a.className = 'teach-script';
+        writeOut(a, remainder);
+      } else {
+        item.remove();
+      }
+      if (parts.svg && item.isConnected){
+        const figureEl = document.createElement('img');
+        figureEl.className = 'teach-thread-figure';
+        figureEl.alt = 'Illustration';
+        figureEl.src = teachFigureSrc(parts.svg);
+        item.appendChild(figureEl);
+      }
+      renderCurrentHomeworkProblem();
+      updateTeachReadyButton();
+      updateLessonCamVisibility();
+      lessonShowLive();
+      hideResults(); hideError();
+    } catch(err){
+      a.textContent = "Sorry, that didn't go through. Try again.";
+      a.className = 'is-pending';
+      teachConversation.pop();
+    } finally {
+      teachReadyBtn.disabled = false;
+    }
+  }
+
+  teachReadyBtn.addEventListener('click', () => requestTeachProblem(
+    'I understand the material — now give me exactly ONE practice problem to solve by hand on paper, labelled "Problem:", matched to what you just taught. Do not include the answer, and add at most one short encouraging sentence besides the problem itself.',
+    'Practice problem'
+  ));
+
   function requestNextTeachProblem(){
-    if (!teachConversation.length) return;
-    teachFollowupAsk(
+    requestTeachProblem(
       'I solved that problem on paper and Claruno checked it — it was correct. Briefly note anything worth remembering, then give me the NEXT practice problem on the same topic, a touch harder. ONE problem only, labelled "Problem:". Do not include the answer.',
       'Next problem'
     );
-    setTimeout(() => teachPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 800);
   }
 
   lessonCheckBtn.addEventListener('click', () => lessonCapture('check'));
