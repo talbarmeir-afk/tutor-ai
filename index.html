@@ -3633,6 +3633,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     homeworkUploadPhotos.push(photo);
     renderHomeworkUploadThumbs();
     endHomeworkPhotoCapture();
+    // With a photo in hand the natural next action is starting — put it
+    // in focus (Take photo stays clickable for adding more).
+    if (!homeworkUploadStartBtn.disabled) homeworkUploadStartBtn.focus();
   });
 
   function renderHomeworkUploadThumbs(){
@@ -3684,6 +3687,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       } catch(err){ /* skip a file that fails to read/decode */ }
     }
     renderHomeworkUploadThumbs();
+    if (!homeworkUploadStartBtn.disabled) homeworkUploadStartBtn.focus();
   });
 
   async function startHomeworkQueue(){
