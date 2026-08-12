@@ -3497,10 +3497,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       skipProblemBtn.classList.toggle('hidden', showNextProblem);
     }
 
+    // Same assigned-problem context the real check ran with — without it
+    // in the Q&A seed, follow-up answers can drift to stray writing from
+    // another problem visible in the photo.
+    const checkAssigned = currentAssignedProblemText();
     conversation = [
       { role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: frame.base64 } },
-        { type: 'text', text: promptTextOverride || ANALYSIS_PROMPT }
+        { type: 'text', text: (checkAssigned ? `The student was assigned this specific problem to solve: ${checkAssigned}\n\nJudge and discuss the work only as an attempt at THIS assigned problem.\n\n` : '') + (promptTextOverride || ANALYSIS_PROMPT) }
       ]},
       { role: 'assistant', content: summarizeForConversation(parsed) }
     ];
@@ -3635,10 +3639,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // earlier correct result in this same lesson would silently keep
     // showing Next-problem alongside hints for the rest of the lesson.
     lessonNextProblemBtn.classList.add('hidden');
+    // The Q&A seed must carry the assigned problem, exactly like the
+    // hint call itself did — without it, follow-up answers describe
+    // whatever OLD work happens to be in the frozen photo instead of
+    // the problem the student is actually on.
+    const hintAssigned = currentAssignedProblemText();
     conversation = [
       { role: 'user', content: [
         { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageData.base64 } },
-        { type: 'text', text: 'Give me a hint for the next step of this handwritten work, without revealing the answer.' }
+        { type: 'text', text: (hintAssigned ? `I'm working on this specific assigned problem: ${hintAssigned}\n\nEverything you say must be about THIS problem — ignore any writing in the photo that belongs to a different problem.\n\n` : '') + 'Give me a hint for the next step of this handwritten work, without revealing the answer.' }
       ]},
       { role: 'assistant', content: hint }
     ];
