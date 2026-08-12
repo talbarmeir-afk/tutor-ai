@@ -1303,7 +1303,7 @@
           <button type="button" class="ghost-btn split-btn-main" id="teachMaterialTakeBtn">Take photo</button>
           <button type="button" class="ghost-btn split-btn-caret" id="teachMaterialCaretBtn" aria-haspopup="menu" aria-expanded="false" aria-label="More ways to add material photos">&#9662;</button>
           <div class="split-btn-menu hidden" id="teachMaterialMenu">
-            <button type="button" id="teachMaterialUploadBtn">Upload existing photos or a PDF&hellip;<small>JPG, PNG, WebP, GIF or PDF</small></button>
+            <button type="button" id="teachMaterialUploadBtn">Upload existing photos or a PDF&hellip;<small>JPG, PNG, WebP, GIF or PDF &mdash; or just paste a copied image (Ctrl/Cmd+V)</small></button>
           </div>
         </div>
       </div>
@@ -1371,7 +1371,7 @@
         <button type="button" class="primary-btn split-btn-main" id="homeworkTakePhotoBtn">Take photo of the homework you got</button>
         <button type="button" class="primary-btn split-btn-caret" id="homeworkSourceCaretBtn" aria-haspopup="menu" aria-expanded="false" aria-label="More ways to add homework photos">&#9662;</button>
         <div class="split-btn-menu hidden" id="homeworkSourceMenu">
-          <button type="button" id="homeworkUploadAddBtn">Upload existing photos or a PDF&hellip;<small>JPG, PNG, WebP, GIF or PDF</small></button>
+          <button type="button" id="homeworkUploadAddBtn">Upload existing photos or a PDF&hellip;<small>JPG, PNG, WebP, GIF or PDF &mdash; or just paste a copied image (Ctrl/Cmd+V)</small></button>
         </div>
       </div>
       <button type="button" class="primary-btn" id="homeworkUploadStartBtn" disabled>Start solving your homework</button>
@@ -3056,9 +3056,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     });
   }
   wireSplitMenu(document.getElementById('teachMaterialCaretBtn'), document.getElementById('teachMaterialMenu'));
-  teachMaterialInput.addEventListener('change', async () => {
-    const files = Array.from(teachMaterialInput.files || []);
-    teachMaterialInput.value = '';
+  // Shared by the file input and paste-to-add.
+  async function addTeachMaterialFiles(files){
     for (const file of files){
       try{
         if (isPdfFile(file)){
@@ -3069,6 +3068,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       } catch(err){ /* skip a file that fails to read/decode */ }
     }
     renderTeachMaterialThumbs();
+  }
+  teachMaterialInput.addEventListener('change', () => {
+    const files = Array.from(teachMaterialInput.files || []);
+    teachMaterialInput.value = '';
+    addTeachMaterialFiles(files);
   });
 
   // Take-photo commandeers the lesson camera box (hidden in teach mode
@@ -3914,9 +3918,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     else homeworkUploadNote.blur();
   });
 
-  homeworkUploadInput.addEventListener('change', async () => {
-    const files = Array.from(homeworkUploadInput.files || []);
-    homeworkUploadInput.value = '';
+  // Shared by the file input and paste-to-add.
+  async function addHomeworkUploadFiles(files){
     for (const file of files){
       try{
         if (isPdfFile(file)){
@@ -3928,6 +3931,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     renderHomeworkUploadThumbs();
     if (!homeworkUploadStartBtn.disabled) homeworkUploadStartBtn.focus();
+  }
+  homeworkUploadInput.addEventListener('change', () => {
+    const files = Array.from(homeworkUploadInput.files || []);
+    homeworkUploadInput.value = '';
+    addHomeworkUploadFiles(files);
   });
 
   async function startHomeworkQueue(){
@@ -5066,6 +5074,43 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     primary.click();
   });
 
+  // Paste-to-add: an image copied from anywhere (screenshot, a snip of a
+  // worksheet, a picture from chat) pasted onto the page lands in
+  // whichever photo intake is on screen — homework pages, teach or
+  // past-test materials, the lesson work photo, or the guest upload box.
+  // Only fires when the clipboard actually carries files and focus isn't
+  // in a text control, so pasting text into the note/Q&A fields is
+  // untouched.
+  document.addEventListener('paste', (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const files = Array.from((e.clipboardData && e.clipboardData.files) || []);
+    if (!files.length) return;
+    const visible = (el) => el && el.offsetParent !== null;
+    if (visible(homeworkUploadPanel)){
+      e.preventDefault();
+      addHomeworkUploadFiles(files);
+      return;
+    }
+    if (visible(document.getElementById('teachMaterials'))){
+      e.preventDefault();
+      addTeachMaterialFiles(files);
+      return;
+    }
+    // Single-photo intakes take the first pasted image.
+    const img = files.find((f) => f.type.startsWith('image/'));
+    if (!img) return;
+    if (lessonModeOn && visible(lessonModeEl)){
+      e.preventDefault();
+      loadLessonWorkPhoto(img);
+      return;
+    }
+    if (visible(uploadModeEl)){
+      e.preventDefault();
+      handleFile(img);
+    }
+  });
+
   function openAttachmentPreview(src){
     if (!src) return;
     const previewImg = document.getElementById('lightboxImg');
@@ -5546,9 +5591,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   lessonCheckBtn.addEventListener('click', () => lessonCapture('check'));
   lessonHintBtn.addEventListener('click', () => lessonCapture('hint'));
-  lessonFileInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    lessonFileInput.value = '';
+  // Shared by the file input and paste-to-add.
+  async function loadLessonWorkPhoto(file){
     if (!file || !file.type.startsWith('image/')) return;
     try{
       const frame = await resizeImage(file, 1600);
@@ -5561,6 +5605,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       lessonCamNote.textContent = "That photo didn't load — try a different file.";
       lessonCamNote.classList.remove('hidden');
     }
+  }
+  lessonFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    lessonFileInput.value = '';
+    loadLessonWorkPhoto(file);
   });
 
   checkBtn.addEventListener('click', runCheck);
