@@ -799,18 +799,6 @@
   }
   .verdict-next-btn:hover{ background:#26893f; }
   .verdict-next-btn:focus-visible{ outline:2px solid #2FA04C; outline-offset:2px; }
-  /* The "leave this segment" control, in every module — deliberately a
-     quiet text link next to the big green action buttons: moving on is
-     always available but never the visually suggested next step. */
-  .lesson-plan-link{
-    display:block; margin:10px auto 0; padding:2px 4px;
-    font-family:'Karla', sans-serif; font-weight:600; font-size:12px;
-    background:none; border:none; color:rgba(24,24,22,0.5);
-    text-decoration:underline; text-underline-offset:2px; cursor:pointer;
-    transition:color .15s ease;
-  }
-  .lesson-plan-link:hover{ color:#181816; }
-  .lesson-plan-link:focus-visible{ outline:2px solid rgba(24,24,22,0.4); outline-offset:2px; border-radius:4px; }
 
   .reset-row{ margin-top:22px; text-align:right; }
   button.ghost-btn{
@@ -877,13 +865,28 @@
   }
   .lesson-mode-option input{ width:17px; height:17px; accent-color:var(--chalk); cursor:pointer; flex-shrink:0; }
   /* Sits near the lesson timer so the student always knows where they are
-     in a multi-mode lesson — hidden entirely for a single-mode lesson,
-     where a "progress" readout of one item would just be clutter. */
+     in a lesson — and it IS the lesson's navigation, not just a readout:
+     every pill jumps to its segment, the "+" opens the plan picker. */
   .lesson-mode-progress{
+    display:flex; flex-wrap:wrap; align-items:center; gap:6px;
     font-family:'Karla', sans-serif; font-size:12.5px; color:var(--ink-muted);
     margin:-10px 0 20px;
   }
-  .lesson-mode-progress strong{ color:var(--ink); font-weight:700; }
+  .lesson-mode-pill{
+    font-family:'Karla', sans-serif; font-weight:600; font-size:12.5px;
+    background:none; color:var(--ink-muted);
+    border:1px solid rgba(24,24,22,0.22); border-radius:999px;
+    padding:5px 13px; cursor:pointer;
+    transition:background .15s ease, color .15s ease, border-color .15s ease;
+  }
+  .lesson-mode-pill:hover{ color:var(--ink); border-color:rgba(24,24,22,0.45); background:rgba(24,24,22,0.04); }
+  .lesson-mode-pill:focus-visible{ outline:2px solid rgba(24,24,22,0.4); outline-offset:2px; }
+  .lesson-mode-pill.is-current{
+    background:var(--ink); color:#fff; border-color:var(--ink); cursor:default;
+  }
+  .lesson-mode-pill.is-current:hover{ background:var(--ink); color:#fff; }
+  .lesson-mode-pill.is-add{ border-style:dashed; padding:5px 11px; }
+  .lesson-mode-arrow{ color:var(--ink-muted); opacity:.55; user-select:none; }
 
   .history-collapse-controls{ display:flex; gap:16px; margin:0 0 14px; }
   .history-lesson + .history-lesson{ padding-top:18px; border-top:1px solid var(--paper-line); }
@@ -1239,8 +1242,9 @@
   </div>
 
   <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
-  <!-- Only shown for a multi-mode lesson — see renderLessonModeProgress(). -->
-  <div class="lesson-mode-progress hidden" id="lessonModeProgress"></div>
+  <!-- The lesson stepper: one clickable pill per planned segment plus a
+       "+" for changing the plan — see renderLessonModeProgress(). -->
+  <nav class="lesson-mode-progress hidden" id="lessonModeProgress" aria-label="Lesson sections"></nav>
 
   <!-- TEMP TEST ONLY — remove once nudge testing is done. Not part of the
        real product; fires the same showStuckNudge() the 1-minute-idle
@@ -1314,19 +1318,16 @@
       <input type="text" id="teachAskInput" class="qa-input" placeholder="Ask about this explanation…" autocomplete="off">
       <button type="submit" class="qa-send" id="teachAskSend">Ask</button>
     </form>
-    <!-- Both closing actions live BELOW the growing conversation thread —
-         anything placed above it gets stranded mid-conversation as
-         follow-up explanations append (bit both these buttons once).
+    <!-- Lives BELOW the growing conversation thread — anything placed
+         above it gets stranded mid-conversation as follow-up
+         explanations append (bit this button once).
          The understanding checkpoint: the lesson arrives WITHOUT a
          problem, questions get settled first, and this button requests
          the first practice problem — which then lives in the pinned
-         banner above the camera, never buried by later Q&A. -->
+         banner above the camera, never buried by later Q&A. Leaving the
+         segment happens via the lesson stepper at the top, so this is
+         the panel's only closing action. -->
     <button type="button" class="verdict-next-btn hidden" id="teachReadyBtn">I'm ready &mdash; give me a practice problem</button>
-    <!-- Teach/test-prep are open-ended (more practice problems keep coming
-         on every correct check), so this is the student's "I'm done with
-         this segment" control — a quiet link, so the big green "I'm
-         ready" button stays the one obvious action. -->
-    <button type="button" class="lesson-plan-link hidden" id="teachContinueLessonBtn">Done with this part &mdash; back to the lesson plan</button>
   </div>
 
   <!-- Shown when the sequencer reaches "homework" and no queue has been
@@ -1473,12 +1474,6 @@
     <input type="file" id="lessonFileInput" accept="image/*" class="hidden">
   </div>
 
-  <!-- The student controls moving between lesson segments in EVERY mode —
-       teach/test-prep have their Continue button in the teach panel; this
-       is homework's, shown during a running lesson whether the queue is
-       mid-way (leftover problems just stay unsolved) or the upload step
-       is still showing (skip the segment entirely). -->
-  <button type="button" class="lesson-plan-link hidden" id="homeworkContinueLessonBtn">Done with this part &mdash; back to the lesson plan</button>
 
   <div id="uploadMode">
     <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Upload a photo of your work">
@@ -1953,34 +1948,82 @@
   let lessonModeQueue = [];
   let lessonModeIndex = 0;
 
+  // The stepper IS the lesson's navigation, not just a readout: every
+  // pill jumps straight to its segment (state is preserved, so a
+  // revisited segment resumes where it left off) and the trailing "+"
+  // opens the picker to change the plan. Shown for single-mode lessons
+  // too — it's the only way to move between segments or reach the
+  // picker before time runs out.
   function renderLessonModeProgress(){
-    if (lessonModeQueue.length < 2){
+    if (!lessonModeQueue.length){
       lessonModeProgress.classList.add('hidden');
       return;
     }
     lessonModeProgress.classList.remove('hidden');
-    lessonModeProgress.innerHTML = lessonModeQueue.map((mode, i) => {
+    lessonModeProgress.innerHTML = '';
+    lessonModeQueue.forEach((mode, i) => {
+      if (i){
+        const sep = document.createElement('span');
+        sep.className = 'lesson-mode-arrow';
+        sep.textContent = '→';
+        sep.setAttribute('aria-hidden', 'true');
+        lessonModeProgress.appendChild(sep);
+      }
       const label = LESSON_MODE_LABELS[mode] || mode;
-      return i === lessonModeIndex ? `<strong>${label}</strong>` : label;
-    }).join(' &rarr; ');
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'lesson-mode-pill' + (i === lessonModeIndex ? ' is-current' : '');
+      // The only segment with a knowable "finished" state is homework
+      // (its queue has an end); teach/test-prep are open-ended.
+      const done = mode === 'homework' && homeworkQueue.length && homeworkQueueIndex >= homeworkQueue.length;
+      pill.textContent = (done ? '✓ ' : '') + label;
+      pill.title = i === lessonModeIndex ? "You're here" : 'Go to ' + label;
+      if (i === lessonModeIndex) pill.setAttribute('aria-current', 'step');
+      pill.addEventListener('click', () => jumpToLessonMode(i));
+      lessonModeProgress.appendChild(pill);
+    });
+    const addPill = document.createElement('button');
+    addPill.type = 'button';
+    addPill.className = 'lesson-mode-pill is-add';
+    addPill.textContent = '+';
+    addPill.title = 'Change what this lesson covers';
+    addPill.setAttribute('aria-label', 'Change what this lesson covers');
+    addPill.addEventListener('click', () => showMidLessonPicker(true));
+    lessonModeProgress.appendChild(addPill);
   }
 
-  // Moves the lesson on to the next mode the student selected, driving
-  // workSourceSelect (and everything already gated on its value) rather
-  // than duplicating that logic here. If the queue is already on its last
-  // mode, this is a no-op — the lesson just continues in that mode, no
-  // forced end.
-  function advanceLessonMode(){
-    if (lessonModeIndex >= lessonModeQueue.length - 1) return;
-    // Leaving a teach/test-prep segment with an unchecked practice
-    // problem still current — give it its history row before the mode
+  // Direct navigation between planned segments, in either direction —
+  // drives workSourceSelect (and everything already gated on its value)
+  // rather than duplicating that logic. Jumping back re-enters a segment
+  // where it left off; jumping to a segment never set up lands on its
+  // setup step, same as arriving in sequence. Also the way out of the
+  // mid-lesson picker without applying anything.
+  function jumpToLessonMode(i){
+    if (!lessonRunning) return;
+    if (i < 0 || i >= lessonModeQueue.length) return;
+    const pickerOpen = !lessonStartPrompt.classList.contains('hidden');
+    if (i === lessonModeIndex && !pickerOpen) return;
+    // An unchecked practice problem gets its history row before the mode
     // (which the row's tagging reads) switches away.
     logUnattemptedTeachProblem();
-    lessonModeIndex++;
-    workSourceSelect.value = lessonModeQueue[lessonModeIndex];
+    if (pickerOpen){
+      setLessonPromptCopy(false);
+      showCheckUI();
+      lessonTimerEl.classList.remove('hidden');
+    }
+    lessonModeIndex = i;
+    workSourceSelect.value = lessonModeQueue[i];
     workSourceSelect.dispatchEvent(new Event('change'));
     renderLessonModeProgress();
     saveActiveLesson();
+  }
+
+  // Sequential advance (queue exhausted, etc.). If the queue is already
+  // on its last mode this is a no-op — the lesson just continues in that
+  // mode, no forced end.
+  function advanceLessonMode(){
+    if (lessonModeIndex >= lessonModeQueue.length - 1) return;
+    jumpToLessonMode(lessonModeIndex + 1);
   }
 
   // The picker card doubles as the mid-lesson "what next?" screen (see
@@ -2001,12 +2044,21 @@
   // the 45 minutes aren't up — the lesson (timer, camera stream, id) stays
   // fully alive; only the check UI gives way to the picker until they
   // choose what to do with the remaining time.
-  function showMidLessonPicker(){
+  function showMidLessonPicker(fromStepper){
     if (!lessonRunning) return;
     logUnattemptedTeachProblem();
     setLessonPromptCopy(true);
+    if (fromStepper){
+      // Reached via the stepper's "+" rather than by finishing
+      // everything — same picker, honest copy: re-picking a part starts
+      // it fresh, and the still-visible stepper is the way back out.
+      lessonStartPrompt.querySelector('h2').textContent = 'Change your lesson plan';
+      lessonStartPrompt.querySelector('p').textContent = 'Pick what to do with the rest of this lesson — picked parts start fresh (homework photos and topics get set up again). Changed your mind? Tap a section above to go back to it.';
+      startLessonBtn.textContent = 'Apply';
+    }
     checkCard.classList.add('hidden');
-    lessonModeProgress.classList.add('hidden');
+    // The stepper stays visible — with the check UI gone, its pills are
+    // the escape hatch back into any segment without applying anything.
     lessonStartPrompt.classList.remove('hidden');
     updateHomeworkDownloadUI();
   }
@@ -2138,7 +2190,6 @@
       }
       teachPanel.classList.remove('hidden');
       teachActions.classList.remove('hidden');
-      updateTeachContinueButton();
       updateTeachReadyButton();
     }
     const mode = ['homework', 'teach', 'test_prep'].includes(state.mode) ? state.mode : 'homework';
@@ -2197,6 +2248,7 @@
   function showStartPrompt(){
     exitLessonMode();
     hideAllLessonPanels();
+    lessonModeProgress.classList.add('hidden');
     stopCamera();
     stopTakePhotoStream();
     setLessonPromptCopy(false);
@@ -2207,6 +2259,7 @@
   function showEndedNote(durationSeconds){
     exitLessonMode();
     hideAllLessonPanels();
+    lessonModeProgress.classList.add('hidden');
     stopCamera();
     stopTakePhotoStream();
     lessonEndedText.textContent = `You worked for ${formatLessonTime(durationSeconds * 1000)} this lesson — it's ended and can't be resumed. Start a new one to keep going, or look back through your past lessons.`;
@@ -2831,7 +2884,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const teachPanelTitle = document.getElementById('teachPanelTitle');
   const teachPanelBody = document.getElementById('teachPanelBody');
   const teachActions = document.getElementById('teachActions');
-  const teachContinueLessonBtn = document.getElementById('teachContinueLessonBtn');
   const teachReadyBtn = document.getElementById('teachReadyBtn');
   const teachAgainBtn = document.getElementById('teachAgainBtn');
   const teachAskBtn = document.getElementById('teachAskBtn');
@@ -3043,23 +3095,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     renderTeachMaterialThumbs();
   }
 
-  // Teach/test-prep are open-ended (the student can keep requesting
-  // harder practice problems indefinitely, with no natural "done" signal)
-  // — this button is the only way to declare a
-  // segment finished. With another selected mode still queued it advances
-  // to that; on the last mode it brings back the mode picker instead, so
-  // remaining lesson time can be put toward something new. Only shown
-  // once a problem has actually been delivered, and only during a real
-  // lesson (guests/off-lesson teach usage has no sequence to advance).
-  function updateTeachContinueButton(){
-    const problemDelivered = !teachActions.classList.contains('hidden');
-    teachContinueLessonBtn.classList.toggle('hidden', !(lessonRunning && lessonModeQueue.length && problemDelivered));
-  }
-  teachContinueLessonBtn.addEventListener('click', () => {
-    if (lessonModeIndex < lessonModeQueue.length - 1) advanceLessonMode();
-    else showMidLessonPicker();
-  });
-
   const writeTimers = new WeakMap();
   function writeOut(el, text){
     const prev = writeTimers.get(el);
@@ -3118,7 +3153,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
     updateLessonCamVisibility();
     updateAttachmentsUI();
-    updateHomeworkContinueButton();
     // The homework banner is mode-aware (renderCurrentHomeworkProblem) —
     // refresh it on every mode switch so it can't linger over teach or
     // reappear stale when homework comes back around.
@@ -3142,7 +3176,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachBtn.textContent = 'Preparing…';
     teachPanel.classList.remove('hidden');
     teachActions.classList.add('hidden');
-    updateTeachContinueButton();
     updateLessonCamVisibility();
     teachAskForm.classList.add('hidden');
     teachThread.innerHTML = '';
@@ -3214,7 +3247,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       }
       saveActiveLesson();
       teachActions.classList.remove('hidden');
-      updateTeachContinueButton();
       // The lesson arrives without a problem — the ready button is now the
       // student's path to one; the camera box waits until it's assigned.
       updateTeachReadyButton();
@@ -3685,20 +3717,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   const homeworkUploadInput = document.getElementById('homeworkUploadInput');
   const homeworkUploadNote = document.getElementById('homeworkUploadNote');
   const homeworkProblemBanner = document.getElementById('homeworkProblemBanner');
-  const homeworkContinueLessonBtn = document.getElementById('homeworkContinueLessonBtn');
   const homeworkTakePhotoBtn = document.getElementById('homeworkTakePhotoBtn');
-
-  // Homework's segment-exit control, mirroring the teach panel's Continue
-  // button: visible throughout a running lesson's homework segment (both
-  // the upload step and mid-queue solving — leftover problems just stay
-  // unsolved), advancing to the next selected mode or back to the picker.
-  function updateHomeworkContinueButton(){
-    homeworkContinueLessonBtn.classList.toggle('hidden', !(lessonRunning && lessonModeOn && workSourceSelect.value === 'homework'));
-  }
-  homeworkContinueLessonBtn.addEventListener('click', () => {
-    if (lessonModeIndex < lessonModeQueue.length - 1) advanceLessonMode();
-    else showMidLessonPicker();
-  });
   const homeworkCaptureActions = document.getElementById('homeworkCaptureActions');
   const homeworkCaptureCancelBtn = document.getElementById('homeworkCaptureCancelBtn');
   const homeworkCaptureSnapBtn = document.getElementById('homeworkCaptureSnapBtn');
@@ -4161,8 +4180,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!hadNext) showMidLessonPicker();
     // The mid-queue branch refreshes the banner via lessonShowLive — this
     // exhausted branch has to do it itself, or "Problem N of N" lingers
-    // over the next segment's UI.
+    // over the next segment's UI. The stepper re-render picks up the
+    // homework pill's ✓ even when homework was the last planned mode
+    // (advanceLessonMode no-ops there, so it didn't re-render).
     renderCurrentHomeworkProblem();
+    renderLessonModeProgress();
     updateHomeworkDownloadUI();
     saveActiveLesson();
   }
@@ -5250,7 +5272,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // this, while lessonModeOn is still false, so the title set there was
     // the pre-lesson default.
     updateCheckCardTitle();
-    updateHomeworkContinueButton();
     updateLessonCamVisibility();
     uploadModeEl.classList.add('hidden');
     watchModeEl.classList.add('hidden');
@@ -5272,7 +5293,6 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lessonModeOn = false;
     document.body.classList.remove('lesson-cam-on');
     updateCheckCardTitle();
-    updateHomeworkContinueButton();
     stopStuckWatch();
     stopLessonCam();
     lessonModeEl.classList.add('hidden');
