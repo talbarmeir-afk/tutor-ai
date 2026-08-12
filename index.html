@@ -344,6 +344,15 @@
   }
   .homework-problem-banner strong{ color:var(--chalk); }
   .homework-problem-text{ flex:1 1 auto; min-width:200px; }
+  /* Stacked fractions in problem text — {num}/{den} in the transcription
+     marks a fraction that was written vertically in the source, and it's
+     rendered vertically again (numerator over a bar over denominator). */
+  .math-frac{
+    display:inline-flex; flex-direction:column; align-items:center;
+    vertical-align:middle; margin:0 2px; line-height:1.15; text-align:center;
+  }
+  .math-frac-num{ padding:0 4px; }
+  .math-frac-den{ padding:0 4px; border-top:1.5px solid currentColor; }
   .homework-problem-edit-btn{
     flex-shrink:0; background:none; border:none; cursor:pointer;
     font-family:'Karla', sans-serif; font-size:12px; color:var(--ink-muted);
@@ -3969,6 +3978,32 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   }
   homeworkUploadStartBtn.addEventListener('click', startHomeworkQueue);
 
+  // Problem text with {num}/{den} fraction markers (fractions written
+  // VERTICALLY in the source — see extractHomeworkProblems' notation
+  // rule and the teach problem requests) rendered as actual stacked
+  // fractions; everything else appended as plain text nodes.
+  function appendMathText(target, text){
+    const re = /\{([^{}]+)\}\s*\/\s*\{([^{}]+)\}/g;
+    const s = String(text);
+    let last = 0, m;
+    while ((m = re.exec(s))){
+      if (m.index > last) target.appendChild(document.createTextNode(s.slice(last, m.index)));
+      const frac = document.createElement('span');
+      frac.className = 'math-frac';
+      const num = document.createElement('span');
+      num.className = 'math-frac-num';
+      num.textContent = m[1].trim();
+      const den = document.createElement('span');
+      den.className = 'math-frac-den';
+      den.textContent = m[2].trim();
+      frac.appendChild(num);
+      frac.appendChild(den);
+      target.appendChild(frac);
+      last = m.index + m[0].length;
+    }
+    if (last < s.length) target.appendChild(document.createTextNode(s.slice(last)));
+  }
+
   function renderCurrentHomeworkProblem(){
     homeworkProblemBanner.innerHTML = '';
     // Teach/test-prep pin their current practice problem in this same
@@ -3985,7 +4020,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       const wrap = document.createElement('span');
       wrap.className = 'homework-problem-text';
       wrap.appendChild(strongEl);
-      wrap.appendChild(document.createTextNode(currentTeachProblemText));
+      appendMathText(wrap, currentTeachProblemText);
       homeworkProblemBanner.appendChild(wrap);
       // The problem's own sketch (labeled triangle, graph…) sits beside
       // the text; click opens it full size.
@@ -4017,7 +4052,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     const strong = document.createElement('strong');
     strong.textContent = `Problem ${homeworkQueueIndex + 1} of ${homeworkQueue.length}: `;
     textWrap.appendChild(strong);
-    textWrap.appendChild(document.createTextNode(entry.problemText));
+    appendMathText(textWrap, entry.problemText);
     // Handwritten problems get misread sometimes — the student can fix
     // the transcription, and the corrected text immediately drives
     // checks, hints, and the homework PDF (they all read the queue entry).
@@ -4233,8 +4268,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const margin = 90;
     const contentW = canvas.width - margin * 2;
+    // Canvas text is line-based — stacked-fraction markers ({num}/{den})
+    // flatten to plain parenthesized fractions here.
+    const problemText = String(entry.problemText).replace(/\{([^{}]+)\}\s*\/\s*\{([^{}]+)\}/g, '($1)/($2)');
     // Hebrew/Arabic question text renders right-to-left, anchored right.
-    const rtl = /[֐-׿؀-ۿ]/.test(entry.problemText);
+    const rtl = /[֐-׿؀-ۿ]/.test(problemText);
     let y = margin;
     ctx.fillStyle = '#8a8880';
     ctx.font = '700 24px Nunito, sans-serif';
@@ -4245,7 +4283,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     ctx.font = '28px Karla, sans-serif';
     if (rtl){ ctx.direction = 'rtl'; ctx.textAlign = 'right'; }
     const textX = rtl ? canvas.width - margin : margin;
-    for (const line of wrapCanvasText(ctx, entry.problemText, contentW)){
+    for (const line of wrapCanvasText(ctx, problemText, contentW)){
       ctx.fillText(line, textX, y + 28);
       y += 40;
     }
@@ -5453,7 +5491,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   // Shared tail for both problem requests: whenever the problem has any
   // visual setup, a sketch of the GIVENS comes with it.
-  const TEACH_PROBLEM_FIGURE_ASK = ' If the problem involves a shape, graph, or anything visual — a triangle with given sides or angles, a number line, a function graph — include the figure block showing the problem\'s setup with the GIVEN data labeled on it, and never anything that reveals the answer.';
+  const TEACH_PROBLEM_FIGURE_ASK = ' If the problem involves a shape, graph, or anything visual — a triangle with given sides or angles, a number line, a function graph — include the figure block showing the problem\'s setup with the GIVEN data labeled on it, and never anything that reveals the answer. In the problem text, write any fraction whose numerator or denominator is more than a single number as {numerator}/{denominator} — curly braces around each part — so it can be displayed stacked; never use curly braces for anything else.';
 
   teachReadyBtn.addEventListener('click', () => requestTeachProblem(
     'I understand the material — now give me exactly ONE practice problem to solve by hand on paper, labelled "Problem:", matched to what you just taught. Do not include the answer, and add at most one short encouraging sentence besides the problem itself.' + TEACH_PROBLEM_FIGURE_ASK,
@@ -6405,7 +6443,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (title){
       const titleEl = document.createElement('div');
       titleEl.className = 'history-group-title';
-      titleEl.textContent = title;
+      // Stacked-fraction markers flatten to plain (a)/(b) in this
+      // one-line text context.
+      titleEl.textContent = title.replace(/\{([^{}]+)\}\s*\/\s*\{([^{}]+)\}/g, '($1)/($2)');
       group.appendChild(titleEl);
     }
 
