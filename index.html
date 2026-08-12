@@ -5043,6 +5043,22 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
   });
 
+  // Enter advances to the next problem whenever the Next-problem button
+  // is the visible primary action — after a solved problem the keyboard
+  // shouldn't need a mouse reach. Stays out of the way while focus is on
+  // any control that handles Enter itself (inputs, textareas, buttons)
+  // and while the image lightbox is open.
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.repeat) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.tagName === 'BUTTON' || t.isContentEditable)) return;
+    if (lessonNextProblemBtn.classList.contains('hidden')) return;
+    const lightboxEl = document.getElementById('lightbox');
+    if (lightboxEl && !lightboxEl.classList.contains('hidden')) return;
+    e.preventDefault();
+    lessonNextProblemBtn.click();
+  });
+
   function openAttachmentPreview(src){
     if (!src) return;
     const previewImg = document.getElementById('lightboxImg');
