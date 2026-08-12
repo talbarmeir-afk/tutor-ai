@@ -417,6 +417,18 @@
   .teach-thread .q{ font-family:'Karla', sans-serif; font-size:12.5px; font-weight:600; color:rgba(24,24,22,0.6); margin:0 0 2px; }
   .teach-thread .teach-script{ font-size:16px; }
   .teach-thread .is-pending{ font-family:'Karla', sans-serif; font-size:12px; color:rgba(24,24,22,0.55); background:none; }
+  /* A prerequisite detour — visibly a branch off the main lesson, not
+     more of it: amber edge + soft tint + an explicit label. */
+  .teach-thread .teach-detour{
+    background:rgba(239,159,39,0.08);
+    border-left:3px solid #EF9F27; border-radius:0;
+    padding:8px 12px;
+  }
+  .teach-detour-badge{
+    font-family:'Karla', sans-serif; font-weight:700; font-size:11.5px;
+    letter-spacing:.05em; text-transform:uppercase;
+    color:#854F0B; margin:0 0 6px;
+  }
   .teach-panel .qa-form{ margin-top:10px; }
   .check-card .mode-toggle{ margin-bottom:12px; }
 
@@ -2205,8 +2217,16 @@
         q.textContent = teachThreadLabels[(i - 2) / 2] || 'Question';
         const a = document.createElement('p');
         a.className = 'teach-script';
-        a.textContent = teachConversation[i + 1].content || '';
+        const raw = teachConversation[i + 1].content || '';
+        // Stored replies keep the raw DETOUR marker — re-derive the
+        // badge and strip it for display, same as the live path.
+        const restoredDetour = extractTeachDetour(raw);
+        a.textContent = restoredDetour ? restoredDetour.text : raw;
         item.appendChild(q);
+        if (restoredDetour){
+          item.classList.add('teach-detour');
+          item.appendChild(buildTeachDetourBadge(restoredDetour.title));
+        }
         item.appendChild(a);
         teachThread.appendChild(item);
       }
@@ -3305,6 +3325,25 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (e.key === 'Enter'){ e.preventDefault(); requestLesson(); }
   });
 
+  // Follow-up replies that open with "DETOUR: <name>" are prerequisite
+  // detours (see TEACH_SYSTEM's detour rule) — the marker line is
+  // stripped from display and the thread item gets a visible badge, so
+  // the student knows they're on a branch that bridges back to the main
+  // topic. The conversation keeps the raw marker: the model should
+  // remember it detoured.
+  function extractTeachDetour(text){
+    const m = String(text).match(/^\s*DETOUR:[ \t]*(.+)[ \t]*\n+/);
+    if (!m) return null;
+    return { title: m[1].trim(), text: String(text).slice(m[0].length) };
+  }
+
+  function buildTeachDetourBadge(title){
+    const badge = document.createElement('p');
+    badge.className = 'teach-detour-badge';
+    badge.textContent = 'Detour — filling a gap: ' + title;
+    return badge;
+  }
+
   async function teachFollowupAsk(question, label){
     if (!teachConversation.length || teachAgainBtn.disabled) return;
     const item = document.createElement('div');
@@ -3338,7 +3377,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       teachThreadLabels.push(label);
       saveActiveLesson();
       a.className = 'teach-script';
-      writeOut(a, answerParts.text);
+      const detour = extractTeachDetour(answerParts.text);
+      if (detour){
+        item.classList.add('teach-detour');
+        item.insertBefore(buildTeachDetourBadge(detour.title), a);
+      }
+      writeOut(a, detour ? detour.text : answerParts.text);
       if (answerParts.svg){
         const figureEl = document.createElement('img');
         figureEl.className = 'teach-thread-figure';
