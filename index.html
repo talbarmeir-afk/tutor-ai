@@ -2144,6 +2144,8 @@
         problem: currentTeachProblemText,
         problemSvg: currentTeachProblemSvg,
         problemLogged: currentTeachProblemLogged,
+        struggled: currentTeachProblemStruggled,
+        results: teachProblemResults,
         figureSvg: lastTeachFigureSvg,
       } : null,
     };
@@ -2184,6 +2186,8 @@
       // "not checked" row would land in a group of its own and double-
       // count a problem that may well have been checked.
       currentTeachProblemLogged = t.problemLogged === undefined ? true : !!t.problemLogged;
+      currentTeachProblemStruggled = !!t.struggled;
+      teachProblemResults = Array.isArray(t.results) ? t.results.filter((r) => typeof r === 'string') : [];
       teachPanelTitle.textContent = t.title || '';
       teachPanelBody.textContent = teachConversation[1].content || '';
       if (t.figureSvg){
@@ -2936,6 +2940,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // segment/lesson ends — otherwise Past Lessons under-counts what the
   // lesson actually covered.
   let currentTeachProblemLogged = false;
+  // Adaptive difficulty: whether the CURRENT practice problem needed
+  // help (a mistake found by Check, or a hint requested), plus this
+  // teach segment's per-problem outcomes. The next-problem request
+  // carries both, so difficulty is paced the way a real teacher would —
+  // up after a clean solve, held level after a struggle.
+  let currentTeachProblemStruggled = false;
+  let teachProblemResults = [];
 
   function extractTeachProblem(text){
     const idx = String(text).lastIndexOf('Problem:');
@@ -3208,6 +3219,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     currentTeachProblemText = null;
     currentTeachProblemSvg = null;
     currentTeachProblemLogged = false;
+    // A fresh seed is a fresh topic — difficulty history restarts.
+    currentTeachProblemStruggled = false;
+    teachProblemResults = [];
     updateTeachReadyButton();
     renderCurrentHomeworkProblem();
     teachFigure.classList.add('hidden');
@@ -3568,7 +3582,11 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       // or otherwise. (Teach's next problem is no longer auto-requested
       // here — the student asks for it via the Next problem button.)
       if (!parsed.unreadable){
-        if (currentTeachProblemText && historyEntryMode() !== 'upload') currentTeachProblemLogged = true;
+        if (currentTeachProblemText && historyEntryMode() !== 'upload'){
+          currentTeachProblemLogged = true;
+          if (parsed.has_mistake) currentTeachProblemStruggled = true;
+          saveActiveLesson();
+        }
         if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
       }
     } catch(err){
@@ -3682,6 +3700,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         statusText.textContent = 'Your work looks complete — checking it properly…';
         await runCheck();
         return;
+      }
+      // A hint was actually needed and delivered (the solved-correctly
+      // case returned above) — on a practice problem that counts as
+      // struggling, which holds the next problem at the same level.
+      if (queuedProblemText && historyEntryMode() !== 'upload'){
+        currentTeachProblemStruggled = true;
+        saveActiveLesson();
       }
       // No frozen photo to draw the usual mascot/bubble hint onto yet —
       // surface it on the live camera's own overlay note instead.
@@ -5534,6 +5559,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         logUnattemptedTeachProblem();
         currentProblemId = crypto.randomUUID();
         currentTeachProblemLogged = false;
+        currentTeachProblemStruggled = false;
         currentTeachProblemText = problem;
         // A figure arriving WITH a problem depicts the problem's setup —
         // it belongs in the banner beside the problem text. (Previously a
@@ -5581,9 +5607,22 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     'Practice problem'
   ));
 
+  // The last few outcomes, oldest first, as a line the problem requests
+  // embed — the model paces difficulty from actual results, like a
+  // teacher who remembers how the last problems went.
+  function teachResultsLine(){
+    if (!teachProblemResults.length) return '';
+    return ' My results on the recent problems, oldest first: ' + teachProblemResults.slice(-4).join('; ') + '.';
+  }
+
   function requestNextTeachProblem(){
+    // Record how THIS problem went before asking for the next one.
+    teachProblemResults.push(currentTeachProblemStruggled ? 'solved, but needed hints/retries' : 'solved cleanly');
     return requestTeachProblem(
-      'I solved that problem on paper and Claruno checked it — it was correct. Briefly note anything worth remembering, then give me the NEXT practice problem on the same topic, a touch harder. ONE problem only, labelled "Problem:". Do not include the answer.' + TEACH_PROBLEM_FIGURE_ASK,
+      'I solved that problem on paper and Claruno checked it — it was correct.'
+      + (currentTeachProblemStruggled ? ' It took me hints or retries to get there.' : ' I got it right without help.')
+      + teachResultsLine()
+      + ' Pick the NEXT practice problem\'s difficulty from these results the way a real teacher would: after a clean solve make it a touch harder; after a struggle keep the SAME level and style until I\'m solid — never jump harder while I\'m still shaky. Briefly note anything worth remembering, then give the problem. ONE problem only, labelled "Problem:". Do not include the answer.' + TEACH_PROBLEM_FIGURE_ASK,
       'Next problem'
     );
   }
@@ -5592,8 +5631,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // the replacement steps sideways or DOWN in difficulty, like a
   // teacher would, never up.
   function requestEasierTeachProblem(){
+    teachProblemResults.push('skipped it — too hard');
     return requestTeachProblem(
-      "I couldn't solve that problem — let's skip it. Give me a DIFFERENT practice problem on the same topic at the same level or slightly easier (never harder), so I can build up to it. If there's a common stumbling block in problems like the one I skipped, mention it in one short sentence first. ONE problem only, labelled \"Problem:\". Do not include the answer." + TEACH_PROBLEM_FIGURE_ASK,
+      "I couldn't solve that problem — let's skip it." + teachResultsLine()
+      + " Give me a DIFFERENT practice problem on the same topic at the same level or slightly easier (never harder), so I can build up to it. If there's a common stumbling block in problems like the one I skipped, mention it in one short sentence first. ONE problem only, labelled \"Problem:\". Do not include the answer." + TEACH_PROBLEM_FIGURE_ASK,
       'Easier problem'
     );
   }
