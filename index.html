@@ -1441,7 +1441,7 @@
           <path class="rm-mouth-happy" d="M55,88 Q70,108 85,88 Q70,100 55,88 Z"/>
           <ellipse class="rm-mouth-talk" cx="70" cy="93" rx="9" ry="7"/>
         </svg>
-        <p id="stuckNudgeText">Hey, still with me? If you're stuck, just tap "Give me a hint" — you're probably closer than you think.</p>
+        <p id="stuckNudgeText">Still with me? Tap "Give me a hint" if you're stuck.</p>
         <button type="button" class="stuck-nudge-close" id="stuckNudgeClose" aria-label="Dismiss">&times;</button>
       </div>
     </div>
@@ -4652,7 +4652,21 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     stopNudgeSpeech();
   }
 
+  // Several really short lines, rotated so the nudge never repeats
+  // itself back-to-back. speakNudge caches audio per text, so each line
+  // costs one TTS call the first time it's used and is free after.
+  const STUCK_NUDGE_LINES = [
+    'Still with me? Tap "Give me a hint" if you\'re stuck.',
+    'Stuck? A hint is one tap away.',
+    'Take your time — the hint button\'s there if you need it.',
+    'Need a nudge? Just ask for a hint.',
+    'You\'re probably closer than you think. Hint if you want it.',
+  ];
+  let stuckNudgeLineIndex = 0;
+
   function showStuckNudge(){
+    stuckNudgeText.textContent = STUCK_NUDGE_LINES[stuckNudgeLineIndex % STUCK_NUDGE_LINES.length];
+    stuckNudgeLineIndex++;
     stuckNudge.classList.remove('hidden');
     stuckMascot.classList.remove('is-ok', 'is-mistake', 'is-celebrating');
     requestAnimationFrame(() => stuckMascot.classList.add('is-talking'));
