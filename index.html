@@ -5043,20 +5043,27 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     }
   });
 
-  // Enter advances to the next problem whenever the Next-problem button
-  // is the visible primary action — after a solved problem the keyboard
-  // shouldn't need a mouse reach. Stays out of the way while focus is on
-  // any control that handles Enter itself (inputs, textareas, buttons)
-  // and while the image lightbox is open.
+  // Global Enter handler: Enter activates the screen's primary action —
+  // whichever of these is currently visible and enabled, in priority
+  // order (most specific first). Never fires while focus sits on a
+  // control that handles Enter itself (inputs, textareas, buttons — the
+  // Q&A box, note field, and problem editor keep their own behavior) or
+  // while the image lightbox is open. Check/Hint are deliberately NOT
+  // Enter-driven: they're two sibling actions with real cost, and a
+  // stray Enter shouldn't submit a photo for grading.
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.repeat) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.tagName === 'BUTTON' || t.isContentEditable)) return;
-    if (lessonNextProblemBtn.classList.contains('hidden')) return;
     const lightboxEl = document.getElementById('lightbox');
     if (lightboxEl && !lightboxEl.classList.contains('hidden')) return;
+    // offsetParent is null for anything display:none'd, including via a
+    // hidden ancestor — exactly the "is it actually on screen" test.
+    const primary = [lessonNextProblemBtn, teachReadyBtn, homeworkUploadStartBtn, startLessonBtn]
+      .find((btn) => btn && !btn.disabled && btn.offsetParent !== null);
+    if (!primary) return;
     e.preventDefault();
-    lessonNextProblemBtn.click();
+    primary.click();
   });
 
   function openAttachmentPreview(src){
