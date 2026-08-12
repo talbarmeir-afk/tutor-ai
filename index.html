@@ -4669,6 +4669,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     lastStuckFrame = gray;
 
     if (now - lastStuckActivityAt > STUCK_IDLE_MS && now - lastStuckNudgeAt > STUCK_RENOTIFY_MS){
+      // Only while a problem is actually assigned — reading a teach
+      // lesson or setting up test prep before asking for a practice
+      // problem is not "stuck". Resetting the clock (not just skipping)
+      // means the idle count starts fresh the moment a problem lands,
+      // instead of a nudge firing the instant it appears.
+      if (!currentAssignedProblemText()){
+        resetStuckClock();
+        return;
+      }
       lastStuckNudgeAt = now;
       showStuckNudge();
     }
