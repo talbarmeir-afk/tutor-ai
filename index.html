@@ -6473,13 +6473,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   function renderCurrentLessonEntries(entries){
     currentLessonList.innerHTML = '';
+    // An empty "This lesson so far" card is just noise at lesson start —
+    // the whole section stays hidden until the first check lands (each
+    // saved entry refreshes this via loadCurrentLesson).
     if (!entries || !entries.length){
-      const empty = document.createElement('p');
-      empty.className = 'history-empty';
-      empty.textContent = 'Nothing checked yet in this lesson — your checks will show up here as you go.';
-      currentLessonList.appendChild(empty);
+      currentLessonSection.classList.add('hidden');
       return;
     }
+    currentLessonSection.classList.remove('hidden');
     groupByProblem(entries).forEach((steps) => {
       currentLessonList.appendChild(buildProblemGroup(steps));
     });
@@ -6502,8 +6503,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   function showCurrentLesson(lessonId){
     activeLessonId = lessonId;
+    // Starts hidden (renderCurrentLessonEntries with no rows keeps it
+    // that way) — loadCurrentLesson unhides it once entries exist, which
+    // matters on mid-lesson resume where checks may already be saved.
     renderCurrentLessonEntries([]);
-    currentLessonSection.classList.remove('hidden');
     loadCurrentLesson();
   }
 
