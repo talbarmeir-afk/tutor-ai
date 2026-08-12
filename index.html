@@ -5520,7 +5520,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   // Shared tail for both problem requests: whenever the problem has any
   // visual setup, a sketch of the GIVENS comes with it.
-  const TEACH_PROBLEM_FIGURE_ASK = ' If the problem involves a shape, graph, or anything visual — a triangle with given sides or angles, a number line, a function graph — include the figure block showing the problem\'s setup with the GIVEN data labeled on it, and never anything that reveals the answer. In the problem text, write any fraction whose numerator or denominator is more than a single number as {numerator}/{denominator} — curly braces around each part — so it can be displayed stacked; never use curly braces for anything else.';
+  const TEACH_PROBLEM_FIGURE_ASK = ' If the problem involves a shape, graph, or anything visual — a triangle with given sides or angles, a number line, a function graph — include the figure block showing the problem\'s setup with the GIVEN data labeled on it, and never anything that reveals the answer. In the problem text, write EVERY fraction as {numerator}/{denominator} — curly braces around each part, simple ones included ({2}/{3}, {4x+25}/{5x}) — so they can be displayed stacked the way they\'d be written on paper; never use curly braces for anything else.';
 
   teachReadyBtn.addEventListener('click', () => requestTeachProblem(
     'I understand the material — now give me exactly ONE practice problem to solve by hand on paper, labelled "Problem:", matched to what you just taught. Do not include the answer, and add at most one short encouraging sentence besides the problem itself.' + TEACH_PROBLEM_FIGURE_ASK,
