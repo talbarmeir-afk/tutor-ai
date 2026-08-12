@@ -131,7 +131,7 @@
   body.lesson-cam-on .top-bar{ margin-bottom:10px; }
   body.lesson-cam-on .tab-bar{ margin-bottom:12px; }
   body.lesson-cam-on .subtab-bar{ margin-bottom:12px; }
-  body.lesson-cam-on .lesson-timer{ margin-bottom:10px; }
+  body.lesson-cam-on .lesson-status-row{ margin-bottom:10px; }
   body.lesson-cam-on .check-card{ padding:14px 18px 16px; margin-bottom:18px; }
   body.lesson-cam-on .check-card-head{ margin-bottom:8px; }
   body.lesson-cam-on .lesson-cam-actions{ margin-top:10px; }
@@ -846,13 +846,19 @@
      old ~3.5%-opacity background was effectively invisible, leaving pale
      text sitting directly on the page's own background, which washed out
      completely against white/light surroundings. */
+  .lesson-status-row{ display:flex; align-items:stretch; margin:0 0 20px; max-width:100%; }
   .lesson-timer{
-    display:inline-block;
+    display:inline-flex; align-items:center;
     font-family:'Karla', sans-serif; font-weight:700; font-size:13px;
     color:var(--chalk); background:var(--bg-soft);
     border:1px solid rgba(24,24,22,0.14); border-radius:20px;
     padding:6px 14px; letter-spacing:.02em; white-space:nowrap;
-    margin:0 0 20px;
+    margin:0;
+  }
+  /* With the segment strip visible beside it, the timer becomes the
+     strip's first cell: shared edge squares off, one border between. */
+  .lesson-status-row:has(.lesson-mode-progress:not(.hidden)) .lesson-timer{
+    border-radius:20px 0 0 20px; border-right:none;
   }
   .lesson-timer.is-low{ color:#fff; background:var(--pen-red); border-color:var(--pen-red); }
   .lesson-timer.is-ended{ color:var(--ink-muted); background:var(--bg-soft); border-color:rgba(24,24,22,0.2); }
@@ -875,27 +881,31 @@
   .lesson-mode-option input{ width:17px; height:17px; accent-color:var(--chalk); cursor:pointer; flex-shrink:0; }
   /* Sits near the lesson timer so the student always knows where they are
      in a lesson — and it IS the lesson's navigation, not just a readout:
-     every pill jumps to its segment, the "+" opens the plan picker. */
+     every cell jumps to its segment, the "+" opens the plan picker. One
+     joined strip continuing off the timer cell, dividers between cells,
+     no arrows: adjacency conveys the order. */
   .lesson-mode-progress{
-    display:flex; flex-wrap:wrap; align-items:center; gap:6px;
-    font-family:'Karla', sans-serif; font-size:12.5px; color:var(--ink-muted);
-    margin:-10px 0 20px;
+    display:inline-flex; align-items:stretch;
+    border:1px solid rgba(24,24,22,0.14); border-radius:0 20px 20px 0;
+    overflow:hidden; max-width:100%; overflow-x:auto;
   }
-  .lesson-mode-pill{
+  /* Rare case of the strip showing without the timer beside it — give it
+     back its own left rounding. */
+  .lesson-timer.hidden + .lesson-mode-progress{ border-radius:20px; }
+  .lesson-mode-cell{
+    display:inline-flex; align-items:center;
     font-family:'Karla', sans-serif; font-weight:600; font-size:12.5px;
     background:none; color:var(--ink-muted);
-    border:1px solid rgba(24,24,22,0.22); border-radius:999px;
-    padding:5px 13px; cursor:pointer;
-    transition:background .15s ease, color .15s ease, border-color .15s ease;
+    border:none; border-left:1px solid rgba(24,24,22,0.14);
+    padding:6px 14px; cursor:pointer; white-space:nowrap;
+    transition:background .15s ease, color .15s ease;
   }
-  .lesson-mode-pill:hover{ color:var(--ink); border-color:rgba(24,24,22,0.45); background:rgba(24,24,22,0.04); }
-  .lesson-mode-pill:focus-visible{ outline:2px solid rgba(24,24,22,0.4); outline-offset:2px; }
-  .lesson-mode-pill.is-current{
-    background:var(--ink); color:#fff; border-color:var(--ink); cursor:default;
-  }
-  .lesson-mode-pill.is-current:hover{ background:var(--ink); color:#fff; }
-  .lesson-mode-pill.is-add{ border-style:dashed; padding:5px 11px; }
-  .lesson-mode-arrow{ color:var(--ink-muted); opacity:.55; user-select:none; }
+  .lesson-mode-cell:first-child{ border-left:none; }
+  .lesson-mode-cell:hover{ color:var(--ink); background:rgba(24,24,22,0.04); }
+  .lesson-mode-cell:focus-visible{ outline:2px solid rgba(24,24,22,0.4); outline-offset:-2px; }
+  .lesson-mode-cell.is-current{ background:rgba(24,24,22,0.08); color:var(--ink); font-weight:700; cursor:default; }
+  .lesson-mode-cell.is-current:hover{ background:rgba(24,24,22,0.08); color:var(--ink); }
+  .lesson-mode-add{ padding:6px 12px; }
 
   .history-collapse-controls{ display:flex; gap:16px; margin:0 0 14px; }
   .history-lesson + .history-lesson{ padding-top:18px; border-top:1px solid var(--paper-line); }
@@ -1250,10 +1260,16 @@
     </div>
   </div>
 
-  <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
-  <!-- The lesson stepper: one clickable pill per planned segment plus a
-       "+" for changing the plan — see renderLessonModeProgress(). -->
-  <nav class="lesson-mode-progress hidden" id="lessonModeProgress" aria-label="Lesson sections"></nav>
+  <!-- One joined strip: the countdown is the first cell, the planned
+       segments follow as clickable cells (current one filled), "+" at
+       the end changes the plan — see renderLessonModeProgress(). The
+       timer and the nav stay separate elements (they hide/show on
+       different schedules) but render as a single control when both
+       are visible. -->
+  <div class="lesson-status-row">
+    <div class="lesson-timer hidden" id="lessonTimer">Lesson: 45:00</div>
+    <nav class="lesson-mode-progress hidden" id="lessonModeProgress" aria-label="Lesson sections"></nav>
+  </div>
 
   <!-- TEMP TEST ONLY — remove once nudge testing is done. Not part of the
        real product; fires the same showStuckNudge() the 1-minute-idle
@@ -1970,35 +1986,28 @@
     }
     lessonModeProgress.classList.remove('hidden');
     lessonModeProgress.innerHTML = '';
+    // Cells carry no "done" checkmarks on purpose — a check next to a
+    // segment reads as "this is the selected one", which is exactly
+    // what the filled current cell already means.
     lessonModeQueue.forEach((mode, i) => {
-      if (i){
-        const sep = document.createElement('span');
-        sep.className = 'lesson-mode-arrow';
-        sep.textContent = '→';
-        sep.setAttribute('aria-hidden', 'true');
-        lessonModeProgress.appendChild(sep);
-      }
       const label = LESSON_MODE_LABELS[mode] || mode;
-      const pill = document.createElement('button');
-      pill.type = 'button';
-      pill.className = 'lesson-mode-pill' + (i === lessonModeIndex ? ' is-current' : '');
-      // The only segment with a knowable "finished" state is homework
-      // (its queue has an end); teach/test-prep are open-ended.
-      const done = mode === 'homework' && homeworkQueue.length && homeworkQueueIndex >= homeworkQueue.length;
-      pill.textContent = (done ? '✓ ' : '') + label;
-      pill.title = i === lessonModeIndex ? "You're here" : 'Go to ' + label;
-      if (i === lessonModeIndex) pill.setAttribute('aria-current', 'step');
-      pill.addEventListener('click', () => jumpToLessonMode(i));
-      lessonModeProgress.appendChild(pill);
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'lesson-mode-cell' + (i === lessonModeIndex ? ' is-current' : '');
+      cell.textContent = label;
+      cell.title = i === lessonModeIndex ? "You're here" : 'Go to ' + label;
+      if (i === lessonModeIndex) cell.setAttribute('aria-current', 'step');
+      cell.addEventListener('click', () => jumpToLessonMode(i));
+      lessonModeProgress.appendChild(cell);
     });
-    const addPill = document.createElement('button');
-    addPill.type = 'button';
-    addPill.className = 'lesson-mode-pill is-add';
-    addPill.textContent = '+';
-    addPill.title = 'Change what this lesson covers';
-    addPill.setAttribute('aria-label', 'Change what this lesson covers');
-    addPill.addEventListener('click', () => showMidLessonPicker(true));
-    lessonModeProgress.appendChild(addPill);
+    const addCell = document.createElement('button');
+    addCell.type = 'button';
+    addCell.className = 'lesson-mode-cell lesson-mode-add';
+    addCell.textContent = '+';
+    addCell.title = 'Change what this lesson covers';
+    addCell.setAttribute('aria-label', 'Change what this lesson covers');
+    addCell.addEventListener('click', () => showMidLessonPicker(true));
+    lessonModeProgress.appendChild(addCell);
   }
 
   // Direct navigation between planned segments, in either direction —
@@ -4215,11 +4224,8 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     if (!hadNext) showMidLessonPicker();
     // The mid-queue branch refreshes the banner via lessonShowLive — this
     // exhausted branch has to do it itself, or "Problem N of N" lingers
-    // over the next segment's UI. The stepper re-render picks up the
-    // homework pill's ✓ even when homework was the last planned mode
-    // (advanceLessonMode no-ops there, so it didn't re-render).
+    // over the next segment's UI.
     renderCurrentHomeworkProblem();
-    renderLessonModeProgress();
     updateHomeworkDownloadUI();
     saveActiveLesson();
   }
