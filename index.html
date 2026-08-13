@@ -7844,7 +7844,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   async function loadDashboard(){
     if (!supabaseClient || !currentSession) return;
-    const [lessonsRes, entriesRes, profileRes] = await Promise.all([
+    const [lessonsRes, entriesResFirst, profileRes] = await Promise.all([
       supabaseClient.from('lessons').select('started_at, duration_seconds').eq('user_id', currentSession.user.id),
       // Skipped problems (or ones solved for the student via Q&A) never
       // got a genuine attempt — counting them would inflate mastery.
@@ -7854,6 +7854,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       supabaseClient.from('history_entries').select('topic, has_mistake, skipped').eq('user_id', currentSession.user.id),
       supabaseClient.from('profiles').select('weekly_target_lessons').eq('user_id', currentSession.user.id).maybeSingle(),
     ]);
+    let entriesRes = entriesResFirst;
+    if (entriesRes.error){
+      // A pre-migration table without the skipped column fails the whole
+      // select — retry with the columns every deployment has, so Topics
+      // at least shows the checks (skips can't be excluded then, which
+      // beats showing nothing).
+      console.warn('Dashboard history query failed, retrying without skipped column', entriesRes.error);
+      entriesRes = await supabaseClient.from('history_entries').select('topic, has_mistake').eq('user_id', currentSession.user.id);
+    }
     if (lessonsRes.error) console.warn('Could not load lessons for dashboard', lessonsRes.error);
     if (entriesRes.error) console.warn('Could not load history for dashboard', entriesRes.error);
 
