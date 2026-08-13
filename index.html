@@ -7845,19 +7845,28 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
   async function loadDashboard(){
     if (!supabaseClient || !currentSession) return;
     const [lessonsRes, entriesRes, profileRes] = await Promise.all([
-      supabaseClient.from('lessons').select('started_at').eq('user_id', currentSession.user.id),
+      supabaseClient.from('lessons').select('started_at, duration_seconds').eq('user_id', currentSession.user.id),
       // Skipped problems (or ones solved for the student via Q&A) never
-      // got a genuine attempt — counting them here would inflate mastery
-      // with checks that didn't actually happen.
-      supabaseClient.from('history_entries').select('topic, has_mistake').eq('user_id', currentSession.user.id).eq('skipped', false),
+      // got a genuine attempt — counting them would inflate mastery.
+      // The skip filter runs CLIENT-side: check rows never set the
+      // skipped column, so where it's NULL a server-side eq(false)
+      // matched nothing and emptied the whole Topics panel.
+      supabaseClient.from('history_entries').select('topic, has_mistake, skipped').eq('user_id', currentSession.user.id),
       supabaseClient.from('profiles').select('weekly_target_lessons').eq('user_id', currentSession.user.id).maybeSingle(),
     ]);
     if (lessonsRes.error) console.warn('Could not load lessons for dashboard', lessonsRes.error);
     if (entriesRes.error) console.warn('Could not load history for dashboard', entriesRes.error);
 
     const weeklyTarget = (profileRes.data && profileRes.data.weekly_target_lessons) || 3;
-    const lessons = lessonsRes.data || [];
-    const entries = entriesRes.data || [];
+    // A lesson counts toward the week/streak only with real engagement:
+    // at least 5 recorded minutes, or no end record yet but started
+    // within the last hour (plausibly in progress right now). Instant
+    // test starts and abandoned blank rows used to inflate the counts.
+    const lessons = (lessonsRes.data || []).filter((l) => {
+      if (l.duration_seconds != null) return l.duration_seconds >= 300;
+      return l.started_at && (Date.now() - new Date(l.started_at).getTime()) < 60 * 60 * 1000;
+    });
+    const entries = (entriesRes.data || []).filter((e) => !e.skipped);
 
     const weekCounts = new Map();
     lessons.forEach((l) => {
