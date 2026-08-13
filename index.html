@@ -429,6 +429,7 @@
     letter-spacing:.05em; text-transform:uppercase;
     color:#854F0B; margin:0 0 6px;
   }
+  .teach-detour-retry{ margin-top:8px; }
   .teach-panel .qa-form{ margin-top:10px; }
   .check-card .mode-toggle{ margin-bottom:12px; }
 
@@ -2232,6 +2233,7 @@
           item.appendChild(buildTeachDetourBadge(restoredDetour.title));
         }
         item.appendChild(a);
+        if (restoredDetour) item.appendChild(buildTeachDetourRetryBtn(restoredDetour.title));
         teachThread.appendChild(item);
       }
       teachPanel.classList.remove('hidden');
@@ -3348,6 +3350,23 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return badge;
   }
 
+  // Each detour carries its own "explain this differently" at its end —
+  // the panel-wide button below the thread re-explains the MAIN lesson,
+  // while this one re-explains the detour's missing piece specifically
+  // (and asks for the DETOUR marker again, so the retry renders as a
+  // detour block too).
+  function buildTeachDetourRetryBtn(title){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'verdict-icon-btn verdict-labeled-btn teach-detour-retry';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 1 2.6 6.4"/><path d="M3 22v-6h6"/></svg><span>Explain this differently</span>';
+    btn.addEventListener('click', () => teachFollowupAsk(
+      'Your detour explanation about ' + title + " didn't fully click for me. Please explain that SAME missing piece again in a different way — a different angle or a different everyday example. Start your reply with the same \"DETOUR: " + title + '" marker line, and end by bridging back to the main topic again.',
+      'Explain the detour differently'
+    ));
+    return btn;
+  }
+
   async function teachFollowupAsk(question, label){
     if (!teachConversation.length || teachAgainBtn.disabled) return;
     const item = document.createElement('div');
@@ -3394,6 +3413,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         figureEl.src = teachFigureSrc(answerParts.svg);
         item.appendChild(figureEl);
       }
+      if (detour) item.appendChild(buildTeachDetourRetryBtn(detour.title));
     } catch(err){
       a.textContent = "Sorry, that didn't go through. Try again.";
       a.className = 'is-pending';
