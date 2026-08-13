@@ -1333,6 +1333,11 @@
         <img id="teachFigureImg" alt="Illustration for this lesson">
       </div>
     </div>
+    <div class="teach-thread" id="teachThread"></div>
+    <!-- BELOW the thread, like every other control here — these act on
+         the LATEST explanation, so pinned above the thread they end up
+         stranded next to the first one as follow-ups append (the same
+         trap that bit the ready and continue buttons before). -->
     <div class="verdict-actions hidden" id="teachActions">
       <button type="button" class="verdict-icon-btn verdict-labeled-btn" id="teachAgainBtn" title="Explain it differently" aria-label="Explain it differently">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1350,7 +1355,6 @@
         <span>Ask a question</span>
       </button>
     </div>
-    <div class="teach-thread" id="teachThread"></div>
     <form class="qa-form hidden" id="teachAskForm">
       <input type="text" id="teachAskInput" class="qa-input" placeholder="Ask about this explanation…" autocomplete="off">
       <button type="submit" class="qa-send" id="teachAskSend">Ask</button>
