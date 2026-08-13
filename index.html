@@ -939,7 +939,29 @@
   }
   .history-lesson.is-collapsed .history-lesson-caret{ transform:rotate(-90deg); }
   .history-lesson.is-collapsed .history-lesson-groups,
+  .history-lesson.is-collapsed .history-teach-log,
   .history-lesson.is-collapsed .homework-download-link{ display:none; }
+  .history-teach-log{ margin:6px 0 10px; }
+  .history-teach-body{
+    border:1px solid var(--paper-line); border-radius:10px;
+    padding:14px 16px; margin-top:8px; background:var(--paper);
+  }
+  .history-teach-entry{ margin:0 0 14px; }
+  .history-teach-entry:last-child{ margin-bottom:0; }
+  .history-teach-entry.is-detour{
+    background:rgba(239,159,39,0.08);
+    border-left:3px solid #EF9F27; border-radius:0; padding:8px 12px;
+  }
+  .history-teach-q{
+    font-family:'Karla', sans-serif; font-size:12.5px; font-weight:600;
+    color:rgba(24,24,22,0.6); margin:0 0 2px;
+  }
+  .history-teach-detour-badge{
+    font-family:'Karla', sans-serif; font-weight:700; font-size:11.5px;
+    letter-spacing:.05em; text-transform:uppercase;
+    color:#854F0B; margin:0 0 6px;
+  }
+  .history-teach-body .teach-script{ font-size:15px; line-height:28px; background-image:none; }
   .history-lesson-groups{ display:flex; flex-direction:column; gap:14px; }
   .auth-choice{ display:flex; gap:8px; }
   .auth-choice button.ghost-btn, .auth-choice button.primary-btn{ padding:9px 18px; font-size:13.5px; }
@@ -2163,6 +2185,8 @@
         problemLogged: currentTeachProblemLogged,
         struggled: currentTeachProblemStruggled,
         results: teachProblemResults,
+        segmentId: currentTeachSegmentId,
+        segmentStartedAt: currentTeachSegmentStartedAt,
         figureSvg: lastTeachFigureSvg,
       } : null,
     };
@@ -2205,6 +2229,11 @@
       currentTeachProblemLogged = t.problemLogged === undefined ? true : !!t.problemLogged;
       currentTeachProblemStruggled = !!t.struggled;
       teachProblemResults = Array.isArray(t.results) ? t.results.filter((r) => typeof r === 'string') : [];
+      // Keep the segment's teach_log identity across refresh so updates
+      // keep landing on the same entry (a missing one gets a fresh id —
+      // worst case the pre-refresh part sits in a separate entry).
+      currentTeachSegmentId = (typeof t.segmentId === 'string' && t.segmentId) ? t.segmentId : crypto.randomUUID();
+      currentTeachSegmentStartedAt = typeof t.segmentStartedAt === 'string' ? t.segmentStartedAt : new Date().toISOString();
       teachPanelTitle.textContent = t.title || '';
       teachPanelBody.textContent = teachConversation[1].content || '';
       if (t.figureSvg){
@@ -2973,6 +3002,27 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // up after a clean solve, held level after a struggle.
   let currentTeachProblemStruggled = false;
   let teachProblemResults = [];
+  // Identity of the current teach/test-prep segment in lessons.teach_log
+  // — one entry per seed, updated after every exchange, so the whole
+  // taught lesson (explanations, detours, problems) is reviewable from
+  // Past Lessons after the lesson ends.
+  let currentTeachSegmentId = null;
+  let currentTeachSegmentStartedAt = null;
+
+  // Fire-and-forget: snapshots the whole current teach conversation into
+  // the lesson's teach_log. Called after every exchange rather than at
+  // lesson end, so a closed tab loses nothing.
+  function pushTeachLogSnapshot(){
+    if (!currentLessonId || !currentTeachSegmentId || teachConversation.length < 2) return;
+    if (!(window.mathTutorHistory && window.mathTutorHistory.saveTeachLog)) return;
+    window.mathTutorHistory.saveTeachLog(currentLessonId, currentTeachSegmentId, {
+      title: teachPanelTitle.textContent || '',
+      mode: workSourceSelect.value,
+      startedAt: currentTeachSegmentStartedAt,
+      conversation: teachConversation,
+      labels: teachThreadLabels,
+    });
+  }
 
   function extractTeachProblem(text){
     const idx = String(text).lastIndexOf('Problem:');
@@ -3245,9 +3295,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     currentTeachProblemText = null;
     currentTeachProblemSvg = null;
     currentTeachProblemLogged = false;
-    // A fresh seed is a fresh topic — difficulty history restarts.
+    // A fresh seed is a fresh topic — difficulty history restarts, and
+    // the segment gets its own teach_log entry.
     currentTeachProblemStruggled = false;
     teachProblemResults = [];
+    currentTeachSegmentId = crypto.randomUUID();
+    currentTeachSegmentStartedAt = new Date().toISOString();
     updateTeachReadyButton();
     renderCurrentHomeworkProblem();
     teachFigure.classList.add('hidden');
@@ -3308,6 +3361,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         teachFigure.classList.remove('hidden');
       }
       saveActiveLesson();
+      pushTeachLogSnapshot();
       teachActions.classList.remove('hidden');
       // The lesson arrives without a problem — the ready button is now the
       // student's path to one; the camera box waits until it's assigned.
@@ -3423,6 +3477,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       teachConversation.push({ role: 'assistant', content: answerParts.text });
       teachThreadLabels.push(label);
       saveActiveLesson();
+      pushTeachLogSnapshot();
       a.className = 'teach-script';
       const detour = extractTeachDetour(answerParts.text);
       if (detour){
@@ -5685,6 +5740,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       teachConversation.push({ role: 'assistant', content: parts.text });
       teachThreadLabels.push(threadLabel);
       saveActiveLesson();
+      pushTeachLogSnapshot();
       const remainder = problem ? stripTeachProblem(parts.text) : parts.text;
       if (remainder){
         a.className = 'teach-script';
@@ -6676,6 +6732,61 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
   // One problem's checks as a card — shared between the Past Lessons list
   // and the current-lesson log shown while a lesson is running.
+  // One saved teach/test-prep segment from lessons.teach_log: the seed
+  // lesson text, then every follow-up exchange with its label, detour
+  // replies marked the same way the live thread marks them. Collapsed
+  // behind a toggle — the taught text is long.
+  function buildTeachLogBlock(seg){
+    const wrap = document.createElement('div');
+    wrap.className = 'history-teach-log';
+    const title = seg.title || 'What was taught';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'history-qa-toggle';
+    const showLabel = `Show the full lesson — ${title}`;
+    toggle.textContent = showLabel;
+    const body = document.createElement('div');
+    body.className = 'history-teach-body hidden';
+
+    const addReply = (labelText, text) => {
+      const raw = String(text || '');
+      const m = raw.match(/^\s*DETOUR:[ \t]*(.+)[ \t]*\n+/);
+      const item = document.createElement('div');
+      item.className = 'history-teach-entry' + (m ? ' is-detour' : '');
+      if (labelText){
+        const q = document.createElement('div');
+        q.className = 'history-teach-q';
+        q.textContent = labelText;
+        item.appendChild(q);
+      }
+      if (m){
+        const badge = document.createElement('div');
+        badge.className = 'history-teach-detour-badge';
+        badge.textContent = 'Detour — filling a gap: ' + m[1].trim();
+        item.appendChild(badge);
+      }
+      const p = document.createElement('div');
+      p.className = 'teach-script';
+      p.textContent = m ? raw.slice(m[0].length) : raw;
+      item.appendChild(p);
+      body.appendChild(item);
+    };
+
+    addReply(null, seg.conversation[1] && seg.conversation[1].content);
+    const labels = Array.isArray(seg.labels) ? seg.labels : [];
+    for (let i = 2; i + 1 < seg.conversation.length; i += 2){
+      addReply(labels[(i - 2) / 2] || 'Question', seg.conversation[i + 1] && seg.conversation[i + 1].content);
+    }
+
+    toggle.addEventListener('click', () => {
+      const nowHidden = body.classList.toggle('hidden');
+      toggle.textContent = nowHidden ? showLabel : `Hide the full lesson — ${title}`;
+    });
+    wrap.appendChild(toggle);
+    wrap.appendChild(body);
+    return wrap;
+  }
+
   function buildProblemGroup(steps){
     const group = document.createElement('div');
     group.className = 'history-group';
@@ -6898,6 +7009,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
         lessonEl.appendChild(dlBtn);
       }
 
+      // The taught content itself — lesson text, explanations, detours —
+      // one collapsible block per teach/test-prep seed, so the student
+      // can come back and re-read what was taught after the lesson.
+      const teachLog = (meta && meta.teach_log && typeof meta.teach_log === 'object') ? Object.values(meta.teach_log) : [];
+      teachLog
+        .filter((seg) => seg && Array.isArray(seg.conversation) && seg.conversation.length >= 2)
+        .sort((a, b) => String(a.startedAt || '').localeCompare(String(b.startedAt || '')))
+        .forEach((seg) => lessonEl.appendChild(buildTeachLogBlock(seg)));
+
       const groupsEl = document.createElement('div');
       groupsEl.className = 'history-lesson-groups';
 
@@ -6937,7 +7057,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     if (lessonIds.length){
       const { data: lessons, error: lessonsError } = await supabaseClient
         .from('lessons')
-        .select('id, duration_seconds, started_at, taught_subjects')
+        .select('id, duration_seconds, started_at, taught_subjects, teach_log')
         .in('id', lessonIds);
       if (lessonsError){
         console.warn('Could not load lesson durations', lessonsError);
@@ -7133,6 +7253,32 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
+  // One teach_log entry per teach/test-prep seed, updated after every
+  // exchange (read-modify-write on the jsonb map keyed by segment id) —
+  // the full taught lesson stays reviewable from Past Lessons after the
+  // lesson ends. Best-effort: a pre-migration lessons table without the
+  // column just logs a warning.
+  async function saveTeachLog(lessonId, segmentId, segment){
+    if (!supabaseClient || !currentSession || !lessonId || !segmentId) return;
+    try{
+      const { data, error: readError } = await supabaseClient
+        .from('lessons')
+        .select('teach_log')
+        .eq('id', lessonId)
+        .single();
+      if (readError) throw readError;
+      const log = (data && data.teach_log && typeof data.teach_log === 'object') ? data.teach_log : {};
+      log[segmentId] = segment;
+      const { error } = await supabaseClient
+        .from('lessons')
+        .update({ teach_log: log })
+        .eq('id', lessonId);
+      if (error) throw error;
+    } catch(err){
+      console.warn('Could not save teach log', err);
+    }
+  }
+
   async function startLessonRecord(lessonId, modes){
     if (!supabaseClient || !currentSession) return;
     try{
@@ -7187,7 +7333,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     }
   }
 
-  window.mathTutorHistory = { saveEntry, saveSkipped, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord, showCurrentLesson, hideCurrentLesson, recordTaughtSubject, recordQA };
+  window.mathTutorHistory = { saveEntry, saveSkipped, openHistory: openHistoryPanel, startLessonRecord, endLessonRecord, showCurrentLesson, hideCurrentLesson, recordTaughtSubject, recordQA, saveTeachLog };
 
   // ---- Profile, exams, dashboard, settings ----
   // Loaded lazily (on tab switch, via window.mathTutorProfile) rather than

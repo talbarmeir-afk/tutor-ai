@@ -396,6 +396,7 @@ alter table history_entries add column if not exists skipped boolean not null de
 alter table history_entries add column if not exists clean_thumbnail text;
 alter table history_entries add column if not exists problem_text text;
 alter table lessons add column if not exists planned_modes text;
+alter table lessons add column if not exists teach_log jsonb;
 
 create table if not exists profiles (
   user_id uuid primary key references auth.users,
