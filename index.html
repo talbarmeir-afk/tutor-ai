@@ -6471,7 +6471,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     resetBtn.classList.add('hidden');
     watchResumeRow.classList.remove('hidden');
     renderResult(parsed, frame, buildWatchPrompt(priorStateSnapshot));
-    if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, frame, 'watch', currentProblemId, currentLessonId);
+    // Same rule as the upload/lesson path: an unreadable photo never had
+    // a genuine check happen — don't record it as one.
+    if (window.mathTutorHistory && !parsed.unreadable) window.mathTutorHistory.saveEntry(parsed, frame, 'watch', currentProblemId, currentLessonId);
   }
 
   // "Continue" keeps watchState as-is, so the next check still knows about
