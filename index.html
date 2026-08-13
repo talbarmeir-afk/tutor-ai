@@ -429,7 +429,7 @@
     letter-spacing:.05em; text-transform:uppercase;
     color:#854F0B; margin:0 0 6px;
   }
-  .teach-detour-retry{ margin-top:8px; }
+  .teach-detour-actions{ display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
   .teach-panel .qa-form{ margin-top:10px; }
   .check-card .mode-toggle{ margin-bottom:12px; }
 
@@ -2233,7 +2233,7 @@
           item.appendChild(buildTeachDetourBadge(restoredDetour.title));
         }
         item.appendChild(a);
-        if (restoredDetour) item.appendChild(buildTeachDetourRetryBtn(restoredDetour.title));
+        if (restoredDetour) item.appendChild(buildTeachDetourActions(restoredDetour.title));
         teachThread.appendChild(item);
       }
       teachPanel.classList.remove('hidden');
@@ -3367,6 +3367,30 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     return btn;
   }
 
+  // The explicit way back from a branch: asks for a short "here's where
+  // we were" recap of the MAIN lesson, delivered as a normal (unmarked)
+  // reply — so the student re-reads the main idea right below the
+  // detour and picks up where they left off.
+  function buildTeachDetourBackBtn(){
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'verdict-icon-btn verdict-labeled-btn';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg><span>Back to the main lesson</span>';
+    btn.addEventListener('click', () => teachFollowupAsk(
+      'That detour helped — now take me back to the main lesson. In a few short lines, remind me where we were and re-state the key idea we were working on before the detour, so I can pick up right where we left off. No new detour in this reply, and no new practice problem.',
+      'Back to the main lesson'
+    ));
+    return btn;
+  }
+
+  function buildTeachDetourActions(title){
+    const row = document.createElement('div');
+    row.className = 'teach-detour-actions';
+    row.appendChild(buildTeachDetourRetryBtn(title));
+    row.appendChild(buildTeachDetourBackBtn());
+    return row;
+  }
+
   async function teachFollowupAsk(question, label){
     if (!teachConversation.length || teachAgainBtn.disabled) return;
     const item = document.createElement('div');
@@ -3413,7 +3437,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
         figureEl.src = teachFigureSrc(answerParts.svg);
         item.appendChild(figureEl);
       }
-      if (detour) item.appendChild(buildTeachDetourRetryBtn(detour.title));
+      if (detour) item.appendChild(buildTeachDetourActions(detour.title));
     } catch(err){
       a.textContent = "Sorry, that didn't go through. Try again.";
       a.className = 'is-pending';
