@@ -885,6 +885,12 @@
   #lessonEndedNote h2{ color:var(--pen-red); }
   .lesson-note p{ font-size:14px; color:var(--ink-muted); line-height:1.6; margin:0 0 16px; }
   .lesson-note-actions{ display:flex; gap:10px; flex-wrap:wrap; }
+  /* The previous lesson's mid-way position, offered for continuation. */
+  .lesson-carryover{
+    border:1px solid var(--paper-line); background:var(--bg-soft);
+    border-radius:10px; padding:14px 16px; margin:0 0 18px;
+  }
+  .lesson-carryover p{ margin:0 0 12px; }
 
   .lesson-mode-picker{ display:flex; flex-direction:column; gap:10px; margin:0 0 18px; }
   .lesson-mode-option{
@@ -1263,6 +1269,15 @@
   <div class="lesson-note hidden" id="lessonStartPrompt">
     <h2>Ready for a lesson?</h2>
     <p>What do you want to do this lesson? Pick as many as you like — Claruno will work through them in order, starting a 45-minute lesson once you begin.</p>
+    <!-- Shown when the previous lesson ended mid-way: continuing starts
+         a NEW lesson (fresh id and clock) restored to that position. -->
+    <div class="lesson-carryover hidden" id="lessonCarryoverBanner">
+      <p id="lessonCarryoverText"></p>
+      <div class="lesson-note-actions">
+        <button type="button" class="primary-btn" id="lessonCarryoverContinueBtn">Continue where you left off</button>
+        <button type="button" class="ghost-btn" id="lessonCarryoverDismissBtn">Start fresh instead</button>
+      </div>
+    </div>
     <div class="lesson-mode-picker" id="lessonModePicker">
       <label class="lesson-mode-option">
         <input type="checkbox" name="lessonMode" value="homework" checked>
@@ -1290,6 +1305,7 @@
     <h2>Lesson ended</h2>
     <p id="lessonEndedText">This lesson has ended and can't be resumed. Start a new one to keep going, or look back through your past lessons.</p>
     <div class="lesson-note-actions">
+      <button class="primary-btn hidden" id="lessonEndedContinueBtn" type="button">Keep going in a new lesson &#8594;</button>
       <button class="primary-btn" id="startNewLessonBtn" type="button">Start a new lesson</button>
       <button class="ghost-btn" id="lessonEndedHistoryBtn" type="button">Past lessons</button>
     </div>
@@ -1992,6 +2008,11 @@
   const lessonEndedNote = document.getElementById('lessonEndedNote');
   const lessonEndedText = document.getElementById('lessonEndedText');
   const lessonEndedHistoryBtn = document.getElementById('lessonEndedHistoryBtn');
+  const lessonEndedContinueBtn = document.getElementById('lessonEndedContinueBtn');
+  const lessonCarryoverBanner = document.getElementById('lessonCarryoverBanner');
+  const lessonCarryoverText = document.getElementById('lessonCarryoverText');
+  const lessonCarryoverContinueBtn = document.getElementById('lessonCarryoverContinueBtn');
+  const lessonCarryoverDismissBtn = document.getElementById('lessonCarryoverDismissBtn');
   const startLessonBtn = document.getElementById('startLessonBtn');
   const startNewLessonBtn = document.getElementById('startNewLessonBtn');
   const lessonModePicker = document.getElementById('lessonModePicker');
@@ -2095,6 +2116,26 @@
       ? "You've finished everything you picked, and there's still lesson time left. What do you want to do with it?"
       : 'What do you want to do this lesson? Pick as many as you like — Claruno will work through them in order, starting a 45-minute lesson once you begin.';
     startLessonBtn.textContent = mid ? 'Keep going' : 'Start Lesson';
+    // The carryover offer belongs only on the true start screen — the
+    // banner element lives inside this same card, which the mid-lesson
+    // picker reuses.
+    renderCarryoverBanner();
+  }
+
+  // "Pick up where your last lesson left off?" — shown on the start
+  // screen whenever a carryover exists, with a short summary of what was
+  // mid-way.
+  function renderCarryoverBanner(){
+    const stored = (!lessonRunning && lessonUserId) ? loadLessonCarryover(lessonUserId) : null;
+    lessonCarryoverBanner.classList.toggle('hidden', !stored);
+    if (!stored) return;
+    const bits = [];
+    const hw = stored.state.homework;
+    if (hw && Array.isArray(hw.queue) && hw.queue.length && Number(hw.index) < hw.queue.length){
+      bits.push(`Homework: problem ${Number(hw.index) + 1} of ${hw.queue.length}`);
+    }
+    if (stored.state.teach && stored.state.teach.title) bits.push(stored.state.teach.title);
+    lessonCarryoverText.textContent = 'Your last lesson ended mid-way' + (bits.length ? ' — ' + bits.join(' · ') : '') + '. Continue from that exact spot in a new lesson, or start fresh below.';
   }
 
   // Shown when the student has worked through everything they selected but
@@ -2147,6 +2188,38 @@
   }
 
   function activeLessonKey(userId){ return ACTIVE_LESSON_STORAGE_PREFIX + userId; }
+
+  // ---- Lesson carryover ----
+  // When the 45 minutes run out mid-work, the position is kept so the
+  // student can "keep going in a new lesson": a fresh lesson id and
+  // clock, restored to exactly where the old one dropped. Two tiers:
+  // same-tab continuation reuses the LIVE state (lossless — figure
+  // photos and the homework-PDF archive included); after a tab close
+  // it's this text-only snapshot, same fidelity as refresh-resume.
+  const LESSON_CARRYOVER_PREFIX = 'mathTutorLessonCarryover:';
+  function carryoverKey(userId){ return LESSON_CARRYOVER_PREFIX + userId; }
+  function loadLessonCarryover(userId){
+    if (!userId) return null;
+    try{
+      const parsed = JSON.parse(localStorage.getItem(carryoverKey(userId)) || 'null');
+      if (parsed && parsed.state) return parsed;
+    } catch(e){ /* malformed storage */ }
+    return null;
+  }
+  function clearLessonCarryover(userId){
+    if (userId) localStorage.removeItem(carryoverKey(userId));
+  }
+  // "Mid-way" = unfinished homework queue problems, or any teach/test-
+  // prep conversation. A lesson that ended with neither has nothing
+  // worth resuming.
+  function lessonStateWorthContinuing(state){
+    if (!state) return false;
+    const hw = state.homework;
+    if (hw && Array.isArray(hw.queue) && hw.queue.length && Number(hw.index) < hw.queue.length) return true;
+    return !!state.teach;
+  }
+  // True while the ended lesson's state is still live in this tab.
+  let carryoverLiveInMemory = false;
 
   // Only an in-progress lesson is ever persisted — once ended there's
   // nothing to resume, so the stored entry is removed.
@@ -2339,7 +2412,13 @@
     lessonModeProgress.classList.add('hidden');
     stopCamera();
     stopTakePhotoStream();
-    lessonEndedText.textContent = `You worked for ${formatLessonTime(durationSeconds * 1000)} this lesson — it's ended and can't be resumed. Start a new one to keep going, or look back through your past lessons.`;
+    const canContinue = carryoverLiveInMemory || !!loadLessonCarryover(lessonUserId);
+    lessonEndedText.textContent = `You worked for ${formatLessonTime(durationSeconds * 1000)} this lesson — its time is up.`
+      + (canContinue ? ' You stopped mid-way: keep going in a new lesson from that exact spot, start fresh, or look back through your past lessons.' : ' Start a new one to keep going, or look back through your past lessons.');
+    lessonEndedContinueBtn.classList.toggle('hidden', !canContinue);
+    // Whichever action leads the row gets the primary look.
+    startNewLessonBtn.classList.toggle('primary-btn', !canContinue);
+    startNewLessonBtn.classList.toggle('ghost-btn', canContinue);
     lessonEndedNote.classList.remove('hidden');
     switchTab('home');
   }
@@ -2352,7 +2431,7 @@
   // short by (timeout or logout) — this becomes the row saved to the
   // `lessons` table, so history shows how long a lesson actually ran, not
   // just whether it hit the full 45 minutes.
-  function finalizeActiveLesson(){
+  function finalizeActiveLesson(skipCarryoverCapture){
     // Whatever practice problem was current when the lesson ended gets
     // its row too — checked or not, it was part of the lesson.
     logUnattemptedTeachProblem();
@@ -2361,6 +2440,21 @@
     lessonRunning = false;
     clearLessonInterval();
     clearActiveLesson();
+    // Keep the mid-lesson position for "keep going in a new lesson"; an
+    // ended lesson with nothing mid-way clears any older carryover
+    // instead. skipCarryoverCapture is for the expired-while-tab-closed
+    // path, whose LIVE vars are empty — its caller saves the persisted
+    // snapshot itself.
+    if (!skipCarryoverCapture){
+      const carryState = buildLessonState();
+      carryoverLiveInMemory = lessonStateWorthContinuing(carryState);
+      if (lessonUserId){
+        try{
+          if (carryoverLiveInMemory) localStorage.setItem(carryoverKey(lessonUserId), JSON.stringify({ savedAt: Date.now(), state: carryState }));
+          else clearLessonCarryover(lessonUserId);
+        } catch(e){ /* quota — the in-memory tier still works this tab */ }
+      }
+    }
     if (endedLessonId) localStorage.removeItem(LESSON_CAM_ROTATION_PREFIX + endedLessonId);
     if (window.mathTutorHistory && window.mathTutorHistory.hideCurrentLesson) window.mathTutorHistory.hideCurrentLesson();
     const recordPromise = window.mathTutorHistory
@@ -2383,6 +2477,9 @@
   function beginLesson(){
     if (!lessonUserId) return;
     setLessonPromptCopy(false);
+    // A deliberately fresh lesson supersedes any carryover.
+    clearLessonCarryover(lessonUserId);
+    carryoverLiveInMemory = false;
     // The homework-PDF archive spans a whole lesson (surviving mid-lesson
     // "keep going" rounds, which reset the queue itself) — only a brand
     // new lesson empties it.
@@ -2403,9 +2500,62 @@
     if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
   }
 
+  // "Keep going in a new lesson": fresh lesson id and clock, restored to
+  // the previous lesson's exact position. Same-tab, the live state is
+  // still intact and is simply kept (lossless — figure photos and the
+  // homework-PDF archive included); otherwise the text-only snapshot is
+  // restored, same fidelity as refresh-resume. History rows and the
+  // teach log attach to the new lesson id.
+  function continueCarryoverLesson(){
+    if (!lessonUserId || lessonRunning) return;
+    const stored = loadLessonCarryover(lessonUserId);
+    if (!stored && !carryoverLiveInMemory) return;
+    clearLessonCarryover(lessonUserId);
+    setLessonPromptCopy(false);
+    currentLessonId = crypto.randomUUID();
+    lessonStartedAt = Date.now();
+    lessonRunning = true;
+    if (carryoverLiveInMemory){
+      carryoverLiveInMemory = false;
+      // Live state is already right — just re-render it in place.
+      workSourceSelect.dispatchEvent(new Event('change'));
+    } else {
+      lessonHomeworkArchive = [];
+      // restoreLessonState only assigns what the snapshot contains —
+      // blank the rest first so nothing stale in this tab leaks into
+      // the continued lesson.
+      homeworkQueue = [];
+      homeworkQueueIndex = 0;
+      teachConversation = [];
+      teachThreadLabels = [];
+      teachThread.innerHTML = '';
+      currentTeachProblemText = null;
+      currentTeachProblemSvg = null;
+      teachPanel.classList.add('hidden');
+      restoreLessonState(stored.state);
+    }
+    saveActiveLesson();
+    if (window.mathTutorHistory) window.mathTutorHistory.startLessonRecord(currentLessonId, lessonModeQueue.slice(lessonModeIndex));
+    clearLessonInterval();
+    lessonIntervalId = setInterval(tickLesson, 1000);
+    renderLessonTimer();
+    showCheckUI();
+    lessonTimerEl.classList.remove('hidden');
+    renderLessonModeProgress();
+    enterLessonMode();
+    if (window.mathTutorHistory && window.mathTutorHistory.showCurrentLesson) window.mathTutorHistory.showCurrentLesson(currentLessonId);
+  }
+
   startLessonBtn.addEventListener('click', () => {
     if (lessonRunning && lessonPickerMidLesson) continueLessonMidway();
     else beginLesson();
+  });
+  lessonEndedContinueBtn.addEventListener('click', continueCarryoverLesson);
+  lessonCarryoverContinueBtn.addEventListener('click', continueCarryoverLesson);
+  lessonCarryoverDismissBtn.addEventListener('click', () => {
+    clearLessonCarryover(lessonUserId);
+    carryoverLiveInMemory = false;
+    renderCarryoverBanner();
   });
   // "Start a new lesson" (shown once a lesson has ended) returns to the
   // mode picker rather than immediately reusing whatever the checkboxes
@@ -2494,7 +2644,12 @@
       if (lessonRemainingMs() <= 0) {
         // The 45 minutes ran out while the tab was closed/asleep — finalize
         // it now rather than silently resuming a lesson that's actually over.
-        const { durationSeconds } = finalizeActiveLesson();
+        // The live vars are still empty here, so the carryover comes from
+        // the persisted snapshot, not from finalize's own capture.
+        if (stored.state && lessonStateWorthContinuing(stored.state)){
+          try{ localStorage.setItem(carryoverKey(lessonUserId), JSON.stringify({ savedAt: Date.now(), state: stored.state })); } catch(e){ /* quota */ }
+        }
+        const { durationSeconds } = finalizeActiveLesson(true);
         renderLessonTimer();
         showEndedNote(durationSeconds);
       } else {
@@ -2532,6 +2687,9 @@
     currentLessonId = null;
     lessonStartedAt = null;
     lessonRunning = false;
+    // The live in-memory state no longer belongs to whoever signs in
+    // next; their own persisted carryover (per-user key) is unaffected.
+    carryoverLiveInMemory = false;
     clearLessonInterval();
     renderLessonTimer();
     tabBar.classList.add('hidden');
