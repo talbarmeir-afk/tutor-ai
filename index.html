@@ -3027,9 +3027,15 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   function extractTeachProblem(text){
     const idx = String(text).lastIndexOf('Problem:');
     if (idx === -1) return null;
-    const after = String(text).slice(idx + 'Problem:'.length);
-    const cut = after.search(/\n\s*\n/);
-    const problem = (cut === -1 ? after : after.slice(0, cut)).trim();
+    // Everything after the label is the problem. The old version read
+    // only up to the first blank line, but the handwriting style puts
+    // blank lines between ideas — the model often writes "Problem:",
+    // a blank line, then the problem across several paragraphs, which
+    // extracted as EMPTY: no pinned banner, no camera, no way to check
+    // the work. The problem requests now demand that nothing follows
+    // the problem statement (encouragement goes before the label), so
+    // capture-to-end is the faithful read.
+    const problem = String(text).slice(idx + 'Problem:'.length).trim();
     return problem || null;
   }
 
@@ -3038,13 +3044,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // the conversation too would just re-create the buried-problem layout
   // this flow exists to fix. The conversation history keeps the full text.
   function stripTeachProblem(text){
+    // Mirror of extractTeachProblem: the problem is everything from the
+    // label to the end, so the thread remainder is everything before it.
     const s = String(text);
     const idx = s.lastIndexOf('Problem:');
     if (idx === -1) return s.trim();
-    const after = s.slice(idx);
-    const cut = after.search(/\n\s*\n/);
-    const rest = cut === -1 ? '' : after.slice(cut);
-    return (s.slice(0, idx) + rest).trim();
+    return s.slice(0, idx).trim();
   }
 
   // Teach replies may end with one model-drawn SVG illustration between
@@ -3166,11 +3171,13 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   // until a problem is delivered) — same pattern as the homework and
   // printed-problem captures.
   function startTeachMaterialCapture(){
-    if (!lessonCamStream || !lessonCamVideo.videoWidth){
-      lessonCamNote.textContent = 'Camera is off — start the camera to take a photo.';
-      lessonCamNote.classList.remove('hidden');
-      return;
-    }
+    // Enter capture mode FIRST: in teach mode the camera box is hidden
+    // until a problem is delivered, so the old "camera is off" early
+    // return drew its note into a hidden box — the click looked like a
+    // dead button (and a display:none'd video keeps videoWidth 0, so
+    // the guard tripped even with a live stream). With the box visible,
+    // a not-yet-started camera simply gets started; if it truly can't
+    // run, startLessonCam's own note is now actually visible.
     capturingTeachMaterials = true;
     imageWrap.classList.add('hidden');
     lessonCamFrame.classList.remove('hidden');
@@ -3179,6 +3186,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     teachMaterialCaptureActions.classList.remove('hidden');
     updateLessonCamVisibility();
     updateLessonLivePip();
+    if (!lessonCamStream) startLessonCam();
   }
 
   function endTeachMaterialCapture(){
@@ -3193,6 +3201,12 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   teachMaterialTakeBtn.addEventListener('click', startTeachMaterialCapture);
   teachMaterialCaptureCancelBtn.addEventListener('click', endTeachMaterialCapture);
   teachMaterialCaptureSnapBtn.addEventListener('click', () => {
+    if (!lessonCamStream || !lessonCamVideo.videoWidth){
+      lessonCamNote.textContent = 'Camera is still starting — give it a second and snap again.';
+      lessonCamNote.classList.remove('hidden');
+      setTimeout(() => lessonCamNote.classList.add('hidden'), 3000);
+      return;
+    }
     teachMaterialPhotos.push(lessonCaptureFrame(lessonCamVideo, 1600, lessonCamQuarter, lessonCamZoom, lessonPanX, lessonPanY));
     renderTeachMaterialThumbs();
     endTeachMaterialCapture();
@@ -5771,7 +5785,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   // Shared tail for both problem requests: whenever the problem has any
   // visual setup, a sketch of the GIVENS comes with it.
-  const TEACH_PROBLEM_FIGURE_ASK = ' If the problem involves a shape, graph, or anything visual — a triangle with given sides or angles, a number line, a function graph — include the figure block showing the problem\'s setup with the GIVEN data labeled on it, and never anything that reveals the answer. In the problem text, write EVERY fraction as {numerator}/{denominator} — curly braces around each part, simple ones included ({2}/{3}, {4x+25}/{5x}) — so they can be displayed stacked the way they\'d be written on paper; never use curly braces for anything else.';
+  const TEACH_PROBLEM_FIGURE_ASK = ' If the problem involves a shape, graph, or anything visual — a triangle with given sides or angles, a number line, a function graph — include the figure block showing the problem\'s setup with the GIVEN data labeled on it, and never anything that reveals the answer. In the problem text, write EVERY fraction as {numerator}/{denominator} — curly braces around each part, simple ones included ({2}/{3}, {4x+25}/{5x}) — so they can be displayed stacked the way they\'d be written on paper; never use curly braces for anything else. Structure: any encouragement or notes come BEFORE the line "Problem:" — everything after the "Problem:" label must be ONLY the problem statement itself, with nothing after it.';
 
   teachReadyBtn.addEventListener('click', () => requestTeachProblem(
     'I understand the material — now give me exactly ONE practice problem to solve by hand on paper, labelled "Problem:", matched to what you just taught. Do not include the answer, and add at most one short encouraging sentence besides the problem itself.' + TEACH_PROBLEM_FIGURE_ASK,
