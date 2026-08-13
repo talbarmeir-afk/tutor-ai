@@ -2221,6 +2221,11 @@
   // True while the ended lesson's state is still live in this tab.
   let carryoverLiveInMemory = false;
 
+  // Whether the LAST check verdict was "this photo solves a different
+  // problem" — that photo must never be archived as the assigned
+  // problem's solution for the homework PDF.
+  let lastCheckWasWrongProblem = false;
+
   // Only an in-progress lesson is ever persisted — once ended there's
   // nothing to resume, so the stored entry is removed.
   function loadActiveLesson(userId){
@@ -3770,12 +3775,14 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // Unreadable gets no mark at all — there's nothing verified to point
     // at, and the model's x/y for this case is a meaningless placeholder,
     // not a real position.
-    resultImg.onload = parsed.unreadable
+    // wrong_problem gets the same no-mark treatment: the writing isn't
+    // an attempt at this problem, so there's no spot to point at.
+    resultImg.onload = (parsed.unreadable || parsed.wrong_problem)
       ? () => { annGroup.innerHTML = ''; }
       : () => { buildOverlay(computeLocation(parsed), !!parsed.has_mistake); };
 
-    verdict.classList.toggle('is-ok', !parsed.has_mistake && !parsed.unreadable);
-    if (parsed.unreadable){
+    verdict.classList.toggle('is-ok', !parsed.has_mistake && !parsed.unreadable && !parsed.wrong_problem);
+    if (parsed.unreadable || parsed.wrong_problem){
       // Neutral, same treatment as a hint — this isn't a verdict (good or
       // bad), so it must not borrow the celebratory green "correct" state.
       ringMascot.classList.remove('is-ok', 'is-mistake', 'is-celebrating', 'is-talking');
@@ -3785,8 +3792,10 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       animateMascot(!parsed.has_mistake);
     }
     teacherBar.classList.remove('hidden');
-    verdictHeading.style.color = parsed.unreadable ? '#181816' : '';
-    verdictHeading.textContent = parsed.unreadable ? "Can't check this photo" : parsed.has_mistake ? "Here's where it breaks" : "Looks solid";
+    verdictHeading.style.color = (parsed.unreadable || parsed.wrong_problem) ? '#181816' : '';
+    verdictHeading.textContent = parsed.unreadable ? "Can't check this photo"
+      : parsed.wrong_problem ? "Looks like this one wasn't solved"
+      : parsed.has_mistake ? "Here's where it breaks" : "Looks solid";
     verdictQuote.textContent = parsed.line_quote ? `"${parsed.line_quote}"` : '';
     verdictQuote.style.display = parsed.line_quote ? '' : 'none';
     verdictExplanation.textContent = parsed.explanation || '';
@@ -3837,6 +3846,9 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
   function summarizeForConversation(parsed){
     if (parsed.unreadable){
       return `I couldn't actually check this photo: ${parsed.explanation || 'it was unreadable.'}`;
+    }
+    if (parsed.wrong_problem){
+      return `The photographed work isn't for the assigned problem — it looks like the student didn't actually solve it, so I said so and walked through how to solve the assigned problem: ${parsed.explanation || ''}`;
     }
     if (parsed.has_mistake){
       return `I found a mistake. The line "${parsed.line_quote || ''}" is incorrect: ${parsed.explanation || ''} The correct step is: ${parsed.fix || ''}`;
@@ -3904,13 +3916,25 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
       // genuine check happen — don't record it as a check at all, correct
       // or otherwise. (Teach's next problem is no longer auto-requested
       // here — the student asks for it via the Next problem button.)
+      lastCheckWasWrongProblem = !!(parsed.wrong_problem && currentAssignedProblemText());
       if (!parsed.unreadable){
-        if (currentTeachProblemText && historyEntryMode() !== 'upload'){
-          currentTeachProblemLogged = true;
-          if (parsed.has_mistake) currentTeachProblemStruggled = true;
-          saveActiveLesson();
+        if (lastCheckWasWrongProblem){
+          // The student never attempted THIS problem — record it as
+          // skipped (photo-less: the unrelated photo isn't its
+          // solution), not as a check verdict.
+          if (currentTeachProblemText && historyEntryMode() !== 'upload'){
+            currentTeachProblemLogged = true;
+            saveActiveLesson();
+          }
+          if (window.mathTutorHistory) window.mathTutorHistory.saveSkipped(null, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
+        } else {
+          if (currentTeachProblemText && historyEntryMode() !== 'upload'){
+            currentTeachProblemLogged = true;
+            if (parsed.has_mistake) currentTeachProblemStruggled = true;
+            saveActiveLesson();
+          }
+          if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
         }
-        if (window.mathTutorHistory) window.mathTutorHistory.saveEntry(parsed, imageData, historyEntryMode(), currentProblemId, currentLessonId, currentProblemHistoryFrame(), currentAssignedProblemText());
       }
     } catch(err){
       // Keep the friendly copy but surface the underlying error too —
@@ -4565,7 +4589,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
     // advance clears imageData (lessonShowLive nulls it) — this is the
     // only moment both still exist together. Skipped-with-no-photo has
     // nothing of the student's to submit, so nothing is archived for it.
-    if (imageData && homeworkQueueIndex < homeworkQueue.length){
+    if (imageData && !lastCheckWasWrongProblem && homeworkQueueIndex < homeworkQueue.length){
       lessonHomeworkArchive.push({
         problemText: homeworkQueue[homeworkQueueIndex].problemText,
         solutionFrame: imageData,
@@ -5681,6 +5705,7 @@ For x and y (only when has_mistake is true): point at the exact wrong token itse
 
   function lessonFreezeFrame(frame){
     imageData = frame;
+    lastCheckWasWrongProblem = false;
     // Problem identity follows the ASSIGNMENT, not the photo: while a
     // queued homework problem or a teach practice problem is active,
     // every photo/check of it belongs to the same history group, so the
