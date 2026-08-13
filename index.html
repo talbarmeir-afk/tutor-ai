@@ -6826,9 +6826,23 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
       }
       const headerParts = ['Lesson', lessonWhen];
       if (durationLabel) headerParts.push(`Lesson duration: ${durationLabel}`);
-      // Lesson type: "New topic" when the student used Teach me during the
-      // lesson (with the subjects that were taught), plain homework otherwise.
-      headerParts.push(meta && meta.taught_subjects ? `New topic: ${meta.taught_subjects}` : 'Homework');
+      // EVERY module the lesson covered, not just one. Evidence: the
+      // rows' mode tags (teach/test_prep since tagging began; legacy
+      // rows are all 'upload' and count as homework only when they carry
+      // queue problem text or the lesson taught nothing — otherwise a
+      // pre-tagging teach lesson would read as homework), plus
+      // taught_subjects for teach segments that never produced a row.
+      const modesUsed = new Set();
+      lessonEntries.forEach((e) => {
+        if (e.mode === 'teach' || e.mode === 'test_prep') modesUsed.add(e.mode);
+        else if (e.problem_text || !(meta && meta.taught_subjects)) modesUsed.add('homework');
+      });
+      if (meta && meta.taught_subjects && !modesUsed.has('teach') && !modesUsed.has('test_prep')) modesUsed.add('teach');
+      const moduleParts = [];
+      if (modesUsed.has('homework')) moduleParts.push('Homework');
+      if (modesUsed.has('teach')) moduleParts.push(meta && meta.taught_subjects ? `New topic: ${meta.taught_subjects}` : 'New topic');
+      if (modesUsed.has('test_prep')) moduleParts.push('Test prep');
+      headerParts.push(moduleParts.length ? moduleParts.join(' + ') : 'Homework');
       headerParts.push(problemLabel);
       const caret = document.createElement('span');
       caret.className = 'history-lesson-caret';
